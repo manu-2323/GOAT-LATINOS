@@ -178,8 +178,8 @@
       ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('arrastrando'); }));
       drop.addEventListener('drop', e => { if (e.dataTransfer.files[0]) procesarArchivo(e.dataTransfer.files[0], panel, p); });
       input.addEventListener('change', () => { if (input.files[0]) procesarArchivo(input.files[0], panel, p); });
-      const elegir = g('#elegir-captura');
-      if (elegir) elegir.addEventListener('click', () => input.click());
+      const btnElegir = g('#elegir-captura');
+      if (btnElegir) btnElegir.addEventListener('click', () => input.click());
     }
     const analizar = g('#analizar');
     if (analizar) analizar.addEventListener('click', () => analizarCaptura(p));

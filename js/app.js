@@ -9,7 +9,25 @@ function rutaActual() {
   return itemNav(id) ? id : 'tabla';
 }
 
+/* Acceso obligatorio: ninguna vista se renderiza sin una sesión válida. */
+function exigirLogin(destino) {
+  const ruta = destino || rutaActual();
+  PantallaAuth.obligatorio = true;
+  const vista = document.getElementById('vista');
+  if (vista) vista.innerHTML = '';
+  if (PantallaAuth.overlay) return;
+  PantallaAuth.mostrar(async () => {
+    try { await Promise.all([GL.cargarPaises(true), GL.cargarContexto(true)]); } catch (e) { console.warn(e); }
+    dibujarMenu(); pintarSesion(); pintarTemporada();
+    await mostrar(ruta);
+  });
+}
+
 async function mostrar(id) {
+  if (PantallaAuth.obligatorio && !Auth.usuario) {
+    exigirLogin(id);
+    return;
+  }
   const item = itemNav(id) || itemNav('tabla');
   const archivo = item.modulo || item.id;
   const nivel = item.nivel || 'publico';
@@ -85,6 +103,7 @@ function conectarMenu() {
 }
 
 async function arrancar() {
+  PantallaAuth.obligatorio = true;
   conectarOffline();
   conectarMenu();
   iniciarIconos();
@@ -92,6 +111,10 @@ async function arrancar() {
   pintarSesion();
 
   try { await Auth.iniciar(); } catch (e) { console.warn(e); }
+  if (!Auth.usuario) {
+    exigirLogin(rutaActual());
+    return;
+  }
   try { await Promise.all([GL.cargarPaises(true), GL.cargarContexto(true)]); } catch (e) { console.warn(e); }
   dibujarMenu(); pintarSesion(); pintarTemporada();
   await mostrar(rutaActual());
@@ -102,7 +125,12 @@ window.addEventListener('gl:auth', async () => {
   dibujarMenu(); pintarSesion();
   try { await GL.cargarContexto(true); } catch (e) { console.warn(e); }
   pintarTemporada();
-  mostrar(_rutaActual);
+  if (PantallaAuth.obligatorio && !Auth.usuario) {
+    exigirLogin(_rutaActual);
+    return;
+  }
+  if (Auth.usuario && PantallaAuth.overlay) PantallaAuth.ocultar(false);
+  await mostrar(_rutaActual);
 });
 window.addEventListener('load', arrancar);
 

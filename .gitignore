@@ -1,0 +1,13 @@
+# Secrets: NUNCA subir al repositorio
+.env
+.env.*
+supabase/.env
+supabase/.env.*
+*.key
+supabase/.temp/
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

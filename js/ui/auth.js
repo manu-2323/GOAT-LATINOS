@@ -7,6 +7,7 @@ const PantallaAuth = {
   modo: 'entrar',
   alEntrar: null,
   overlay: null,
+  obligatorio: false,
   _timers: {},
 
   campoClave(id, etiqueta, auto) {
@@ -46,7 +47,10 @@ const PantallaAuth = {
         '<p class="auth-cambiar"><button type="button" class="auth-enlace" data-modo="entrar">Ingreso de jugador</button> · ' +
           '<button type="button" class="auth-enlace" data-modo="registro">Registrate</button></p>'
       : esEntrar
-        ? '<h2>Bienvenido de nuevo</h2><p>Ingresá para ver tu perfil y tus partidos.</p>' +
+        ? '<h2>' + (PantallaAuth.obligatorio ? 'Acceso a la liga' : 'Bienvenido de nuevo') + '</h2><p>' +
+          (PantallaAuth.obligatorio
+            ? 'Ingresá con tu cuenta para continuar al sistema.'
+            : 'Ingresá para ver tu perfil y tus partidos.') + '</p>' +
           '<form id="form-entrar">' +
             '<label>Correo electrónico<input class="input" type="email" id="en-correo" autocomplete="email" required></label>' +
             PantallaAuth.campoClave('en-clave', 'Contraseña', 'current-password') +
@@ -84,6 +88,7 @@ const PantallaAuth = {
           : 'Al registrarte quedarás pendiente de aprobación hasta que el administrador te asigne a un grupo.') + '</p>' +
       '</div>';
     document.body.appendChild(o);
+    document.body.classList.add('auth-activa');
     PantallaAuth.overlay = o;
     iniciarIconos();
 
@@ -210,9 +215,9 @@ const PantallaAuth = {
         try {
           await Auth.registrar(nombre.value.trim(), correo.value.trim(), clave.value,
             o.querySelector('#rg-pais').value, o.querySelector('#rg-tel').value.trim());
-          PantallaAuth.ocultar();
-          GL.notificar('Cuenta creada. Revisá tu Gmail para confirmar el correo.', 'exito', 'mail');
-          if (PantallaAuth.alEntrar) PantallaAuth.alEntrar();
+          // Con acceso obligatorio, solo se cierra si Supabase devolvió sesión.
+          // Si el correo requiere confirmación, Auth.registrar lanza y el overlay permanece.
+          exito('Cuenta creada. ¡Bienvenido a la liga!', 'check-circle-2');
         } catch (e) { err.textContent = e.message; ocupado(form, false); }
       });
     }
@@ -220,6 +225,7 @@ const PantallaAuth = {
 
   ocultar(resetModo) {
     if (PantallaAuth.overlay) { PantallaAuth.overlay.remove(); PantallaAuth.overlay = null; }
+    document.body.classList.remove('auth-activa');
     if (resetModo !== false) PantallaAuth.modo = 'entrar';
   }
 };

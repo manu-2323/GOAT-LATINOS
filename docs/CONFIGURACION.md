@@ -1,6 +1,6 @@
 # GOATS LATINOS · League Manager — Configuración
 
-Versión actual: **1.0.5**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
+Versión actual: **1.0.9**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
 
 ## 1. Arranque
 
@@ -127,7 +127,31 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 9. Eliminatorias → generar rondas a medida que se definen los ganadores.
 10. Estadísticas globales → consultá tops, rachas, head-to-head y exportá PNG.
 
-## 6. Mejoras 1.0.5
+## 6. Mejoras 1.0.8 — Responsive en celular
+
+- **Viewport** base `width=device-width, initial-scale=1.0` y cache-busting de CSS/JS.
+- **Tabla**: en menos de 480 px se muestran `# | Jugador | J | Pts | Dif`, con la bandera dentro
+  del nombre; un botón despliega G, E, P y goles. Pestañas de grupo a ancho completo.
+- **Fixture**: partido en card vertical (local, marcador, visitante) y selector de jornada como
+  desplegable grande.
+- **Resultados**: botón de captura de 44 px, estadísticas en dos columnas y modal que cabe en 360 px.
+- **Administración**: tablas con scroll horizontal y acciones en menú desplegable.
+- **Navegación**: barra inferior con iconos Lucide y etiquetas cortas, objetivo táctil de 56 px.
+- **Modales y toasts**: modales de hasta 90 % del ancho con scroll interno; toasts abajo y centrados.
+- **General**: texto desde 14 px, botones y campos desde 44 px y padding lateral de 12 px.
+
+## 7. Mejoras 1.0.9 — Acceso obligatorio
+
+- **Login inicial**: al arrancar, si no hay sesión válida se muestra la pantalla de acceso antes de
+  cargar cualquier vista. No existe modo invitado.
+- **Bloqueo de navegación**: `#hash`, eventos de autenticación y cierre de sesión no pueden renderizar
+  tabla, fixture ni estadísticas sin `Auth.usuario`. Al cerrar sesión vuelve el login.
+- **Registro**: el overlay solo se cierra si Supabase devuelve sesión. Si el correo requiere
+  confirmación, permanece el formulario con el mensaje correspondiente.
+- **Capa visual**: el overlay cubre toda la pantalla (incluido el banner offline) y bloquea el scroll
+  del fondo mientras se autentica.
+
+## 8. Mejoras 1.0.5
 
 - **Países dinámicos**: tabla `paises` cargada al arrancar; banderas reales vía `flagcdn.com` en tabla,
   fixture, perfil y administración. La bandera emoji queda solo para textos de WhatsApp.
@@ -145,7 +169,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **IA**: Gemini Flash-Lite (`gemini-3.5-flash-lite`, modelo 2.0 retirado por Google) reemplaza a la integración anterior; toast con icono animado
   `Analizando captura con Gemini AI...`.
 
-## 7. Decisiones de diseño
+## 9. Decisiones de diseño
 
 - **Sin emojis en la UI.** El código de país se muestra como chip tipográfico y bandera de imagen.
   Las banderas emoji se usan únicamente en textos generados para WhatsApp.
@@ -159,7 +183,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Confirmaciones**: acciones destructivas usan modal; el resto de acciones confirman con toast.
 - Todas las vistas muestran skeleton mientras cargan y reinicializan Lucide después de cada render.
 
-## 8. Solución de problemas
+## 10. Solución de problemas
 
 | Síntoma | Acción |
 |---|---|
