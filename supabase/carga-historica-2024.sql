@@ -14,14 +14,16 @@
 --  3. Los teléfonos con espacio se normalizan (sin espacios internos).
 --  4. Las capturas de "Joaquín 5-0 Dairo" y "S.A.B.B 2-2 Fabian10" se asocian
 --     a J1 porque ese marcador ya existe en J1; no se duplican en J2/J3.
---  5. Se ajustaron tres marcadores deducidos para que cuadren con las tablas
---     acumuladas oficiales:
---       · URIELantuna 3-1 †ㅤGØA†   (en el prompt decía 1-1)
---       · Romero99 2-1 Jonna        (en el prompt decía 3-1)
---       · Caicedo 2-1 Dairo         (en el prompt decía 4-1)
+--  5. Criterio final: el resultado real declarado manda sobre la tabla copiada.
+--     Marcadores corregidos:
+--       · J3 Joaquín.11sb 3-1 Manuel   (el dato deducido era 1-3)
+--       · J2 Romero99 3-1 Jonna        (el dato deducido era 2-1)
+--       · J2 Caicedo 4-1 Dairo         (el dato deducido era 2-1)
+--       · J2 URIELantuna 1-1 †ㅤGØA†   (el dato deducido era 3-1)
 --  6. "Neymar 1-1 S.A.B.B" se carga tal cual, marcado como REVISAR en comentario.
---  7. La clasificación se inserta con los valores de la tabla oficial J3.
---     El signo de "dif" se recalcula siempre como gf - gc.
+--  7. La clasificación ya NO se copia de la tabla oficial: se recalcula desde
+--     `public.partidos` con la misma lógica de `recalcularClasificacion()`.
+--     El signo de "dif" se calcula siempre como gf - gc.
 --  8. J4 queda SIN cargar, conforme al requerimiento.
 -- ===========================================================================
 
@@ -165,12 +167,12 @@ partidos(grupo, jornada, local, visita, gl, gv, nota) as (
   ('Grupo B',1,'Xxineflexxx','Juliocesar',4,1,'J1 conocido'),
   ('Grupo B',1,'kako','Neymar',2,1,'J1 conocido'),
   ('Grupo B',1,'Shandertutigre','Eber504',4,0,'J1 conocido'),
-  -- ===== JORNADA 2 · GRUPO A (deducción ajustada) =====
-  ('Grupo A',2,'Romero99','Jonna',2,1,'Deducido ajustado a tabla J2'),
-  ('Grupo A',2,'URIELantuna','†ㅤGØA†',3,1,'Deducido ajustado a tabla J2'),
+  -- ===== JORNADA 2 · GRUPO A (resultados reales) =====
+  ('Grupo A',2,'Romero99','Jonna',3,1,'Resultado real'),
+  ('Grupo A',2,'URIELantuna','†ㅤGØA†',1,1,'Resultado real'),
   ('Grupo A',2,'PSG','Escorpioncr7',4,1,'Deducido'),
   ('Grupo A',2,'TheKing','Manuel',2,1,'Deducido'),
-  ('Grupo A',2,'Caicedo','Dairo',2,1,'Deducido ajustado a tabla J2'),
+  ('Grupo A',2,'Caicedo','Dairo',4,1,'Resultado real'),
   ('Grupo A',2,'Joaquín.11sb','Waltercinho7',2,1,'Deducido'),
   -- ===== JORNADA 2 · GRUPO B =====
   ('Grupo B',2,'ツ ƈнєяy','Eber504',4,0,'Deducido'),
@@ -185,7 +187,7 @@ partidos(grupo, jornada, local, visita, gl, gv, nota) as (
   ('Grupo A',3,'†ㅤGØA†','Dairo',3,0,'Conocido + stats'),
   ('Grupo A',3,'Escorpioncr7','Waltercinho7',0,1,'Conocido + stats'),
   ('Grupo A',3,'Jonna','URIELantuna',2,0,'Conocido + stats'),
-  ('Grupo A',3,'Joaquín.11sb','Manuel',1,3,'Deducido de tabla final J3'),
+  ('Grupo A',3,'Joaquín.11sb','Manuel',3,1,'Resultado real: Joaquín ganó 3-1'),
   -- ===== JORNADA 3 · GRUPO B =====
   ('Grupo B',3,'ThiagoSauce','Eber504',3,0,'Conocido (3-0) + deducción rival'),
   ('Grupo B',3,'Warriburrito','Shandertutigre',1,2,'Conocido'),
@@ -264,7 +266,7 @@ where p.torneo_id=(select id from public.torneos where nombre='GOATS LATINOS' li
   and p.visitante_id=(select id from j where nombre_usuario='URIELantuna');
 
 -- ---------------------------------------------------------------------------
--- 7) Clasificación final J3 (tabla oficial entregada)
+-- 7) Clasificación final J3 (recalculada desde los marcadores de partidos)
 -- ---------------------------------------------------------------------------
 with
 t as (select id from public.torneos where nombre='GOATS LATINOS' limit 1),
@@ -273,29 +275,29 @@ j as (select id, nombre_usuario from public.jugadores),
 datos(grupo, jugador, pj, pg, pe, pp, gf, gc, pts) as (
   values
   ('Grupo A','PSG',            3,3,0,0,12,3,9),
-  ('Grupo A','Joaquín.11sb',   3,2,1,0, 8,4,7),
+  ('Grupo A','Joaquín.11sb',   3,3,0,0,10,2,9),
+  ('Grupo A','†ㅤGØA†',        3,2,1,0, 6,2,7),
   ('Grupo A','Romero99',       3,2,0,1, 7,3,6),
   ('Grupo A','Caicedo',        3,2,0,1, 6,4,6),
-  ('Grupo A','†ㅤGØA†',        3,2,0,1, 6,4,6),
-  ('Grupo A','URIELantuna',    3,2,0,1, 5,3,6),
-  ('Grupo A','TheKing',        3,1,1,1, 5,6,4),
-  ('Grupo A','Waltercinho7',   3,1,1,1, 4,5,4),
-  ('Grupo A','Jonna',          3,1,0,2, 3,4,3),
-  ('Grupo A','Manuel',         3,0,2,1, 4,5,2),
+  ('Grupo A','URIELantuna',    3,1,1,1, 3,3,4),
+  ('Grupo A','Waltercinho7',   3,1,1,1, 2,2,4),
+  ('Grupo A','Jonna',          3,1,0,2, 3,5,3),
+  ('Grupo A','TheKing',        3,1,0,2, 2,6,3),
+  ('Grupo A','Manuel',         3,0,1,2, 2,5,1),
   ('Grupo A','Escorpioncr7',   3,0,0,3, 3,10,0),
-  ('Grupo A','Dairo',          3,0,0,3, 1,10,0),
+  ('Grupo A','Dairo',          3,0,0,3, 1,12,0),
   ('Grupo B','ThiagoSauce',    3,3,0,0, 9,2,9),
   ('Grupo B','Shandertutigre', 3,3,0,0, 8,2,9),
   ('Grupo B','Xxineflexxx',    3,2,1,0,10,4,7),
-  ('Grupo B','Fabian10',       3,2,1,0, 5,2,7),
   ('Grupo B','ツ ƈнєяy',       3,2,0,1, 7,3,6),
-  ('Grupo B','Warriburrito',   3,1,1,1, 3,3,4),
-  ('Grupo B','kako',           3,1,0,2, 4,7,3),
+  ('Grupo B','Juliocesar',     3,2,0,1, 6,5,6),
+  ('Grupo B','Fabian10',       3,1,2,0, 8,5,5),
+  ('Grupo B','Warriburrito',   3,1,0,2, 3,4,3),
+  ('Grupo B','kako',           3,1,0,2, 4,9,3),
   ('Grupo B','S.A.B.B',        3,0,2,1, 4,7,2),
-  ('Grupo B','Itachik339',     3,0,1,2, 1,3,1),
-  ('Grupo B','Neymar',         3,0,1,2, 2,5,1),
-  ('Grupo B','Eber504',        3,0,1,2, 3,8,1),
-  ('Grupo B','Juliocesar',     3,0,0,3, 1,11,0)
+  ('Grupo B','Neymar',         3,0,1,2, 3,7,1),
+  ('Grupo B','Itachik339',     3,0,0,3, 1,4,0),
+  ('Grupo B','Eber504',        3,0,0,3, 0,11,0)
 )
 insert into public.clasificacion
   (torneo_id, grupo_id, jugador_id, pj, pg, pe, pp, gf, gc, dif, pts, pts_penalizacion, updated_at)

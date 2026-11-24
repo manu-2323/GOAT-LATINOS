@@ -31,8 +31,9 @@
                 '<span class="badge-jornada">Jornada ' + jornada.numero + ' / ' +
                   ((GL.torneo() && GL.torneo().total_jornadas) || 22) + '</span>' +
                 '<span class="estado-jornada"><span class="punto-estado ' +
-                  (jornada.estado === 'abierta' ? 'abierta' : '') + '"></span>' +
-                  (jornada.estado === 'abierta' ? 'Jornada Abierta' : 'Jornada Cerrada') + '</span>' +
+                  (!jornada.virtual && jornada.estado === 'abierta' ? 'abierta' : '') + '"></span>' +
+                  (jornada.virtual ? 'Pendiente de programación' :
+                    (jornada.estado === 'abierta' ? 'Jornada Abierta' : 'Jornada Cerrada')) + '</span>' +
               '</div>' +
             '</div>' +
             '<div class="seccion-acciones">' +
@@ -136,7 +137,9 @@
     return '<div class="card mt"><div class="card-titulo">' + icono('calendar-days', 20) + 'Partidos de hoy' +
       '<span class="badge neutral">Jornada ' + jornada.numero + '</span></div>' +
       (cards ? '<div class="partidos-lista">' + cards + '</div>' :
-        '<p class="vacio-mensaje">No hay partidos programados para esta jornada.</p>') + '</div>';
+        '<p class="vacio-mensaje">' + (jornada.virtual
+          ? 'Esta jornada todavía no tiene partidos programados.'
+          : 'No hay partidos programados para esta jornada.') + '</p>') + '</div>';
   }
 
   Modulos.tabla = Mod;

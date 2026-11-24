@@ -1,5 +1,5 @@
 -- ===========================================================================
--- GOATS LATINOS · Migración propuesta (NO ejecutada todavía)
+-- GOATS LATINOS · Migración de unicidad histórica (ejecutada en producción)
 --===========================================================================
 -- Corrige un fallo lógico detectado durante la carga histórica:
 --   · fixture.js hace upsert de jornadas con onConflict 'torneo_id,grupo_id,numero'
@@ -7,7 +7,8 @@
 --   · partidos no tiene restricción que evite regenerar el mismo encuentro.
 --   · clasificacion es única por jugador, no por temporada → impide multitemporada.
 --
--- Ejecutar en SQL Editor cuando se autorice el cambio de esquema.
+-- Ejecutada el 24/11/2026 en el proyecto zmjzlvsdlfzmhptmtmjx.
+-- Se puede volver a ejecutar: usa IF NOT EXISTS y no modifica datos existentes.
 -- ===========================================================================
 
 begin;

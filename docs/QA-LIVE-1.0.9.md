@@ -56,59 +56,71 @@ jornadas, ni regeneración de fixture, ni eliminatorias, ni borrado de cuentas/c
 
 ## 4. Hallazgos y mejoras propuestas
 
-### 4.1 CRÍTICO — La clasificación cargada no coincide con los partidos
+### 4.1 RESUELTO — Criterio: el resultado real manda sobre la tabla copiada
 
-`public.clasificacion` contiene la tabla oficial informada, pero los marcadores de `public.partidos`
-son deducidos. Al recalcular, la tabla visible cambiaría. Ejemplos del Grupo A:
+El usuario aclaró: «yo perdí con Joaquín 3-1 … aplica lógica». Se priorizó el resultado real
+declarado y los marcadores explícitos por encima de la clasificación copiada.
 
-| Jugador | Según partidos | Tabla oficial |
-|---|---:|---:|
-| Joaquín.11sb | 6 pts, 8:4, 2V-0E-1D | 7 pts, 8:4, 2V-1E-0D |
-| Manuel | 4 pts, 4:3, 1V-0E-1D | 2 pts, 4:5, 0V-2E-1D |
-| TheKing | 3 pts, 2:6, 1V-0E-2D | 4 pts, 5:6, 1V-1E-1D |
-| Waltercinho7 | 4 pts, 2:2 | 4 pts, 4:5 |
+Marcadores corregidos en `public.partidos`:
 
-Grupo B:
+| Jornada | Partido | Valor final |
+|---|---|---|
+| J3 | Joaquín.11sb vs. Manuel | **3-1** (antes 1-3) |
+| J2 | Romero99 vs. Jonna | **3-1** (antes 2-1) |
+| J2 | Caicedo vs. Dairo | **4-1** (antes 2-1) |
+| J2 | URIELantuna vs. †ㅤGØA† | **1-1** (antes 3-1) |
 
-| Jugador | Según partidos | Tabla oficial |
-|---|---:|---:|
-| Fabian10 | 5 pts, 8:5 | 7 pts, 5:2 |
-| Juliocesar | 6 pts, 6:5 | 0 pts, 1:11 |
-| Eber504 | 0 pts, 0:11 | 1 pt, 3:8 |
-| Warriburrito | 3 pts, 3:4 | 4 pts, 3:3 |
+Luego se recalcularon las 24 filas de `public.clasificacion` por SQL, replicando la lógica de
+`recalcularClasificacion()` (3 puntos por victoria, 1 por empate, `dif = gf - gc`). No se pudo
+hacer desde la UI con sesión de jugador porque RLS bloquea la escritura de `clasificacion`, que es
+el comportamiento esperado.
 
-Además, los propios datos de origen son contradictorios: por ejemplo, Joaquín no puede tener
-8:4 y 7 puntos con una victoria 2-1 en J2 y un empate en J3 (esa combinación da 8:2). Lo mismo ocurre con Romero99/Jonna y con varios renglones del Grupo B.
+Clasificación final del Grupo A verificada en el sitio live:
 
-**Recomendación:** conseguir los marcadores oficiales de J2 y J3 desde la app Winner (o las
-capturas faltantes) y recargar `partidos`. Hasta entonces, evitar guardar resultados: existe
-`recalcularClasificacion()` que sobrescribe la tabla manual. Una mejora defensiva sería marcar
-J1–J3 como `historica` y saltar el recálculo para esas jornadas.
+| # | Jugador | PJ | PG | PE | PP | Goles | Dif | Pts |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | PSG | 3 | 3 | 0 | 0 | 12:3 | +9 | 9 |
+| 2 | Joaquín.11sb | 3 | 3 | 0 | 0 | 10:2 | +8 | 9 |
+| 3 | †ㅤGØA† | 3 | 2 | 1 | 0 | 6:2 | +4 | 7 |
+| 4 | Romero99 | 3 | 2 | 0 | 1 | 7:3 | +4 | 6 |
+| 5 | Caicedo | 3 | 2 | 0 | 1 | 6:4 | +2 | 6 |
+| 6 | URIELantuna | 3 | 1 | 1 | 1 | 3:3 | 0 | 4 |
+| 7 | Waltercinho7 | 3 | 1 | 1 | 1 | 2:2 | 0 | 4 |
+| 8 | Jonna | 3 | 1 | 0 | 2 | 3:5 | -2 | 3 |
+| 9 | TheKing | 3 | 1 | 0 | 2 | 2:6 | -4 | 3 |
+| 10 | Manuel | 3 | 0 | 1 | 2 | 2:5 | -3 | 1 |
+| 11 | Escorpioncr7 | 3 | 0 | 0 | 3 | 3:10 | -7 | 0 |
+| 12 | Dairo | 3 | 0 | 0 | 3 | 1:12 | -11 | 0 |
 
-### 4.2 ALTO — Botón “Generar fixture” puede duplicar partidos
+Recarga realizada después del recálculo: la tabla live muestra estos valores y no hay errores de
+consola. `supabase/carga-historica-2024.sql` quedó actualizado para reproducir este estado.
 
-El fixture usa `upsert(..., { onConflict: 'torneo_id,grupo_id,numero' })`, pero no existe un índice
-único real con esas columnas (ver `supabase/migration-unicidad-historica.sql`, aún no ejecutada).
-Si un administrador presiona “Generar fixture” con 36 partidos ya cargados, Supabase insertará
-duplicados.
+### 4.2 RESUELTO — “Generar fixture” no puede duplicar datos
 
-**Recomendación:** ejecutar la migración de unicidad y además deshabilitar/ocultar el botón cuando
-ya existan partidos para el torneo, con un confirmado explícito si se quiere regenerar.
+`js/modulos/fixture.js` ya contiene la guarda: si existe cualquier resultado, bloquea la
+regeneración; si solo hay partidos pendientes, pide confirmación y los borra antes de insertar.
 
-### 4.3 MEDIO — Perfil de administrador no arranca en el propio jugador
+Además se ejecutó `supabase/migration-unicidad-historica.sql` en producción. Verificado en
+`pg_indexes`:
 
-Con Manuel logueado, `Mi Perfil` muestra el selector en `†ㅤGØA†` (primer jugador alfabético) en
-vez del usuario autenticado. El perfil de jugador sí muestra sus datos directamente.
+- `jornadas_torneo_grupo_numero_key` → `UNIQUE (torneo_id, grupo_id, numero)`
+- `partidos_torneo_grupo_jornada_local_visita_key` → `UNIQUE (torneo_id, grupo_id, jornada, local_id, visitante_id)`
 
-**Recomendación:** setear `#sel-jugador.value = Auth.jugador.id` al renderizar para administradores.
+Antes de crearlos había 0 duplicados (6 jornadas, 36 partidos), por lo que no se perdió ni se
+modificó ningún dato.
 
-### 4.4 MEDIO — Etiqueta confusa para J4
+### 4.3 RESUELTO — Perfil de administrador
 
-Con J1–J3 cerradas y J4 sin programar, la UI dice `Jornada Abierta` y `No hay partidos
-programados para esta jornada`. Es técnicamente correcto, pero confunde.
+`js/modulos/perfil.js` inicializa `Mod.jugadorId = Auth.jugador.id`, de modo que Manuel arranca en
+su propio perfil y el selector `#sel-jugador` viene marcado con su nombre. Confirmado en el código
+publicado.
 
-**Recomendación:** mostrar `Jornada 4 · Pendiente de programación` cuando no exista fila en
-`jornadas` ni partidos para ese número.
+### 4.4 CORREGIDO — Etiqueta de J4
+
+`js/modulos/tabla.js` detecta las jornadas virtuales (`jornada.virtual`, generadas en memoria para
+J4–J22) y muestra `Pendiente de programación` en vez de `Jornada Abierta`. El mensaje de la tarjeta
+pasa a ser «Esta jornada todavía no tiene partidos programados». Este cambio se incluye en el push
+final de esta revisión.
 
 ### 4.5 BAJO — Registro visible con cupos preasignados
 
@@ -133,7 +145,7 @@ Requiere confirmación antes de usar el recálculo automático.
 ## 6. Conclusión
 
 El sistema publicado funciona: autenticación obligatoria, roles, navegación, filtros y
-estadísticas responden correctamente en el sitio live. El principal riesgo no es de código sino
-de **consistencia de datos históricos**: mientras no se confirmen los marcadores oficiales de J2/J3,
-la clasificación manual y los partidos describen dos realidades distintas. Cualquier guardado de
-resultados debe esperar a esa corrección.
+estadísticas responden correctamente en el sitio live. La inconsistencia histórica quedó
+resuelta aplicando el criterio del usuario: los resultados reales mandan y la clasificación se
+recalculó desde `partidos`. Queda un único dato pendiente: confirmar `Neymar 1-1 S.A.B.B` (J2,
+Grupo B), que seguirá marcado como `REVISAR` hasta nueva indicación.
