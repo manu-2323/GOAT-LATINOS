@@ -21,14 +21,15 @@ Ejecutado contra `zmjzlvsdlfzmhptmtmjx` (producción) con Supabase CLI.
 - Administradores: 3 (`Manuel`, `†ㅤGØA†`, `ツ ƈнєяy`); `super_admin`: 1 (Manuel).
 - J4 **no** cargada, conforme al requerimiento.
 - Script reproducible actualizado: `supabase/carga-historica-2024.sql`.
-- Sitio live en `1.0.9`: `GLManager.version === '1.0.9'`, 0 errores de consola.
+- Sitio live en `1.0.10`: `GLManager.version === '1.0.10'`, 0 errores de consola.
 
 ## 2. Hallazgos y resolución
 
 ### 2.1 Versión desincronizada en GitHub Pages 〔RESUELTO〕
 
-El HTML servía `?v=1.0.8` mientras `config.js` respondía `1.0.5`. Se publicó `1.0.9` y se verificó
-en el sitio en vivo que tanto `CONFIG.VERSION` como `GLManager.version` devuelven `1.0.9`.
+El HTML servía `?v=1.0.8` mientras `config.js` respondía `1.0.5`. Se publicó `1.0.9` y luego
+`1.0.10` (para renovar la caché de los assets tras la corrección de J4). Se verificó en el sitio
+en vivo que tanto `CONFIG.VERSION` como `GLManager.version` devuelven `1.0.10`.
 
 ### 2.2 Registro bloqueado por correos precargados 〔RESUELTO〕
 
@@ -103,7 +104,7 @@ para darlo por definitivo.
 
 - Responsive validado a `360×640` y `390×844`: tabla colapsable, fixture en cards, dropdown de
   jornada, bottom nav, modales 90vw/90dvh y toasts bottom-center.
-- Login obligatorio publicado en `1.0.9`: `#vista` queda vacía hasta autenticar, el logout vuelve
+- Login obligatorio publicado en `1.0.9` y conservado en `1.0.10`: `#vista` queda vacía hasta autenticar, el logout vuelve
   al overlay y la sesión persiste al recargar.
 
 ## 5. Verificación en vivo

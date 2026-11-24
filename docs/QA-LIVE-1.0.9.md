@@ -1,4 +1,4 @@
-# QA en producción — versión 1.0.9
+# QA en producción — versión 1.0.9 (verificación final 1.0.10)
 
 Fecha: 24/11/2026  
 Sitio: https://manu-2323.github.io/GOAT-LATINOS/  
@@ -9,7 +9,7 @@ Commit publicado: `e85da1a` (el despliegue final de Pages fue `87c45e2`, que con
 
 | Verificación | Resultado |
 |---|---|
-| Versión en vivo (`GLManager.version`) | `1.0.9` |
+| Versión en vivo (`GLManager.version`) | `1.0.10` |
 | Login como primera pantalla | OK — `#vista` queda vacía hasta autenticar |
 | Cuentas `auth.users` | 24 |
 | Identidades `email` | 24 |
