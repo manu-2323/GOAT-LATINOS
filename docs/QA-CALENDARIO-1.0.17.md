@@ -43,6 +43,12 @@ Validado en iframes reales de `360×640` y `390×844` con la sesión de jugador:
 - `rpc/gl_crear_notificacion` devuelve `400` con «No podés crear notificaciones para otro jugador.». Ya está documentado en `docs/QA-MENSAJES-1.0.16.md`; no es causado por este módulo y no bloquea el calendario.
 - El panel admin quedó implementado pero **sin prueba en vivo**: no hay administrador activo. Requiere una cuenta administradora real para probar programación, apertura y cierre.
 
+## Publicación
+
+- Commit `1421cca` en `main` (`Modulo 06 Calendario y programacion 1.0.17`), 7 archivos cambiados.
+- GitHub Pages: run `45556549766`, `status=completed`, `conclusion=success`, commit `1421cca15f33cc0626ed6902488851d037b53d1e`.
+- Verificación del sitio publicado: `https://manu-2323.github.io/GOAT-LATINOS/` sirve `CONFIG.VERSION = 1.0.17`, menú con «Calendario» y «Fixture», sin errores de consola al cargar.
+
 ## Resultado
 
-Módulo 06 listo para publicación `1.0.17` con vistas de jugador y administrador, exportación por impresión y enlaces de calendario, contacto por RPC segura y diseño responsive validado.
+Módulo 06 publicado en `1.0.17` con vistas de jugador y administrador, exportación por impresión y enlaces de calendario, contacto por RPC segura y diseño responsive validado.
