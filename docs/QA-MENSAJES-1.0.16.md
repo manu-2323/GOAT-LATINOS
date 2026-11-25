@@ -44,3 +44,8 @@ Aparece un único `400` en `rpc/gl_crear_notificacion` con el mensaje “No pod�
 Se debe a la cuenta de pruebas: su `auth.uid()` distinto del `id` de la fila histórica vinculada en `public.jugadores`.
 La RPC compara ambos UUID directamente. No afecta a los mensajes ni a los jugadores creados con el flujo normal,
 donde ambos IDs coinciden. Se deja documentado sin cambios de código.
+
+## Publicación
+
+- Commit funcional `9090377` — GitHub Pages run `45536452808`, `success`.
+- Verificación live con `?qa=mensajes-1016-live`: versión `1.0.16`, 12 referencias `?v=1.0.16`, sesión de jugador activa, `esAdmin=false`, lecturas `jugadores` y `partidos` con `200`, plantilla de cierre generada con datos sintéticos y las cuatro secciones requeridas presentes.
