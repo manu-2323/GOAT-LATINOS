@@ -36,3 +36,11 @@ El generador de WhatsApp deja de usar la franja fija `11:00–21:00` y pasa a le
 - Administración simulada: 22 botones **Horario**, texto de horario en la jornada cargada y textarea `#cfg-reglamento` con el reglamento guardado.
 - Remoto: columnas `fecha_inicio`, `hora_limite` y `reglamento` presentes (`1/1/1`) y reglamento sembrado en el torneo activo.
 - Consola local: sin errores tras recargar con `?qa=mensajes-1016-local`.
+
+## Nota sobre la consola en vivo
+
+En `https://manu-2323.github.io/GOAT-LATINOS/?qa=mensajes-1016-live` no hay errores del módulo de mensajes.
+Aparece un único `400` en `rpc/gl_crear_notificacion` con el mensaje “No podés crear notificaciones para otro jugador.”
+Se debe a la cuenta de pruebas: su `auth.uid()` distinto del `id` de la fila histórica vinculada en `public.jugadores`.
+La RPC compara ambos UUID directamente. No afecta a los mensajes ni a los jugadores creados con el flujo normal,
+donde ambos IDs coinciden. Se deja documentado sin cambios de código.
