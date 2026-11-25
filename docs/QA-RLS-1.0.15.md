@@ -56,3 +56,12 @@ su fila; un admin ve todas. No se concedieron permisos nuevos.
 - La cuenta de pruebas sigue siendo **jugador**; no se ejecutó `admin-bootstrap`.
 - `1.0.14` quedó publicada y verificada (stats con denominadores propios); este release corrige
   únicamente la capa de RLS y el número de versión.
+
+## Publicación
+
+- Commit `8aab773` (“Corregir recursión de políticas RLS y publicar 1.0.15”), pusheado a
+  `origin/main` desde `6b07f28`.
+- GitHub Pages: run `45531490710` (n.º 20, `head_sha 8aab773`) **completado con `success`**.
+- Sitio live `https://manu-2323.github.io/GOAT-LATINOS/?qa=rls-1015-live`: `CONFIG.VERSION =
+  1.0.15`, 12 referencias `?v=1.0.15`, 0 referencias a `1.0.14`, sesión de jugador activa,
+  `jugadores` y `partidos` en HTTP `200` y consola sin errores.

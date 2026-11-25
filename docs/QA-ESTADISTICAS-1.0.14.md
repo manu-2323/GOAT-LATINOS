@@ -64,3 +64,11 @@ Estado original de esa fila, para restaurar cuando se decida el alta definitiva 
 La cuenta puede borrarse cuando ya no se necesite: en Supabase → Authentication → Users se elimina
 el usuario `73e3509c-0a9a-444e-bf76-704e7dcb5cb8`, y en `public.jugadores` se deja `user_id=null`
 (o se elimina la fila si se decide no conservar el registro histórico).
+
+## Publicación
+
+- Commit `6b07f28` (“Corregir promedios de rendimiento con denominadores propios (1.0.14)”),
+  pusheado a `origin/main` desde `5934981`.
+- GitHub Pages: run `45530932270` (n.º 19, `head_sha 6b07f28`) **completado con `success`**.
+- Sitio live `https://manu-2323.github.io/GOAT-LATINOS/?qa=stats-1014-live`: `CONFIG.VERSION =
+  1.0.14`, 12 referencias `?v=1.0.14`, 0 referencias a `1.0.13` y consola sin errores.
