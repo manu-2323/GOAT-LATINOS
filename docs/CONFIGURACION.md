@@ -19,7 +19,9 @@ npx --yes serve . -l 4173
 
 ## 2. Base de datos
 
-Todo el SQL está en `supabase/` y es idempotente. Ejecutalo en Supabase → SQL Editor en este orden:
+El SQL está en `supabase/` y, salvo la migración 7, es idempotente. `migration-hardening-rpcs.sql`
+se aplica **una sola vez** porque renombra funciones (repetirla daría error de “función no existe”).
+Ejecutalo en Supabase → SQL Editor en este orden:
 
 1. `configuracion-completa.sql` — torneo, grupos A/B, columna `numero`, `email`, RLS base y bucket `capturas-partidos`.
 2. `migration-numero-jugador.sql` — compatibilidad con el número del jugador.
