@@ -1,6 +1,6 @@
 # GOATS LATINOS · League Manager — Configuración
 
-Versión actual: **1.0.15**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
+Versión actual: **1.0.16**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
 
 ## 1. Arranque
 
@@ -42,6 +42,9 @@ Ejecutalo en Supabase → SQL Editor en este orden:
    políticas RLS por `gl_es_admin()` / `gl_es_super_admin()` (SECURITY DEFINER). Sin esto, cualquier
    usuario con sesión recibía `42P17: infinite recursion detected in policy for relation jugadores`.
    Aplicada en producción; ver `docs/QA-RLS-1.0.15.md`.
+ 9. `migration-mensajes-1.0.16.sql` — agrega `jornadas.fecha_inicio` y `jornadas.hora_limite`
+    (`timestamptz`), y `torneos.reglamento` (`text`); siembra el reglamento vigente. Aplicada en
+    producción; ver `docs/QA-MENSAJES-1.0.16.md`.
 
 Estado verificado en remoto: 16 países activos, 1 torneo activo, 2 grupos, columnas `numero`,
 `email`, `super_admin`, `avatar_url`, `zona_horaria`, bucket `avatares` público, RPC
@@ -150,7 +153,8 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 3. Administración → Configuración: revisá nombre, temporada y jornadas (22).
 4. Administración → Jugadores: agregá a los 12 jugadores de cada grupo (o esperá a que se registren).
 5. Fixture → Generar fixture (exactamente 12 por grupo).
-6. Jornadas → Abrir jornada → Mensajes → revisá la vista previa y copiar/enviar por WhatsApp.
+6. Jornadas → cargá el **Horario** de inicio y límite de cada jornada y abrila. Configuración →
+   revisá el reglamento. Mensajes → revisá la vista previa; si falta un dato, los botones quedan bloqueados.
 7. Resultados → cargar marcadores (manual o con captura + Gemini). La tabla se recalcula sola.
 8. Jornadas → Cerrar: resolvé los pendientes `1-0`, se recalcula todo y se genera el mensaje de cierre.
 9. Eliminatorias → generar rondas a medida que se definen los ganadores.
@@ -255,7 +259,20 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
   `GET /rest/v1/partidos` devuelven `200`, el módulo de estadísticas globales renderiza con
   `PJ con datos` y la consola no registra errores. Detalle en `docs/QA-RLS-1.0.15.md`.
 
-## 12. Mejoras 1.0.5
+## 12. Mejoras 1.0.16 — Mensajes verificados
+
+- **Datos reales**: la jornada tiene `fecha_inicio` y `hora_limite`; el torneo tiene `reglamento`.
+  El generador ya no usa la franja fija `11:00–21:00`, sino esos instantes convertidos a la zona IANA de cada jugador.
+- **Apertura**: incluye torneo, temporada, grupo, número de jornada, inicio, límite, seis enfrentamientos,
+  horarios por jugador y reglamento aplicable.
+- **Cierre**: incluye clasificación actualizada, resultados, goles y goleadores reales, estadísticas con
+  denominadores válidos, resoluciones administrativas separadas y próxima jornada.
+- **Verificación previa**: si falta horario, reglamento, zona horaria, sexto encuentro, cierre de jornada
+  o actualización de la clasificación, se muestran los motivos y se desactivan copiar, descargar y enviar.
+- **Edición**: botón **Horario** por jornada y campo **Reglamento vigente** en Configuración.
+  Detalle en `docs/QA-MENSAJES-1.0.16.md`.
+
+## 13. Mejoras 1.0.5
 
 - **Países dinámicos**: tabla `paises` cargada al arrancar; banderas reales vía `flagcdn.com` en tabla,
   fixture, perfil y administración. La bandera emoji queda solo para textos de WhatsApp.
@@ -275,7 +292,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **IA**: Gemini Flash-Lite (`gemini-3.5-flash-lite`, modelo 2.0 retirado por Google) reemplaza a la integración anterior; toast con icono animado
   `Analizando captura con Gemini AI...`.
 
-## 13. Decisiones de diseño
+## 14. Decisiones de diseño
 
 - **Sin emojis en la UI.** El código de país se muestra como chip tipográfico y bandera de imagen.
   Las banderas emoji se usan únicamente en textos generados para WhatsApp.
@@ -289,7 +306,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Confirmaciones**: acciones destructivas usan modal; el resto de acciones confirman con toast.
 - Todas las vistas muestran skeleton mientras cargan y reinicializan Lucide después de cada render.
 
-## 14. Solución de problemas
+## 15. Solución de problemas
 
 | Síntoma | Acción |
 |---|---|

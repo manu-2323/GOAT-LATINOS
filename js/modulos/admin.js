@@ -250,9 +250,14 @@
       return '<div class="timeline-item ' + (n === actual ? 'activa' : '') + (jdata.estado === 'cerrada' ? ' cerrada' : '') + '">' +
         '<div class="timeline-num">' + n + '</div>' +
         '<div class="timeline-contenido"><strong>Jornada ' + n + '</strong>' +
-          '<small>' + esc(GL.fecha(jdata.fecha)) + ' · ' + hechos + '/' + parts.length + ' partidos</small>' +
+          '<small>' + esc(GL.fecha(jdata.fecha)) + ' · ' +
+            (jdata.fecha_inicio && jdata.hora_limite
+              ? GL.fechaHoraEnZona(jdata.fecha_inicio, CONFIG.ZONA_REFERENCIA) + ' – ' + GL.fechaHoraEnZona(jdata.hora_limite, CONFIG.ZONA_REFERENCIA)
+              : 'Horario por definir') +
+            ' · ' + hechos + '/' + parts.length + ' partidos</small>' +
           (jdata.estado === 'cerrada' ? GL.badge('Cerrada', 'red') : GL.badge('Abierta', 'green')) +
           '<div style="flex:1;min-width:90px;max-width:130px"><div class="barra-progreso"><span style="width:' + pct + '%"></span></div></div>' +
+          '<button type="button" class="btn sm sec" data-editar-jornada="' + n + '">' + icono('clock', 14) + 'Horario</button>' +
           '<button type="button" class="btn sm sec" data-ver-jornada="' + n + '">' + icono('eye', 14) + 'Ver</button>' +
           (jdata.estado === 'abierta'
             ? '<button type="button" class="btn sm" data-cerrar-jornada="' + n + '">' + icono('lock', 14) + 'Cerrar</button>'
@@ -338,6 +343,9 @@
           '<option value="activo"' + (t.estado === 'activo' ? ' selected' : '') + '>Activo</option>' +
           '<option value="finalizado"' + (t.estado === 'finalizado' ? ' selected' : '') + '>Finalizado</option>' +
         '</select></label>' +
+        '<label class="campo"><span>Reglamento vigente (se incluye en los mensajes)</span>' +
+          '<textarea class="input" id="cfg-reglamento" rows="5" placeholder="Reglas de duración, margen, inasistencias y capturas">' + esc(t.reglamento || '') + '</textarea></label>' +
+        '<p class="nota-pie">Este texto se usa en la apertura de cada jornada. Si está vacío, el generador de mensajes bloquea la vista previa.</p>' +
         '<button type="button" class="btn" id="guardar-cfg">' + icono('save', 16) + 'Guardar cambios</button>' +
       '</div>' +
       '<div class="card"><div class="card-titulo">' + icono('rotate-ccw', 19) + 'Nueva temporada</div>' +
@@ -476,6 +484,8 @@
     cont.querySelectorAll('[data-grupo-j]').forEach(b => b.addEventListener('click', () => {
       Mod.grupoJornadas = b.dataset.grupoJ; Mod.render(root);
     }));
+    cont.querySelectorAll('[data-editar-jornada]').forEach(b => b.addEventListener('click', () =>
+      modalEditarJornada(Number(b.dataset.editarJornada), root)));
     cont.querySelectorAll('[data-ver-jornada]').forEach(b => b.addEventListener('click', () =>
       modalVerJornada(Number(b.dataset.verJornada))));
     cont.querySelectorAll('[data-cerrar-jornada]').forEach(b => b.addEventListener('click', () =>
@@ -502,7 +512,8 @@
         nombre: cont.querySelector('#cfg-nombre').value.trim(),
         temporada: cont.querySelector('#cfg-temporada').value.trim(),
         total_jornadas: Number(cont.querySelector('#cfg-jornadas').value) || CONFIG.JORNADAS_FASE_REGULAR,
-        estado: cont.querySelector('#cfg-estado').value
+        estado: cont.querySelector('#cfg-estado').value,
+        reglamento: cont.querySelector('#cfg-reglamento').value.trim()
       };
       if (update.total_jornadas !== CONFIG.JORNADAS_FASE_REGULAR) {
         GL.notificar('La fase regular debe tener exactamente ' + CONFIG.JORNADAS_FASE_REGULAR + ' jornadas.', 'advertencia'); return;
@@ -1187,6 +1198,81 @@
           '<div class="marcador ' + (r.pendiente ? '' : 'jugado') + '">' + r.texto + '</div>' +
           '<div class="equipo visita">' + esc(GL.nombreJugador(p.visitante_id)) + icono('plane', 14) + '</div></div>';
       }).join('') + '</div>' : GL.vacio('No hay partidos para esta jornada.', 'calendar-x', null)
+    });
+    iniciarIconos();
+  }
+
+  /* Horario real de una jornada: se guarda como instante y se edita en la
+     zona de referencia para que el mensaje pueda convertirlo por jugador. */
+  function modalEditarJornada(n, root) {
+    const torneo = GL.torneo();
+    if (!torneo) { GL.notificar('No hay torneo activo.', 'error'); return; }
+    const jdata = GL.ctx.jornadas.find(j =>
+      j.torneo_id === torneo.id && j.grupo_id === Mod.grupoJornadas && j.numero === n) || {};
+    const partes = instante => {
+      if (!instante) return { fecha: '', hora: '' };
+      const d = new Date(instante);
+      if (isNaN(d.getTime())) return { fecha: '', hora: '' };
+      const p = GL.partesEnZona(d, CONFIG.ZONA_REFERENCIA);
+      const dos = x => String(x).padStart(2, '0');
+      return { fecha: p.year + '-' + dos(p.month) + '-' + dos(p.day), hora: dos(p.hour) + ':' + dos(p.minute) };
+    };
+    const ini = partes(jdata.fecha_inicio), fin = partes(jdata.hora_limite);
+    const zona = GL.etiquetaZona(CONFIG.ZONA_REFERENCIA);
+    GL.abrirModal({
+      titulo: 'Horario de la jornada ' + n,
+      cuerpo:
+        '<p class="modal-texto">Cargá el instante real de inicio y de cierre. Se guarda en UTC y el generador de mensajes lo convierte a la zona de cada jugador.</p>' +
+        '<div class="campo-row">' +
+          '<label class="campo" style="margin:0"><span>Fecha de inicio (' + esc(zona) + ')</span>' +
+            '<input class="input" type="date" id="jh-fecha-inicio" value="' + esc(ini.fecha) + '"></label>' +
+          '<label class="campo" style="margin:0"><span>Hora de inicio (' + esc(zona) + ')</span>' +
+            '<input class="input" type="time" id="jh-hora-inicio" value="' + esc(ini.hora) + '"></label>' +
+        '</div>' +
+        '<div class="campo-row mt">' +
+          '<label class="campo" style="margin:0"><span>Fecha límite (' + esc(zona) + ')</span>' +
+            '<input class="input" type="date" id="jh-fecha-limite" value="' + esc(fin.fecha || ini.fecha) + '"></label>' +
+          '<label class="campo" style="margin:0"><span>Hora límite (' + esc(zona) + ')</span>' +
+            '<input class="input" type="time" id="jh-hora-limite" value="' + esc(fin.hora) + '"></label>' +
+        '</div>' +
+        '<p class="nota-pie">Si falta alguno de estos datos, el generador de mensajes bloquea la vista previa hasta cargarlos.</p>',
+      acciones: '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
+                '<button type="button" class="btn" id="jh-guardar">' + icono('save', 16) + 'Guardar horario</button>',
+      onAbrir(fondo, cerrar) {
+        fondo.querySelector('#jh-guardar').addEventListener('click', async () => {
+          const btn = fondo.querySelector('#jh-guardar');
+          const inicio = GL.momentoZona(fondo.querySelector('#jh-fecha-inicio').value,
+            fondo.querySelector('#jh-hora-inicio').value, CONFIG.ZONA_REFERENCIA);
+          const limite = GL.momentoZona(fondo.querySelector('#jh-fecha-limite').value,
+            fondo.querySelector('#jh-hora-limite').value, CONFIG.ZONA_REFERENCIA);
+          if (!inicio || !limite) {
+            GL.notificar('Completá fecha y hora de inicio y de cierre.', 'advertencia'); return;
+          }
+          if (limite <= inicio) {
+            GL.notificar('La hora límite debe ser posterior al inicio.', 'advertencia'); return;
+          }
+          btn.disabled = true;
+          const values = { fecha_inicio: inicio.toISOString(), hora_limite: limite.toISOString() };
+          const { error } = jdata.id
+            ? await sb.from('jornadas').update(values).eq('id', jdata.id)
+            : await sb.from('jornadas').insert(Object.assign({
+                torneo_id: torneo.id, grupo_id: Mod.grupoJornadas, numero: n
+              }, values));
+          if (error) { GL.notificar(error.message, 'error'); btn.disabled = false; return; }
+          const grupoAud = GL.ctx.grupos.find(g => g.id === Mod.grupoJornadas);
+          GL.auditoria && GL.auditoria.registrar('jornada_horario_actualizado', 'jornada', null, {
+            numero: n,
+            grupo: grupoAud ? grupoAud.nombre : '?',
+            inicio: GL.fechaHoraEnZona(inicio, CONFIG.ZONA_REFERENCIA),
+            limite: GL.fechaHoraEnZona(limite, CONFIG.ZONA_REFERENCIA)
+          });
+          cerrar();
+          GL.invalidar();
+          await GL.cargarContexto(true);
+          GL.notificar('Horario de la jornada ' + n + ' guardado.', 'exito');
+          Mod.render(root);
+        });
+      }
     });
     iniciarIconos();
   }

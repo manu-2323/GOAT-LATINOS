@@ -138,6 +138,51 @@ const GL = {
     return new Date(instante);
   },
 
+  /* Instante UTC que corresponde a una fecha y hora LOCAL en la zona IANA dada.
+     Ajuste iterativo para cambios estacionales. Devuelve null si los datos no son válidos. */
+  momentoZona(fecha, hora, zona) {
+    const z = GL._zonaResuelta(zona) || CONFIG.ZONA_REFERENCIA;
+    const f = String(fecha || '').slice(0, 10);
+    const h = String(hora || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f) || !/^\d{1,2}:\d{2}$/.test(h)) return null;
+    const [anio, mes, dia] = f.split('-').map(Number);
+    const [hh, mm] = h.split(':').map(Number);
+    if (hh > 23 || mm > 59 || !mes || mes > 12 || !dia || dia > 31) return null;
+    const objetivo = Date.UTC(anio, mes - 1, dia, hh, mm);
+    const fechaObjetivo = new Date(objetivo);
+    if (isNaN(fechaObjetivo.getTime()) ||
+        fechaObjetivo.getUTCFullYear() !== anio || fechaObjetivo.getUTCMonth() !== mes - 1 ||
+        fechaObjetivo.getUTCDate() !== dia) return null;
+    let instante = objetivo;
+    for (let i = 0; i < 5; i++) {
+      const p = GL.partesEnZona(instante, z);
+      const obtenido = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute);
+      const delta = objetivo - obtenido;
+      if (!delta) break;
+      instante += delta;
+    }
+    return new Date(instante);
+  },
+
+  /* Fecha de un instante en una zona: DD/MM/YYYY. */
+  fechaEnZona(instante, zona) {
+    if (!instante) return 'Por definir';
+    const d = instante instanceof Date ? instante : new Date(instante);
+    if (isNaN(d.getTime())) return 'Por definir';
+    const p = GL.partesEnZona(d, zona);
+    return String(p.day).padStart(2, '0') + '/' + String(p.month).padStart(2, '0') + '/' + p.year;
+  },
+
+  /* Fecha y hora de un instante en una zona: DD/MM HH:mm. */
+  fechaHoraEnZona(instante, zona) {
+    if (!instante) return 'Por definir';
+    const d = instante instanceof Date ? instante : new Date(instante);
+    if (isNaN(d.getTime())) return 'Por definir';
+    const p = GL.partesEnZona(d, zona);
+    return String(p.day).padStart(2, '0') + '/' + String(p.month).padStart(2, '0') + ' ' +
+      String(p.hour).padStart(2, '0') + ':' + String(p.minute).padStart(2, '0');
+  },
+
   horaEnZona(instante, zona) {
     const z = GL._zonaResuelta(zona) || CONFIG.ZONA_REFERENCIA;
     const fecha = instante instanceof Date ? instante : new Date(instante);
