@@ -1,6 +1,6 @@
 # GOATS LATINOS · League Manager — Configuración
 
-Versión actual: **1.0.13**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
+Versión actual: **1.0.14**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
 
 ## 1. Arranque
 
@@ -224,7 +224,21 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
   con `authenticated` sin rol admin bloqueada en todas las RPC. Detalle en
   `docs/QA-AUDITORIA-1.0.13.md`.
 
-## 10. Mejoras 1.0.5
+## 10. Mejoras 1.0.14 — Estadísticas de rendimiento
+
+- **Denominador correcto por métrica**: goles por partido real, posesión sobre partidos con posesión
+  registrada y precisión de pase sobre partidos con pase registrado. Un encuentro sin dato no cuenta
+  como `0%` ni entra en el denominador; los walkovers y resoluciones por expulsión quedan fuera.
+- **Fuente única**: `EST.calcularPromedios()` y `EST.calcularRendimiento()` son los únicos que
+  calculan estos promedios. `stats-globales.js` y `perfil.js` consumen ese resultado, sin lógica
+  duplicada.
+- **Visibilidad**: las globales muestran `n PJ con datos` junto a posesión y pase, y goles por partido
+  real en el top de goleadores; el perfil muestra partidos reales, goles por partido real y la cuenta
+  de partidos con datos.
+- **Verificación**: datos sintéticos con denominadores `posN=2`, `paseN=2` y `promGoles=2`; render sin
+  `undefined`/`NaN` y consola sin errores. Detalle en `docs/QA-ESTADISTICAS-1.0.14.md`.
+
+## 11. Mejoras 1.0.5
 
 - **Países dinámicos**: tabla `paises` cargada al arrancar; banderas reales vía `flagcdn.com` en tabla,
   fixture, perfil y administración. La bandera emoji queda solo para textos de WhatsApp.
@@ -244,7 +258,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **IA**: Gemini Flash-Lite (`gemini-3.5-flash-lite`, modelo 2.0 retirado por Google) reemplaza a la integración anterior; toast con icono animado
   `Analizando captura con Gemini AI...`.
 
-## 11. Decisiones de diseño
+## 12. Decisiones de diseño
 
 - **Sin emojis en la UI.** El código de país se muestra como chip tipográfico y bandera de imagen.
   Las banderas emoji se usan únicamente en textos generados para WhatsApp.
@@ -258,7 +272,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Confirmaciones**: acciones destructivas usan modal; el resto de acciones confirman con toast.
 - Todas las vistas muestran skeleton mientras cargan y reinicializan Lucide después de cada render.
 
-## 12. Solución de problemas
+## 13. Solución de problemas
 
 | Síntoma | Acción |
 |---|---|

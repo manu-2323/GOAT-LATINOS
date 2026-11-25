@@ -5,6 +5,16 @@
    ===================================================================== */
 (function () {
 
+  /* Un dato solo cuenta si viene cargado y está en un rango válido.
+     null, undefined, '' o NaN NO son 0: significan "sin estadística". */
+  function datoRegistrado(valor, minimo, maximo) {
+    if (valor === null || valor === undefined || valor === '') return null;
+    const n = Number(valor);
+    if (!Number.isFinite(n) || n < minimo) return null;
+    if (maximo !== undefined && n > maximo) return null;
+    return n;
+  }
+
   const EST = {
 
     /* ------------------------------------------------------------------
@@ -83,28 +93,43 @@
     ------------------------------------------------------------------ */
     calcularPromedios(partidos, jugadorId) {
       const stats = {};
-      const a = id => stats[id] || (stats[id] = { id, pj: 0, posesion: 0, pase: 0, tiros: 0, tirosPuerta: 0 });
+      const a = id => stats[id] || (stats[id] = {
+        id, pj: 0, posesion: 0, pase: 0, tiros: 0, tirosPuerta: 0,
+        posN: 0, paseN: 0, tirosN: 0, tirosPuertaN: 0
+      });
       // Solo partidos realmente jugados en FC Mobile.
       // Los walkovers y resoluciones por expulsión NO generan datos de posesión,
       // tiros ni precisión de pase — son marcadores administrativos, no rendimiento real.
       partidos.filter(p => p.estado === 'jugado' && !GL.esAdministrativo(p)).forEach(p => {
         const l = a(p.local_id), v = a(p.visitante_id);
         l.pj++; v.pj++;
-        l.posesion += Number(p.posesion_local) || 0;
-        v.posesion += Number(p.posesion_visitante) || 0;
-        l.pase += Number(p.pase_local) || 0;
-        v.pase += Number(p.pase_visitante) || 0;
-        l.tiros += Number(p.tiros_local) || 0;
-        v.tiros += Number(p.tiros_visitante) || 0;
-        l.tirosPuerta += Number(p.tiros_puerta_local) || 0;
-        v.tirosPuerta += Number(p.tiros_puerta_visitante) || 0;
+
+        // Cada métrica suma solo cuando su dato existe. Un partido sin posesión
+        // cargada NO cuenta como 0% ni entra en el denominador de posesión.
+        const datos = [
+          { clave: 'posesion',    n: 'posN',    local: datoRegistrado(p.posesion_local, 0, 100), visita: datoRegistrado(p.posesion_visitante, 0, 100) },
+          { clave: 'pase',        n: 'paseN',    local: datoRegistrado(p.pase_local, 0, 100),     visita: datoRegistrado(p.pase_visitante, 0, 100) },
+          { clave: 'tiros',       n: 'tirosN',   local: datoRegistrado(p.tiros_local, 0),         visita: datoRegistrado(p.tiros_visitante, 0) },
+          { clave: 'tirosPuerta', n: 'tirosPuertaN', local: datoRegistrado(p.tiros_puerta_local, 0), visita: datoRegistrado(p.tiros_puerta_visitante, 0) }
+        ];
+        datos.forEach(d => {
+          if (d.local !== null)  { l[d.clave] += d.local;  l[d.n]++; }
+          if (d.visita !== null) { v[d.clave] += d.visita; v[d.n]++; }
+        });
       });
       Object.values(stats).forEach(s => {
-        s.promPos = s.pj ? Math.round(s.posesion / s.pj) : 0;
-        s.promPase = s.pj ? Math.round(s.pase / s.pj) : 0;
+        s.promPos = s.posN ? Math.round(s.posesion / s.posN) : 0;
+        s.promPase = s.paseN ? Math.round(s.pase / s.paseN) : 0;
+        s.promTiros = s.tirosN ? Math.round((s.tiros / s.tirosN) * 10) / 10 : 0;
+        s.promTirosPuerta = s.tirosPuertaN ? Math.round((s.tirosPuerta / s.tirosPuertaN) * 10) / 10 : 0;
       });
       const todos = Object.values(stats);
-      if (jugadorId) return todos.find(s => s.id === jugadorId) || { id: jugadorId, pj: 0, posesion: 0, pase: 0, tiros: 0, tirosPuerta: 0, promPos: 0, promPase: 0 };
+      const vacio = () => ({
+        id: jugadorId, pj: 0, posesion: 0, pase: 0, tiros: 0, tirosPuerta: 0,
+        posN: 0, paseN: 0, tirosN: 0, tirosPuertaN: 0,
+        promPos: 0, promPase: 0, promTiros: 0, promTirosPuerta: 0
+      });
+      if (jugadorId) return todos.find(s => s.id === jugadorId) || vacio();
       return todos;
     },
 
@@ -162,9 +187,12 @@
         difReglamentario: cl.dif || 0,
         // Goles reales (rendimiento deportivo, solo FC Mobile)
         gf: gr.gf, gc: gr.gc, dif: gr.dif,
-        // Vallas y promedios
+        partidosReales: gr.pj || 0,
+        promGoles: gr.pj ? Math.round((gr.gf / gr.pj) * 10) / 10 : 0,
+        // Vallas y promedios: cada uno usa su propio denominador válido
         vallas,
         promPos: prom.promPos, promPase: prom.promPase,
+        posN: prom.posN || 0, paseN: prom.paseN || 0,
         tiros: prom.tiros, tirosPuerta: prom.tirosPuerta,
         // Racha
         racha: rachaData.actual,

@@ -67,14 +67,16 @@
             statCard('Derrotas', 'circle-x', rend.pp, 'rojo-txt') +
           '</div>' +
           '<div class="grid tres">' +
+            statCard('Partidos reales (FC Mobile)', 'calendar-days', rend.partidosReales) +
             statCard('Goles a favor (reales)', 'goal', rend.gf) +
             statCard('Goles en contra (reales)', 'shield-alert', rend.gc) +
+            statCard('Goles por partido real', 'goal', rend.promGoles.toFixed(1), 'verde-txt') +
             statCard('Diferencia de gol', 'trending-up', GL.signo(rend.dif)) +
             statCard('Vallas en 0', 'shield', rend.vallas) +
             statCard('Tiros totales', 'crosshair', rend.tiros) +
             statCard('Tiros a puerta', 'crosshair', rend.tirosPuerta) +
-            statCard('Promedio posesión', 'pie-chart', rend.promPos + '%') +
-            statCard('Promedio precisión pase', 'route', rend.promPase + '%') +
+            statCard('Promedio posesión (' + rend.posN + ' PJ)', 'pie-chart', rend.promPos + '%') +
+            statCard('Promedio precisión pase (' + rend.paseN + ' PJ)', 'route', rend.promPase + '%') +
             statCard('Racha actual', rend.racha.tipo === 'V' ? 'trending-up' : 'trending-down', rend.racha.texto) +
             statCard('Mejor victoria', 'trophy', rend.mejorVictoria) +
             statCard('Peor derrota', 'trending-down', rend.peorDerrota) +
@@ -271,16 +273,8 @@
       return p.estado === 'jugado' && (esLocal(p, id) ? r.gc : r.gf) === 0 && !GL.esResolucionExpulsion(p);
     }).length;
   }
-  function suma(partidos, id, kLocal, kVisita) {
-    return partidos.reduce((a, p) => a + (Number(esLocal(p, id) ? p[kLocal] : p[kVisita]) || 0), 0);
-  }
-  function promedio(partidos, id, kLocal, kVisita) {
-    // Solo partidos realmente disputados en FC Mobile.
-    // Walkovers y resoluciones administrativas no generan datos de posesión ni pase,
-    // incluirlos inflaría o distorsionaría los promedios del jugador.
-    const jugados = partidos.filter(p => p.estado === 'jugado' && !GL.esAdministrativo(p));
-    return jugados.length ? Math.round(suma(jugados, id, kLocal, kVisita) / jugados.length) : 0;
-  }
+  // Los promedios se calculan en EST.calcularRendimiento(): un solo denominador
+  // válido por métrica. No se duplica la lógica aquí para evitar divergencias.
   function racha(partidos, id) {
     const js = partidos.filter(p => p.estado !== 'pendiente').sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
     if (!js.length) return { texto: '—', icono: 'minus' };

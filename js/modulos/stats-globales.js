@@ -69,7 +69,7 @@
     return Array.from(ids).map(id => {
       const c = cl.find(s => s.id === id) || { pj: 0, pg: 0, pe: 0, pp: 0, pts: 0, gf: 0, gc: 0, dif: 0, resultados: [] };
       const g = gr.find(s => s.id === id) || { gf: 0, gc: 0, dif: 0 };
-      const po = prom.find(s => s.id === id) || { promPos: 0, promPase: 0 };
+      const po = prom.find(s => s.id === id) || { promPos: 0, promPase: 0, posN: 0, paseN: 0 };
       const va = vallas.find(s => s.id === id) || { vallas: 0 };
       const rachaData = EST.calcularRachas(c.resultados);
       return {
@@ -77,8 +77,12 @@
         pj: c.pj, g: c.pg, e: c.pe, p: c.pp, puntos: c.pts,
         // gf/gc para ranking deportivo = goles reales (FC Mobile)
         gf: g.gf, gc: g.gc, dif: g.dif,
+        // Denominador de rendimiento: partidos realmente jugados, no clasificación.
+        pjReal: g.pj || 0,
+        promGoles: g.pj ? Math.round((g.gf / g.pj) * 10) / 10 : 0,
         vallas: va.vallas,
         promPos: po.promPos, promPase: po.promPase,
+        posN: po.posN || 0, paseN: po.paseN || 0,
         resultados: c.resultados,
         racha: rachaData.actual,
         mejorRacha: rachaData.mejorVictorias,
@@ -164,11 +168,15 @@
       return GL.vacio('Todavía no hay resultados cargados en este grupo.', 'chart-no-axes-column', null);
     }
     return '<div class="grid tres">' +
-        metrica('Top 5 goleadores', 'goal', top(lista, 'gf', 5), 'gf', '', s => s.pj + ' partidos') +
+        metrica('Top 5 goleadores', 'goal', top(lista, 'gf', 5), 'gf', '',
+          s => s.promGoles.toFixed(1) + ' por partido real · ' + s.pjReal + ' PJ reales') +
         metrica('Top 5 vallas invictas', 'shield', top(lista, 'vallas', 5), 'vallas', '') +
         metrica('Top 5 victorias', 'trophy', top(lista, 'g', 5), 'g', '', s => s.pj + ' partidos') +
         metrica('Top 5 mejor diferencia', 'trending-up', top(lista, 'dif', 5), 'dif', '') +
-        metrica('Top 5 posesión', 'pie-chart', top(lista, 'promPos', 5), 'promPos', '%') +
+        metrica('Top 5 posesión', 'pie-chart', top(lista, 'promPos', 5), 'promPos', '%',
+          s => s.posN + ' PJ con datos') +
+        metrica('Top 5 precisión de pase', 'route', top(lista, 'promPase', 5), 'promPase', '%',
+          s => s.paseN + ' PJ con datos') +
         rachasHtml(lista) +
       '</div>' +
       '<div class="card mt"><div class="card-titulo">' + icono('chart-no-axes-column', 19) + 'Goles por jugador</div>' +
@@ -176,13 +184,15 @@
       '</div>' +
       '<div class="mt">' + h2hHtml(partidos, grupoId) + '</div>' +
       '<div class="card mt"><div class="card-titulo">' + icono('table-2', 19) + 'Resumen completo</div>' +
-        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th class="izq">Jugador</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>Dif</th><th>Vallas</th><th>Pos %</th><th>Pase %</th><th>Pts</th></tr></thead><tbody>' +
+        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th class="izq">Jugador</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>Dif</th><th>Vallas</th><th title="Sobre partidos con posesión registrada">Pos %</th><th title="Sobre partidos con precisión de pase registrada">Pase %</th><th>Pts</th></tr></thead><tbody>' +
         lista.slice().sort((a, b) => b.puntos - a.puntos || b.dif - a.dif).map((s, i) =>
           '<tr style="animation-delay:' + (i * .03) + 's"><td class="izq"><div class="jugador-celda">' + avatar(s.id) +
           esc(GL.nombreJugador(s.id)) + '</div></td><td class="num">' + s.pj + '</td><td class="num">' + s.g +
           '</td><td class="num">' + s.e + '</td><td class="num">' + s.p + '</td><td class="num verde-txt">' + s.gf +
           '</td><td class="num rojo-txt">' + s.gc + '</td><td class="num">' + GL.signo(s.dif) +
-          '</td><td class="num">' + s.vallas + '</td><td class="num">' + s.promPos + '</td><td class="num">' + s.promPase +
+          '</td><td class="num">' + s.vallas +
+          '</td><td class="num">' + s.promPos + '<small class="extra">' + s.posN + ' PJ con datos</small>' +
+          '</td><td class="num">' + s.promPase + '<small class="extra">' + s.paseN + ' PJ con datos</small>' +
           '</td><td class="num dorado">' + s.puntos + '</td></tr>').join('') +
         '</tbody></table></div></div>';
   }
