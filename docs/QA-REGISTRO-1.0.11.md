@@ -65,6 +65,14 @@ Se intentó además una prueba de alta completa, pero GoTrue rechazó los correo
 (HTTP 429). No se creó ninguna cuenta: `auth.users = 0`, `jugadores = 24`, `mfa_factors = 0`
 después de los intentos.
 
+## Publicación
+
+- Commit `839d986` en `main`; GitHub Pages build `45523292976` completado con éxito.
+- Sitio live: `CONFIG.VERSION = 1.0.11` y `GLManager.version = 1.0.11`.
+- `js/core/supabase.js` en vivo usa `gl_nombre_disponible` y ya no contiene `gl_correo_existe`.
+- `index.html` en vivo tiene 12 scripts con `?v=1.0.11` y un solo `meta description`.
+- Prueba en vivo: `LIVE_QA_1011` muestra **Nombre disponible** y 0 errores de consola.
+
 ## Conclusión
 
 El bloqueo reportado (“ningún nombre tiene disponibilidad”) quedó resuelto: la UI muestra
