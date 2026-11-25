@@ -72,4 +72,15 @@ devuelve `2 - 1` y `GL.golesReales(...)` solo `{gf, gc}` como corresponde.
 
 ## Publicación
 
-- Pendiente de commit/push y verificación de GitHub Pages y del sitio live.
+- Commit `a362562` (“Endurecer RPC y corregir bugs de frontend (1.0.13)”), pusheado a
+  `origin/main` desde `3c9ae1b`.
+- GitHub Pages: run `45527630157` (n.º 16, `head_sha a362562`) **completado con `success`**.
+- Sitio live `https://manu-2323.github.io/GOAT-LATINOS/`: `CONFIG.VERSION = 1.0.13`,
+  `GL.resultado(...) = 2 - 1`, `GL.horarioZona('America/Tijuana') = 09:00 – 19:00`.
+- `index.html` en vivo: 11 scripts y 1 hoja de estilos con `?v=1.0.13` (12 referencias),
+  sin restos de `?v=1.0.12`.
+- Consola sin errores. Red: `paises`, `torneos`, `grupos`, `jugadores_publicos`,
+  `grupo_jugadores`, `jornadas`, `clasificacion` y `sanciones` devolvieron `200`. No hubo
+  lecturas de `jugadores` ni llamadas a RPC sensibles sin sesión.
+- Cierre: versión `1.0.13` publicada y verificada en local, base de datos remota y sitio live.
+  Queda pendiente repetir los flujos administrativos reales cuando exista una cuenta admin.
