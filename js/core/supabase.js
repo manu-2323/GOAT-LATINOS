@@ -145,23 +145,31 @@ const Auth = {
     return Auth.usuario;
   },
 
-  /* Acceso admin: la clave se valida en la Edge Function, nunca en el navegador. */
+  /* Acceso admin: la RPC valida correo autorizado + clave hash antes del login. */
   async entrarAdmin(correo, clave) {
     if (!sb) throw new Error('Supabase no está configurado.');
     const email = String(correo || '').trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Ingresá un correo electrónico válido.');
     if (!clave) throw new Error('Ingresá la clave de administrador.');
-    let torneoId = null;
-    try { await GL.cargarContexto(); torneoId = GL.torneoId(); } catch (e) { torneoId = null; }
-    const { error } = await sb.functions.invoke('admin-bootstrap', {
-      body: { email, password: clave, torneo_id: torneoId }
+
+    const { data: validacion, error: errValidar } = await sb.rpc('gl_validar_acceso_admin', {
+      p_email: email, p_clave: clave
     });
-    if (error) throw new Error(Auth.traducir(await mensajeFuncion(error)));
+    if (errValidar) throw new Error(Auth.traducir(errValidar.message));
+    if (!validacion || validacion.ok !== true) {
+      throw new Error((validacion && validacion.mensaje) || 'Acceso de administrador no autorizado.');
+    }
+
     const { data, error: errLogin } = await sb.auth.signInWithPassword({ email, password: clave });
     if (errLogin) throw new Error(Auth.traducir(errLogin.message));
     Auth.usuario = data.user;
     await Auth.cargarPerfil(true);
-    if (!Auth.esAdmin()) throw new Error('La cuenta no quedó habilitada como administrador.');
+    if (!Auth.esAdmin()) {
+      await sb.auth.signOut();
+      Auth.usuario = null;
+      Auth.jugador = null;
+      throw new Error('Ese correo no está habilitado como administrador.');
+    }
     return Auth.usuario;
   },
 

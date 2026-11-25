@@ -1,7 +1,7 @@
 /* =====================================================================
    GOATS LEAGUE MANAGER — Pantalla de acceso / registro
    El alta pide el nombre con el que el jugador aparece en FC Mobile.
-   El acceso admin valida la clave en una Edge Function (nunca en el JS).
+   El acceso admin valida correo y clave en Supabase (nunca en el JS).
    ===================================================================== */
 const PantallaAuth = {
   modo: 'entrar',
@@ -37,7 +37,7 @@ const PantallaAuth = {
     const esAdmin = PantallaAuth.modo === 'admin';
     const esEntrar = PantallaAuth.modo === 'entrar' || esAdmin;
     const cuerpo = esAdmin
-      ? '<h2>Acceso de administrador</h2><p>Usá cualquier correo y la clave de administrador. El servidor valida el acceso.</p>' +
+      ? '<h2>Acceso de administrador</h2><p>Ingresá el correo autorizado y la clave de administrador. El servidor valida ambos.</p>' +
         '<form id="form-admin">' +
           '<label>Correo electrónico<input class="input" type="email" id="ad-correo" autocomplete="email" required></label>' +
           PantallaAuth.campoClave('ad-clave', 'Clave de administrador', 'current-password') +
@@ -94,7 +94,7 @@ const PantallaAuth = {
         '<small>LEAGUE MANAGER</small></div>' +
         '<div class="auth-caja">' + cuerpo + '</div>' +
         '<p class="auth-pie">' + (esAdmin
-          ? 'La clave de administrador se configura en el servidor. Nunca se guarda en el navegador.'
+          ? 'Solo dos correos están autorizados. La clave se valida en el servidor y nunca se guarda en el navegador.'
           : 'Al registrarte quedarás pendiente de aprobación hasta que el administrador te asigne a un grupo.') + '</p>' +
       '</div>';
     document.body.appendChild(o);

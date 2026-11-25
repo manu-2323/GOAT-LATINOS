@@ -80,7 +80,7 @@ cuentas.
 | **SERVICE_ROLE_KEY** | Solo secret de Supabase Edge Functions |
 | **GEMINI_API_KEY** | Solo secret de la función `analizar-captura` |
 | **ADMIN_PASSWORD** | Solo secret de `admin-gestionar-admins` y `admin-obtener-clave` |
-| Contraseña bootstrap | Constante server-side en `admin-bootstrap`; nunca en frontend, repo ni docs |
+| Clave de administrador | Hash bcrypt en `public.admin_credencial` + secreto `ADMIN_PASSWORD`; nunca en claro en frontend, repo ni docs |
 
 > La Service Role Key, la API key de Gemini y la clave de administrador **nunca** se escriben en el
 > frontend, en este repo ni en docs. Si expusiste alguna, rotala desde Supabase → Settings → API
@@ -97,21 +97,27 @@ supabase secrets set ADMIN_PASSWORD=<clave_de_administrador>
 
 No reescribas los valores actuales salvo rotación intencional.
 
-### Roles y acceso de administrador
+### Roles y acceso de administrador (1.0.18)
 
-- No hay lista fija de correos: **cualquier correo puede ingresar como admin si conoce la clave**.
-- En la pantalla de acceso, tocá **Acceso de administrador**, escribí el correo y la clave.
-- `admin-bootstrap` valida la clave contra la constante bootstrap del propio Edge Function, crea/
-  actualiza la cuenta y promueve la fila en `jugadores` usando Service Role. El navegador nunca
-  compara la clave. Se bloquea de forma permanente después del primer alta exitosa y limita intentos.
-- Las altas posteriores de administradores usan `admin-gestionar-admins` con `ADMIN_PASSWORD` y
-  `admin-promover`, ambos restringidos al `super_admin`.
-- El **primer administrador** queda marcado como `super_admin`. Ese rol habilita la pestaña
-  **Administradores**, la gestión de otros admins, la consulta de la clave y la edición de países.
-- `admin-gestionar-admins` exige `super_admin`. Los nuevos administrarios se crean con
-  `super_admin: false`. No se puede quitar el rol al administrador principal ni dejar menos de un admin.
-- `admin-obtener-clave` devuelve `ADMIN_PASSWORD` únicamente al `super_admin` autenticado. Se muestra
-  en **Administración → Administradores → Ver clave de administrador**.
+- Hay **exactamente dos cuentas autorizadas**: `manuelperezcanales2021@gmail.com` (superadministrador)
+  y `fcmobilegt00@gmail.com` (administrador). Un jugador que conozca la clave **no puede entrar** con
+  otro correo: la RPC rechaza el correo antes de comparar la clave.
+- En la pantalla de acceso, tocá **Acceso de administrador**, escribí el correo autorizado y la clave.
+- `gl_validar_acceso_admin(p_email, p_clave)` es una RPC `SECURITY DEFINER` ejecutable por `anon`.
+  Consulta `public.admin_acceso`, compara la clave con el hash bcrypt de `public.admin_credencial` usando
+  `extensions.crypt`, exige que la fila siga siendo `rol='admin'` y `activo=true`, y bloquea tras
+  **5 intentos fallidos por correo durante 15 minutos**. El navegador nunca compara la clave.
+- Después de validar, el cliente hace `signInWithPassword` con la misma clave, recarga el perfil y
+  cierra la sesión si la fila no es administrador. La sesión de Supabase es el único estado de acceso.
+- `admin-bootstrap` quedó **retirado y desactivado**: ya no contiene clave fija ni crea administradores.
+- Ambos administradores tienen `rol='admin'`, por lo que acceden a **todos los módulos** —incluido
+  Calendario, Jornadas, Resultados, Mensajes y Administración— y conservan su fila original de jugador,
+  con grupo, partidos y estadísticas personales intactos.
+- Manuel conserva `super_admin=true`: esa flag habilita la pestaña **Administradores**, la consulta de
+  la clave y la edición de países. GØA tiene `super_admin=false` pero acceso completo vía `rol='admin'`.
+- `ツ ƈнєяy` pasó a `rol='jugador'` sin perder ningún dato deportivo.
+- `admin-gestionar-admins` y `admin-obtener-clave` siguen exigiendo `super_admin` y usan el secreto
+  `ADMIN_PASSWORD`, rotado a la misma clave compartida.
 - Los roles se verifican contra la base de datos **en cada carga de módulo**, no solo al iniciar sesión.
 
 Para corregir un rol a mano (solo si hace falta):
@@ -139,7 +145,7 @@ supabase functions deploy eliminar-cuenta --yes
 |---|---|
 | `analizar-captura` | Valida sesión de admin, acepta JPG/PNG de hasta 5 MB y llama a **Gemini Flash-Lite** (`gemini-3.5-flash-lite:generateContent`) con thinking mínimo y timeout de 18 s. El modelo 2.0 fue retirado por Google y 3.8 Flash tiene una latencia excesiva para esta extracción. Devuelve exactamente 10 campos numéricos: goles, tiros, tiros a puerta, posesión y pases de ambos equipos. |
 | `admin-crear-jugador` | Crea cuenta Auth y fila en `jugadores` con Service Role verificando que quien llama es admin. Si falla la BD, borra el usuario creado. |
-| `admin-bootstrap` | Valida la clave de administrador, crea/actualiza la cuenta, promueve a admin y asigna `super_admin` al primero. Límite: 5 intentos/minuto. |
+| `admin-bootstrap` | Retirada en 1.0.18. Devuelve 403 y no contiene clave: el acceso usa la RPC `gl_validar_acceso_admin`. |
 | `admin-gestionar-admins` | Alta y baja de administradores, solo para `super_admin`. Bloquea auto-despromoción, quitar al principal y dejar menos de un admin. |
 | `admin-obtener-clave` | Devuelve la clave de administrador solo al `super_admin`; nunca se guarda en frontend ni BD. |
 | `eliminar-cuenta` | Borra cuenta Auth, fila de jugador, partidos, clasificación, sanciones, membresías y avatar. Exige escribir `ELIMINAR`. Bloquea borrar al `super_admin` o al último admin. |
@@ -148,8 +154,8 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 
 ## 5. Flujo recomendado del admin
 
-1. Ejecutá el SQL de la sección 2, configurá los secrets y desplegá las seis funciones.
-2. Entrá con **Acceso de administrador** usando cualquier correo y la clave configurada.
+1. Ejecutá el SQL de la sección 2, aplicá `supabase/migration-admin-1.0.18.sql`, configurá los secrets y desplegá las siete funciones.
+2. Entrá con **Acceso de administrador** usando uno de los dos correos autorizados y la clave compartida.
 3. Administración → Configuración: revisá nombre, temporada y jornadas (22).
 4. Administración → Jugadores: agregá a los 12 jugadores de cada grupo (o esperá a que se registren).
 5. Fixture → Generar fixture (exactamente 12 por grupo).

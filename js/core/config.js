@@ -6,7 +6,7 @@ const CONFIG = {
   SUPABASE_URL: 'https://zmjzlvsdlfzmhptmtmjx.supabase.co',
   SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptanpsdnNkbGZ6bWhwdG10bWp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0ODE4MDIsImV4cCI6MjExMTA1NzgwMn0.4FosjYMKwl3n6ab-8Zw48lwxdmk1NQzsHAxynNFiRoA',
   NOMBRE_LIGA: 'GOATS LATINOS',
-  VERSION: '1.0.17',
+  VERSION: '1.0.18',
   BUCKET_CAPTURAS: 'capturas-partidos',
   BUCKET_AVATARES: 'avatares',
   JORNADAS_FASE_REGULAR: 22,
@@ -19,7 +19,7 @@ const CONFIG = {
   ZONA_REFERENCIA: 'America/Managua',
   HORA_INICIO_REFERENCIA: '11:00',
   HORA_FIN_REFERENCIA: '21:00'
-  /* La clave de administrador NO vive aquí: se valida en una Edge Function. */
+  /* La clave de administrador NO vive aquí: se valida en Supabase por RPC. */
 };
 
 /* Horario base de referencia: Nicaragua / Costa Rica (UTC-6), 11:00 AM – 9:00 PM.
