@@ -108,19 +108,27 @@
       const ra = GL.golesReales(a), rb = GL.golesReales(b);
       return (rb.gf + rb.gc) - (ra.gf + ra.gc);
     })[0];
-    const r = mejorPartido ? GL.golesReales(mejorPartido) : { gf: 0, gc: 0 };
+    // GL.golesReales() solo devuelve {gf, gc}: el marcador visible sale de GL.resultado().
+    // Si todos los partidos están resueltos administrativamente no hay "mejor partido":
+    // mostramos una nota clara en vez de leer local_id de undefined.
+    const marcador = mejorPartido ? GL.resultado(mejorPartido) : null;
+    const golesReales = mejorPartido ? GL.golesReales(mejorPartido) : { gf: 0, gc: 0 };
+    const cardMejorPartido = mejorPartido
+      ? '<div class="card"><div class="card-titulo">' + icono('star', 19) + 'Mejor partido de la jornada</div>' +
+          '<div class="center" style="padding:16px 0">' +
+            '<div style="font-family:Rajdhani;font-size:17px">' + esc(GL.nombreJugador(mejorPartido.local_id)) +
+            ' <span class="dorado">' + esc(marcador.texto) + '</span> ' + esc(GL.nombreJugador(mejorPartido.visitante_id)) + '</div>' +
+            '<div class="num dorado" style="font-size:38px;font-family:Rajdhani;font-weight:700;margin-top:6px">' +
+              (golesReales.gf + golesReales.gc) + ' goles</div>' +
+          '</div></div>'
+      : '<div class="card"><div class="card-titulo">' + icono('star', 19) + 'Mejor partido de la jornada</div>' +
+          GL.vacio('Todavía no hay partidos jugados en esta jornada.', 'swords', null) + '</div>';
     return '<div class="grid tres">' +
       metrica('Más porterías rasgadas', 'zap', top(s, 'gf'), 'gf', '', x => 'prom. ' + x.promedio.toFixed(1)) +
       metrica('Más porterías en 0', 'shield', top(s, 'vallas'), 'vallas', '') +
       metrica('Menos goles recibidos', 'lock', s.slice().sort((a, b) => a.gc - b.gc).slice(0, 3), 'gc', '') +
       metrica('Mejor diferencia de gol', 'trending-up', top(s, 'dif'), 'dif', '') +
-      '<div class="card"><div class="card-titulo">' + icono('star', 19) + 'Mejor partido de la jornada</div>' +
-        '<div class="center" style="padding:16px 0">' +
-          '<div style="font-family:Rajdhani;font-size:17px">' + esc(GL.nombreJugador(mejorPartido.local_id)) +
-          ' <span class="dorado">' + r.texto + '</span> ' + esc(GL.nombreJugador(mejorPartido.visitante_id)) + '</div>' +
-          '<div class="num dorado" style="font-size:38px;font-family:Rajdhani;font-weight:700;margin-top:6px">' +
-            (r.gf + r.gc) + ' goles</div>' +
-        '</div></div>' +
+      cardMejorPartido +
       metrica('Mejor jugador de la jornada', 'award', top(s, 'score'), 'score', ' pts', x => x.gf + ' goles · ' + x.vallas + ' vallas') +
       '</div>' +
       '<div class="card mt"><div class="card-titulo">' + icono('activity', 19) + 'Detalle por jugador</div>' +

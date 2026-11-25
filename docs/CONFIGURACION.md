@@ -1,6 +1,6 @@
 # GOATS LATINOS · League Manager — Configuración
 
-Versión actual: **1.0.12**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
+Versión actual: **1.0.13**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
 
 ## 1. Arranque
 
@@ -32,6 +32,10 @@ Todo el SQL está en `supabase/` y es idempotente. Ejecutalo en Supabase → SQL
 6. `migration-zonas-horarias.sql` — columna `jugadores.zona_horaria` con backfill por país,
    vista pública actualizada y validación de formato IANA. Ejecutar **después** de
    `migration-registro-seguro.sql` para conservar la vista con la columna nueva.
+7. `migration-hardening-rpcs.sql` (1.0.13) — renombra las RPC sensibles a `*_interno`, crea
+   wrappers que validan `public.gl_es_admin()` con `auth.uid()`, revoca `EXECUTE` a `anon`/`PUBLIC`,
+   fija `search_path` en funciones `SECURITY DEFINER` y termina con `notify pgrst, 'reload schema'`.
+   Aplicada en producción sin errores; ver `docs/QA-AUDITORIA-1.0.13.md`.
 
 Estado verificado en remoto: 16 países activos, 1 torneo activo, 2 grupos, columnas `numero`,
 `email`, `super_admin`, `avatar_url`, `zona_horaria`, bucket `avatares` público, RPC
@@ -195,7 +199,30 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Novatos**: notas con el horario local y su offset (`UTC-06:00`), selector con nombres de
   ciudad y mensaje de ayuda si todavía no eligieron zona.
 
-## 9. Mejoras 1.0.5
+## 9. Mejoras 1.0.13 — Auditoría de RPC y correcciones
+
+- **RPC endurecidas**: `gl_generar_fixture`, `gl_generar_calendario`, `gl_guardar_resultado`,
+  `gl_cerrar_jornada`, `gl_crear_temporada` y `recalcular_clasificacion` ahora son wrappers que
+  validan `public.gl_es_admin()` y toman la identidad de `auth.uid()`, nunca del UUID que enviaba
+  el navegador (`p_ingresado_por`, `p_cerrado_por`, `p_creado_por`).
+- **Sin `anon` escribiendo**: se revocó `EXECUTE` a `anon` y `PUBLIC` en esas RPC y en las
+  internas `*_interno`, notificaciones, auditoría, `limpiar_rate_limits` y triggers. El frontend
+  con sesión conserva acceso; `gl_nombre_disponible` sigue público para el registro.
+- **`search_path` fijo**: `''` en los wrappers y `public, pg_temp` en las funciones internas y
+  helpers, para evitar secuestro de `search_path`.
+- **Notificaciones**: un jugador solo crea las suyas; el admin puede crear para cualquiera.
+  Auditoría registra siempre a quien ejecuta la acción (`auth.uid()`).
+- **`partidos_historial`**: sin grants directos a `anon`/`authenticated`; sus políticas
+  `ph_admin_read` / `ph_service_write` ya usan `gl_es_admin()`.
+- **Bugs corregidos**: `stats-jornada.js` lee el marcador con `GL.resultado()` (antes `undefined`),
+  `clasificacion.js` devuelve el contexto refrescado, `notificaciones.js` consulta partidos con
+  `GL.partidos()` (antes `GL.ctx.partidos`, inexistente) y las eliminatorias ponen el partido extra
+  en jornadas 31+ para no colisionar con cuartos, semifinales y final.
+- **Verificación**: anon `401` en RPC sensibles, `200` en `gl_nombre_disponible`, y simulación
+  con `authenticated` sin rol admin bloqueada en todas las RPC. Detalle en
+  `docs/QA-AUDITORIA-1.0.13.md`.
+
+## 10. Mejoras 1.0.5
 
 - **Países dinámicos**: tabla `paises` cargada al arrancar; banderas reales vía `flagcdn.com` en tabla,
   fixture, perfil y administración. La bandera emoji queda solo para textos de WhatsApp.
@@ -215,7 +242,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **IA**: Gemini Flash-Lite (`gemini-3.5-flash-lite`, modelo 2.0 retirado por Google) reemplaza a la integración anterior; toast con icono animado
   `Analizando captura con Gemini AI...`.
 
-## 10. Decisiones de diseño
+## 11. Decisiones de diseño
 
 - **Sin emojis en la UI.** El código de país se muestra como chip tipográfico y bandera de imagen.
   Las banderas emoji se usan únicamente en textos generados para WhatsApp.
@@ -229,7 +256,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Confirmaciones**: acciones destructivas usan modal; el resto de acciones confirman con toast.
 - Todas las vistas muestran skeleton mientras cargan y reinicializan Lucide después de cada render.
 
-## 11. Solución de problemas
+## 12. Solución de problemas
 
 | Síntoma | Acción |
 |---|---|

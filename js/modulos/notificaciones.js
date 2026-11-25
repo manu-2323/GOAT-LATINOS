@@ -95,9 +95,9 @@
 
       // ── Próximo partido ──────────────────────────────────────────
       if (jornadaActual) {
-        const partidos = GL.ctx.partidos || [];
+        // GL.ctx no contiene partidos: se consultan bajo demanda (Tabla de posiciones los usa igual).
+        const partidos = await GL.partidos({ torneo_id: tid, jornada: jornadaActual.numero });
         const proximo = partidos.find(p =>
-          p.jornada === jornadaActual.numero &&
           p.estado === 'pendiente' &&
           (p.local_id === jid || p.visitante_id === jid));
         if (proximo) {

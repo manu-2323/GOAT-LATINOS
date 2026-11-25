@@ -20,6 +20,15 @@
     { key: 'semis',   titulo: 'Semifinales' },
     { key: 'final',   titulo: 'Final' }
   ];
+  // Los partidos extra van en una numeración propia (31 en adelante).
+  // Antes se usaba base+2: la previa (23) ponía el extra en 25, donde ya
+  // jugaban los cuartos, y semis en 29, donde ya jugaba la final.
+  const JORNADA_EXTRA_BASE = CONFIG.JORNADA_PLAYOFF_FIN + 1;
+  function jornadaExtraPara(fase, numero) {
+    const orden = ['previa', 'cuartos', 'semis', 'final'];
+    const bloque = Math.max(0, orden.indexOf(fase)) * 10;
+    return JORNADA_EXTRA_BASE + bloque + (Number(numero) || 0);
+  }
 
   // Guardia anti-doble-clic para generarSiguiente
   let _generando = false;
@@ -257,8 +266,8 @@
     const localExtra = pts(cruce.a) >= pts(cruce.b) ? cruce.a : cruce.b;
     const visitanteExtra = localExtra === cruce.a ? cruce.b : cruce.a;
 
-    // El partido extra usa la jornada base+2 (separada de ida y vuelta).
-    const jornadaExtra = Number(cruce.ida.jornada) + 2;
+    // El partido extra usa su propia numeración: nunca solapa con las rondas 23–30.
+    const jornadaExtra = jornadaExtraPara(cruce.fase, cruce.numero);
 
     // Verificar que no exista ya
     const { data: yaExiste } = await sb.from('partidos').select('id')

@@ -51,11 +51,13 @@ async function recalcularClasificacion(torneo_id, grupo_id) {
   GL.invalidar();
   await GL.cargarContexto(true);
 
-  // Devolver las filas actualizadas desde el contexto ya refrescado
-  const clasificacion = (ctx.clasificacion || []).filter(
+  // Devolver las filas actualizadas desde el contexto ya refrescado.
+  // `ctx` apuntaba al objeto anterior: cargarContexto() reemplaza GL.ctx,
+  // por eso hay que leer GL.ctx (si no, se devolvía la clasificación vieja).
+  const filas = (GL.ctx && GL.ctx.clasificacion) || [];
+  return filas.filter(
     c => c.torneo_id === tid && (!gid || c.grupo_id === gid)
   );
-  return clasificacion;
 }
 
 async function recalcularTodosLosGrupos(torneo_id) {
