@@ -54,7 +54,7 @@
         if (chk) chk.addEventListener('change', () => { Mod.soloMios = chk.checked; Mod.render(el); });
         const gen = el.querySelector('[data-generar]');
         if (gen) gen.addEventListener('click', () => Mod.generar(el));
-      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message, null, 'el fixture'); }
+      } catch (e) { console.error(e); el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'el fixture'), null, 'el fixture'); }
       iniciarIconos();
     },
 
@@ -209,7 +209,7 @@
       Mod.render(el);
     } catch (e) {
       console.error('gl_generar_fixture:', e);
-      GL.notificar('No se pudo generar el calendario: ' + e.message, 'error');
+      GL.notificar(GL.mensaje(e, 'guardar', 'el fixture'), 'error');
     }
   }
 

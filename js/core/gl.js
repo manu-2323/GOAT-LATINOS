@@ -52,6 +52,8 @@ const GL = {
      y llaman a la implementación real; el módulo puede sobrescribirlos sin
      recursion porque la delegación siempre invoca al método del módulo. */
   _delegarExport(nombre, args) {
+    /* 1.2.0: mensaje de carga legible desde el primer clic. */
+    GL.notificar(GL.mensajeCarga ? GL.mensajeCarga('png') : 'Generando PNG…', 'info', 'loader-circle');
     return GL.modulo('exportar-png').then(modulo => {
       const clave = nombre === 'exportarPNG' ? 'exportar' : nombre;
       const fn = modulo && modulo[clave];
@@ -59,7 +61,7 @@ const GL = {
       GL[nombre] = fn; // el módulo real ya cargado reemplaza al stub
       return fn.apply(GL, args);
     }).catch(e => {
-      GL.notificar(e && e.message ? e.message : 'No se pudo preparar la exportación a PNG.', 'error');
+      GL.notificar(GL.mensaje(e, 'png', 'la exportación'), 'error');
     });
   },
 
@@ -467,8 +469,9 @@ const GL = {
     }
     return out + '</div>' +
       '<p class="skeleton-leyenda" style="text-align:center;font-size:11px;color:var(--text-secondary);margin-top:10px">' +
-        icono('loader', 13) + ' Cargando información…</p>' +
-      '</div>';
+        icono('loader', 13) + ' Cargando información…</p>';
+    /* 1.2.0: se conserva el cierre sobrante como referencia histórica en comentario:
+       antes se devolvía un </div> adicional que desequilibraba el panel. */
   },
 
   vacio(mensaje, ico, accion, sugerencia) {
@@ -498,12 +501,7 @@ const GL = {
           icono('refresh-cw', 15) + 'Reintentar' +
         '</button>' +
       '</div>' +
-      '<details class="error-tecnico-det" style="margin-top:14px">' +
-        '<summary style="font-size:11px;color:var(--text-secondary);cursor:pointer">Ver detalle técnico</summary>' +
-        '<pre style="font-size:10px;color:var(--text-secondary);white-space:pre-wrap;text-align:left;margin-top:6px;max-width:340px">' +
-          esc(mensajeTecnico || '—') +
-        '</pre>' +
-      '</details>' +
+      /* 1.2.0: el detalle técnico ya no se muestra al usuario; queda solo en consola. */
     '</div>';
   },
 
@@ -516,15 +514,15 @@ const GL = {
 
     // Red / conectividad
     if (m.includes('failed to fetch') || m.includes('networkerror') || m.includes('network request failed'))
-      return 'No pudimos conectarnos con el servidor' + ctx + '. Comprobá tu conexión a internet e intentá de nuevo.';
+      return 'No pudimos conectarnos con el servidor' + ctx + '. Comprueba tu conexión a internet e intenta de nuevo.';
     if (m.includes('timeout') || m.includes('timed out'))
-      return 'La respuesta tardó demasiado' + ctx + '. El servidor puede estar ocupado. Esperá un momento y reintentá.';
+      return 'La respuesta tardó demasiado' + ctx + '. El servidor puede estar ocupado. Esperá un momento y reintenta.';
     if (m.includes('abort'))
       return 'La solicitud fue interrumpida' + ctx + '. Intentá recargar la página.';
 
     // Autenticación / sesión
     if (m.includes('jwt') || m.includes('token') || m.includes('session') || m.includes('unauthorized') || m.includes('401'))
-      return 'Tu sesión expiró. Cerrá sesión, volvé a ingresar e intentá de nuevo.';
+      return 'Tu sesión expiró. Cerrá sesión, volvé a ingresar e intenta de nuevo.';
     if (m.includes('403') || m.includes('forbidden') || m.includes('row-level security'))
       return 'No tenés permiso para realizar esta acción. Si creés que es un error, contactá al administrador.';
 
@@ -544,9 +542,9 @@ const GL = {
 
     // Límites
     if (m.includes('too large') || m.includes('payload'))
-      return 'El archivo o los datos enviados son demasiado grandes. Reducí el tamaño e intentá de nuevo.';
+      return 'El archivo o los datos enviados son demasiado grandes. Reducí el tamaño e intenta de nuevo.';
     if (m.includes('rate limit') || m.includes('too many requests') || m.includes('429'))
-      return 'Estás haciendo demasiadas solicitudes en poco tiempo. Esperá unos segundos e intentá de nuevo.';
+      return 'Estás haciendo demasiadas solicitudes en poco tiempo. Esperá unos segundos e intenta de nuevo.';
 
     // Servidor
     if (m.includes('500') || m.includes('internal server'))
@@ -1104,4 +1102,106 @@ const GL = {
 };
 
 /* Acciones de sesión enlazadas desde app.js (evita acoplamiento circular). */
+/* ---------------------------------------------------------------------
+   1.2.0 — Teléfonos con libphonenumber-js (metadata nacional real).
+   Se añade después del objeto GL para poder leer la implementación anterior.
+   --------------------------------------------------------------------- */
+const GL_telIntl = (function () {
+    const L = window.libphonenumber;
+    const disponible = !!(L && typeof L.parsePhoneNumberFromString === 'function');
+    if (!disponible) {
+      console.warn('[GL.tel] libphonenumber-js no disponible; se usa el formato histórico.');
+    }
+    const original = {
+      normalizar: GL.tel.normalizar.bind(GL.tel),
+      validar: GL.tel.validar.bind(GL.tel),
+      formatear: GL.tel.formatear.bind(GL.tel)
+    };
+    const paisDe = codigo => String(codigo || '').toUpperCase() || 'NI';
+
+    function parsear(valor, codigoPais) {
+      if (!disponible) return null;
+      try {
+        const p = L.parsePhoneNumberFromString(String(valor || '').trim(), paisDe(codigoPais));
+        return p && p.isValid() ? p : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function digitos(valor) { return String(valor || '').replace(/\D/g, ''); }
+
+    function e164(valor, codigoPais) {
+      const p = parsear(valor, codigoPais);
+      return p ? p.number : '';
+    }
+
+    function nacional(valor, codigoPais) {
+      const numero = e164(valor, codigoPais);
+      if (!numero) return '';
+      try {
+        /* El bundle CDN expone PhoneNumber.format(), no formatNumber(). */
+        const objeto = L.parsePhoneNumberFromString(numero, paisDe(codigoPais));
+        let texto = objeto ? objeto.format('NATIONAL') : '';
+        if (!texto) return '+' + numero.replace('+', '');
+        /* Nicaragua: la metadata devuelve 4+4; se presenta con guion solo ahí. */
+        if (paisDe(codigoPais) === 'NI' && /^\d{4}\s\d{4}$/.test(texto)) {
+          texto = texto.replace(' ', '-');
+        }
+        return texto;
+      } catch (e) {
+        return '+' + numero.replace('+', '');
+      }
+    }
+
+    GL.tel.normalizar = function (telefono, codigoPais) {
+      const numero = e164(telefono, codigoPais);
+      return numero ? digitos(numero) : original.normalizar(telefono, codigoPais);
+    };
+    GL.tel.e164 = e164;
+    GL.tel.nacional = nacional;
+    GL.tel.esValido = function (telefono, codigoPais) { return !!parsear(telefono, codigoPais); };
+    GL.tel.validar = function (telefono, codigoPais) {
+      if (!telefono) return { ok: true };
+      if (!disponible) return original.validar(telefono, codigoPais);
+      const p = parsear(telefono, codigoPais);
+      if (!p) {
+        const nombre = (PAISES[paisDe(codigoPais)] || {}).nombre || 'ese país';
+        return {
+          ok: false,
+          mensaje: 'El número no parece válido para ' + nombre + '. Comprueba el prefijo y vuelve a intentarlo.'
+        };
+      }
+      return { ok: true, e164: p.number, nacional: nacional(p.number, codigoPais), pais: paisDe(codigoPais) };
+    };
+    GL.tel.formatear = function (valor, codigoPais) {
+      const texto = nacional(valor, codigoPais);
+      return texto || original.formatear(valor, codigoPais);
+    };
+    return { disponible, e164, nacional, parsear };
+})();
+
+/* 1.2.0 — WhatsApp: usa telefono_e164 cuando existe y genera wa.me sin +,
+   espacios ni guiones. No afirma que el número tenga cuenta de WhatsApp. */
+(function () {
+  GL.linkWhatsapp = function (jugador, nombreFallback) {
+    let telefono = '', codigoPais = '', nombre = nombreFallback || '';
+    if (jugador && typeof jugador === 'object') {
+      telefono   = String(jugador.telefono_e164 || jugador.telefono || '');
+      codigoPais = String(jugador.pais_telefono || jugador.pais || '');
+      nombre     = nombreFallback || jugador.nombre_usuario || '';
+    } else {
+      telefono = String(jugador || '');
+    }
+    const numero = GL.tel.normalizar(telefono, codigoPais);
+    if (!numero) return '';
+    const display = GL.tel.formatear(numero, codigoPais) || ('+' + numero);
+    return '<a class="wa-link" href="https://wa.me/' + esc(numero) +
+      '" target="_blank" rel="noopener noreferrer" ' +
+      'aria-label="Abrir chat con ' + esc(nombre || 'este jugador') + ' por WhatsApp" ' +
+      'title="Abrir chat con ' + esc(nombre || 'este jugador') + '">' +
+      icono('message-circle', 13) + esc(display) + '</a>';
+  };
+})();
+
 window.GL = GL;

@@ -68,7 +68,7 @@
         el.querySelector('#calendario-print').innerHTML = htmlImprimir(datos);
       } catch (e) {
         console.error('[calendario]', e);
-        el.innerHTML = GL.error(e.message, null, 'el calendario');
+        el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'el calendario'), null, 'el calendario');
       }
       iniciarIconos();
     }
@@ -722,7 +722,7 @@
                 estado: j.estado || 'abierta'
               }, values));
           if (error) {
-            GL.notificar('No se pudo guardar: ' + error.message, 'error');
+            GL.notificar(GL.mensaje(error, 'guardar', 'el calendario'), 'error');
             btn.disabled = false;
             return;
           }
@@ -758,7 +758,7 @@
       const { error } = j.id
         ? await sb.from('jornadas').update(values).eq('id', j.id)
         : await sb.from('jornadas').insert(values);
-      if (error) { GL.notificar(error.message, 'error'); return; }
+      if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'el calendario'), 'error'); return; }
       GL.auditoria && GL.auditoria.registrar('calendario_jornada_abierta', 'jornada', null, {
         numero, grupo: d.grupo ? d.grupo.nombre : '?'
       });
@@ -780,7 +780,7 @@
       if (!(await GL.confirmar('¿Cerrar la jornada ' + numero + '?',
         'Cerrar jornada', 'Cerrar'))) return;
       const { error } = await sb.from('jornadas').update({ estado: 'cerrada' }).eq('id', j.id);
-      if (error) { GL.notificar(error.message, 'error'); return; }
+      if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'el calendario'), 'error'); return; }
       GL.auditoria && GL.auditoria.registrar('calendario_jornada_cerrada', 'jornada', null, {
         numero, grupo: d.grupo ? d.grupo.nombre : '?'
       });

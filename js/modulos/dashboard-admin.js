@@ -95,7 +95,8 @@
               ' · <span class="badge gold">' + icono('shield',12) + ' Administrador</span></p>' +
             '</div>' +
             '<div class="seccion-acciones">' +
-              '<button type="button" class="btn sec" id="da-refrescar">' + icono('refresh-cw',15) + 'Actualizar</button>' +
+              '<button type="button" class="btn-secundario" id="da-guia">' + icono('compass',15) + 'Ver guía</button>' +
+              '<button type="button" class="btn-secundario" id="da-refrescar">' + icono('refresh-cw',15) + 'Actualizar</button>' +
             '</div>' +
           '</div>' +
 
@@ -195,6 +196,10 @@
           b.addEventListener('click',  () => { location.hash = b.dataset.ir; });
           b.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' ') location.hash = b.dataset.ir; });
         });
+        const btnGuia = el.querySelector('#da-guia');
+        if (btnGuia) btnGuia.addEventListener('click', () => {
+          if (window.OnboardingAdmin) OnboardingAdmin.iniciar(true);
+        });
         el.querySelector('#da-refrescar').addEventListener('click', () => Mod.render(el));
 
         /* ── Dibujar gráficas ── */
@@ -205,7 +210,7 @@
 
       } catch (e) {
         console.error(e);
-        el.innerHTML = GL.error(e.message, null, 'el centro de control');
+        el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'el centro de control'), null, 'el centro de control');
       }
       iniciarIconos();
     }

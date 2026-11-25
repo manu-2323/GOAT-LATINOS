@@ -119,6 +119,13 @@ const Auth = {
           telefono:       typeof telefono === 'object' ? (telefono.visual || '') : String(telefono || '').replace(/[^\d+\s\-]/g, '').slice(0, 25),
           telefono_e164:  typeof telefono === 'object' ? (telefono.e164   || '') : '',
           pais_telefono:  typeof telefono === 'object' ? (telefono.paisTel || pais).toUpperCase() : String(pais || '').toUpperCase(),
+          // 1.2.0: formato nacional y verificación de formato (no de cuenta WhatsApp).
+          telefono_nacional: typeof telefono === 'object'
+            ? (GL.tel && GL.tel.nacional ? GL.tel.nacional(telefono.e164 || telefono.visual || '', telefono.paisTel || pais) : '')
+            : '',
+          telefono_verificado: typeof telefono === 'object'
+            ? !!(telefono.e164 && GL.tel && GL.tel.esValido && GL.tel.esValido(telefono.e164, telefono.paisTel || pais))
+            : false,
           rol: 'jugador',
           activo: true,
           suspendido: false,

@@ -45,7 +45,7 @@
         el.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
           irATab(b.dataset.tab, el);
         }));
-      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message, null, 'la administración'); }
+      } catch (e) { console.error(e); el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'la administración'), null, 'la administración'); }
       iniciarIconos();
     }
   };
@@ -574,7 +574,7 @@
         '<div class="card"><div class="card-titulo">' + icono('user-plus', 19) + 'Añadir administrador</div>' +
           '<p class="muted" style="font-size:12px">Si el correo ya tiene cuenta, conserva su contraseña. Si no, se crea con la clave de administrador configurada en el servidor.</p>' +
           '<label class="campo mt"><span>Correo electrónico</span><input class="input" type="email" id="adm-email" autocomplete="email" placeholder="jugador@correo.com" required></label>' +
-          '<label class="campo"><span>Nombre en el juego (opcional)</span><input class="input" id="adm-nombre" maxlength="24" placeholder="Ej. GOAT_ADMIN"></label>' +
+          '<label class="campo"><span>Nombre en el juego (opcional)</span><input class="input" id="adm-nombre" maxlength="32" placeholder="Ej. GOAT_ADMIN"></label>' +
           '<button type="button" class="btn block" id="adm-agregar">' + icono('shield-plus', 16) + 'Designar administrador</button>' +
           '<p class="nota-pie">La clave de administrador no se guarda en el navegador: se valida en el servidor.</p>' +
         '</div>' +
@@ -714,7 +714,7 @@
     const pasoJugadores =
       '<p class="muted" style="font-size:12px">Alta rápida: se crea la cuenta, se guarda el jugador y se lo asigna al grupo elegido.</p>' +
       '<div class="campo-row">' +
-        '<label class="campo"><span>Nombre de usuario</span><input class="input" id="nt-jug-nombre" maxlength="24" placeholder="Ej. GOAT_PEREZ"></label>' +
+        '<label class="campo"><span>Nombre de usuario</span><input class="input" id="nt-jug-nombre" maxlength="32" placeholder="Ej. GOAT_PEREZ"></label>' +
         '<label class="campo"><span>Correo</span><input class="input" type="email" id="nt-jug-email" placeholder="jugador@correo.com"></label>' +
         '<label class="campo"><span>Clave</span><input class="input" id="nt-jug-clave" value="' +
           Math.random().toString(36).slice(2, 10) + '" autocomplete="new-password"></label>' +
@@ -836,7 +836,7 @@
             Mod.tab = 'resumen';
             Mod.render(root);
           } catch (e) {
-            fondo.setError(e.message);
+            fondo.setError(GL.mensaje(e, 'guardar', 'la administración'));
             setBloqueado(false);
           }
         })();
@@ -874,7 +874,7 @@
             Mod.tab = 'resumen';
             Mod.render(root);
           } catch (e) {
-            fondo.setError(e.message);
+            fondo.setError(GL.mensaje(e, 'guardar', 'la administración'));
             setBloqueado(false);
           }
         })();
@@ -900,7 +900,7 @@
         update.reglamento = cont.querySelector('#cfg-reglamento').value.trim();
       }
       const { error: errUpdate } = await sb.from('torneos').update(update).eq('id', GL.torneo().id);
-      if (errUpdate) { GL.notificar('Error al guardar los datos: ' + errUpdate.message, 'error'); return; }
+      if (errUpdate) { GL.notificar(GL.mensaje(errUpdate, 'guardar', 'la administración'), 'error'); return; }
 
       const { data, error } = await sb.rpc('gl_actualizar_total_jornadas', {
         p_torneo_id: GL.torneo().id,
@@ -911,7 +911,7 @@
       await recargarContextoAdmin();
       GL.notificar(r.mensaje || 'Datos guardados. El torneo tiene ' + jornadas.valor + ' jornadas.', 'exito');
       Mod.render(root);
-    } catch (e) { GL.notificar('No se pudo guardar: ' + e.message, 'error'); }
+    } catch (e) { GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error'); }
   }
 
   async function crearJugadorRapido(cont, root) {
@@ -925,8 +925,8 @@
     const telRaw = cont.querySelector('#nt-jug-tel').value.trim();
     const grupo = cont.querySelector('#nt-jug-grupo').value;
 
-    if (nombre.length < 2 || nombre.length > 24) {
-      GL.notificar('El nombre debe tener entre 2 y 24 caracteres válidos.', 'advertencia'); return;
+    if (nombre.length < 2 || nombre.length > 32) {
+      GL.notificar('El nombre debe tener entre 2 y 32 caracteres válidos.', 'advertencia'); return;
     }
     if ((GL.ctx.jugadores || []).some(x => x.nombre_usuario === nombre)) {
       GL.notificar('Ese nombre ya está en uso por otro jugador.', 'advertencia'); return;
@@ -965,7 +965,7 @@
       GL.notificar(nombre + ' creado y asignado al grupo.', 'exito');
       Mod.render(root);
     } catch (e) {
-      GL.notificar('No se pudo crear el jugador: ' + e.message, 'error');
+      GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
       btn.disabled = false; btn.textContent = 'Crear jugador';
     }
   }
@@ -975,11 +975,11 @@
     if (quitar) {
       try {
         const { error } = await sb.from('grupo_jugadores').delete().eq('jugador_id', j.id);
-        if (error) { GL.notificar('No se pudo quitar del grupo: ' + error.message, 'error'); return; }
+        if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); return; }
         await recargarContextoAdmin();
         GL.notificar(j.nombre_usuario + ' quedó sin grupo.', 'exito');
         Mod.render(root);
-      } catch (e) { GL.notificar('No se pudo quitar del grupo: ' + e.message, 'error'); }
+      } catch (e) { GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error'); }
       return;
     }
     const grupos = GL.grupos();
@@ -999,12 +999,12 @@
         (async () => {
           try {
             const { error } = await sb.from('grupo_jugadores').insert({ grupo_id: gid, jugador_id: j.id });
-            if (error) { fondo.setError(error.message); setBloqueado(false); return; }
+            if (error) { fondo.setError(GL.mensaje(error, 'guardar', 'la administración')); setBloqueado(false); return; }
             cerrar();
             await recargarContextoAdmin();
             GL.notificar(j.nombre_usuario + ' asignado al grupo.', 'exito');
             Mod.render(root);
-          } catch (e) { fondo.setError(e.message); setBloqueado(false); }
+          } catch (e) { fondo.setError(GL.mensaje(e, 'guardar', 'la administración')); setBloqueado(false); }
         })();
       }
     });
@@ -1056,7 +1056,7 @@
             await recargarContextoAdmin();
             GL.notificar(r.mensaje || 'Calendario generado correctamente.', 'exito');
             Mod.render(root);
-          } catch (e) { fondo.setError(e.message); setBloqueado(false); }
+          } catch (e) { fondo.setError(GL.mensaje(e, 'guardar', 'la administración')); setBloqueado(false); }
         })();
       }
     });
@@ -1103,7 +1103,7 @@
       GL.notificar(r.mensaje || 'Jornada ' + n + ' guardada para el ' + aDDMMYYYY(fechaISO) + '.', 'exito');
       Mod.render(root);
     } catch (e) {
-      GL.notificar('No se pudo guardar la jornada: ' + e.message, 'error');
+      GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
       btn.disabled = false; btn.textContent = 'Guardar jornada';
     }
   }
@@ -1134,7 +1134,7 @@
             await recargarContextoAdmin();
             GL.notificar(r.mensaje || 'Jornada ' + n + ' eliminada.', 'exito');
             Mod.render(root);
-          } catch (e) { fondo.setError(e.message); setBloqueado(false); }
+          } catch (e) { fondo.setError(GL.mensaje(e, 'guardar', 'la administración')); setBloqueado(false); }
         })();
       }
     });
@@ -1169,8 +1169,8 @@
             GL.notificar((data && data.mensaje) || j.nombre_usuario + ' eliminado correctamente.', 'exito');
             Mod.render(root);
           } catch (e) {
-            fondo.setError(e.message);
-            GL.notificar('No se pudo eliminar el jugador: ' + e.message, 'error');
+            fondo.setError(GL.mensaje(e, 'guardar', 'la administración'));
+            GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
             setBloqueado(false);
           }
         })();
@@ -1253,7 +1253,7 @@
         GL.notificar(email + ' ahora es administrador.', 'exito');
         Mod.render(root);
       } catch (e) {
-        GL.notificar(e.message, 'error');
+        GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
         agregarAdmin.disabled = false;
       }
     });
@@ -1276,7 +1276,7 @@
               cerrar(); GL.invalidar(); await GL.cargarContexto(true);
               GL.notificar('Rol de administrador quitado.', 'exito');
               Mod.render(root);
-            } catch (e) { GL.notificar(e.message, 'error'); btn.disabled = false; }
+            } catch (e) { GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error'); btn.disabled = false; }
           });
         }
       });
@@ -1302,7 +1302,7 @@
         });
         iniciarIconos();
         return m;
-      } catch (e) { GL.notificar(e.message, 'error'); }
+      } catch (e) { GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error'); }
       finally { verClave.disabled = false; }
     });
 
@@ -1319,7 +1319,7 @@
       const n = Number(b.dataset.abrirJornada);
       const { error } = await sb.from('jornadas').update({ estado: 'abierta' })
         .eq('torneo_id', GL.torneo().id).eq('numero', n).eq('grupo_id', Mod.grupoJornadas);
-      if (error) { GL.notificar(error.message, 'error'); return; }
+      if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); return; }
       const grupoAud = GL.ctx.grupos.find(g => g.id === Mod.grupoJornadas);
       GL.auditoria && GL.auditoria.registrar('jornada_abierta', 'jornada', null, {
         numero: n, grupo: grupoAud ? grupoAud.nombre : '?'
@@ -1429,12 +1429,12 @@
       cuerpo:
         // Nombre de usuario
         '<label class="campo"><span>Nombre en el juego</span>' +
-          '<input class="input" id="ed-nombre" maxlength="24" ' +
+          '<input class="input" id="ed-nombre" maxlength="32" ' +
             'value="' + esc(j.nombre_usuario) + '" ' +
             'placeholder="Ej: GOAT_PEREZ" ' +
             'autocomplete="off">' +
           '<small style="color:var(--text-secondary);font-size:11px;margin-top:2px;display:block">' +
-            'Solo letras, números y guión bajo (_). Máximo 24 caracteres.' +
+            'Solo letras, números y guión bajo (_). Máximo 32 caracteres.' +
           '</small>' +
         '</label>' +
 
@@ -1501,8 +1501,8 @@
           if (!nombreNorm || nombreNorm.length < 2) {
             errorCampo(fondo, '#ed-nombre', 'El nombre debe tener al menos 2 caracteres.');
             hayError = true;
-          } else if (nombreNorm.length > 24) {
-            errorCampo(fondo, '#ed-nombre', 'Máximo 24 caracteres (actual: ' + nombreNorm.length + ').');
+          } else if (nombreNorm.length > 32) {
+            errorCampo(fondo, '#ed-nombre', 'Máximo 32 caracteres (actual: ' + nombreNorm.length + ').');
             hayError = true;
           } else {
             // Verificar duplicado en el contexto actual (excluyendo al propio jugador)
@@ -1564,7 +1564,7 @@
               errorCampo(fondo, '#ed-nombre',
                 'El servidor rechazó el nombre: ya existe en la base de datos.');
             } else {
-              GL.notificar('Error al guardar: ' + error.message, 'error');
+              GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error');
             }
             btn.disabled = false; btn.textContent = 'Guardar cambios';
           } else {
@@ -1674,13 +1674,13 @@
 
           const { error: errDel } = await sb.from('grupo_jugadores').delete().eq('jugador_id', j.id);
           if (errDel) {
-            GL.notificar('Error al liberar grupo anterior: ' + errDel.message, 'error');
+            GL.notificar(GL.mensaje(errDel, 'guardar', 'la administración'), 'error');
             btn.disabled = false; btn.textContent = asignar === true ? 'Asignar' : 'Mover jugador';
             return;
           }
           const { error } = await sb.from('grupo_jugadores').insert({ grupo_id: gid, jugador_id: j.id });
           if (error) {
-            GL.notificar('Error al asignar grupo: ' + error.message, 'error');
+            GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error');
             btn.disabled = false; btn.textContent = asignar === true ? 'Asignar' : 'Mover jugador';
             return;
           }
@@ -1971,7 +1971,7 @@
           // 1. Registrar la sanción
           const { error: errSan } = await sb.from('sanciones').insert(row);
           if (errSan) {
-            GL.notificar('Error al registrar la sanción: ' + errSan.message, 'error');
+            GL.notificar(GL.mensaje(errSan, 'guardar', 'la administración'), 'error');
             btn.disabled = false;
             btn.innerHTML = icono('gavel', 16) + 'Aplicar sanción';
             return;
@@ -2058,7 +2058,7 @@
             const { error } = await sb.from('jugadores')
               .update({ activo: true, rol: 'jugador', suspendido: false })
               .eq('id', j.id);
-            if (error) { GL.notificar(error.message, 'error'); btn.disabled = false; return; }
+            if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); btn.disabled = false; return; }
             GL.auditoria && GL.auditoria.registrar('jugador_estado_cambio', 'jugador', j.id, {
               jugador:         j.nombre_usuario,
               estado_anterior: 'expulsado',
@@ -2181,7 +2181,7 @@
               .update({ activo: false, rol: 'expulsado', suspendido: true })
               .eq('id', j.id)
               .neq('rol', 'expulsado'); // Protección anti-doble-expulsión
-            if (error) { GL.notificar('Error al expulsar: ' + error.message, 'error'); btnOk.disabled = false; return; }
+            if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); btnOk.disabled = false; return; }
             resPartidos = await resolverPartidosPorSancion(j.id, { tipo: 'expulsion' });
             estadoNuevo = 'expulsado';
           } else {
@@ -2189,7 +2189,7 @@
             const { error } = await sb.from('jugadores')
               .update({ suspendido: true })
               .eq('id', j.id);
-            if (error) { GL.notificar('Error al suspender: ' + error.message, 'error'); btnOk.disabled = false; return; }
+            if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); btnOk.disabled = false; return; }
             resPartidos = await resolverPartidosPorSancion(j.id, {
               tipo: 'suspension',
               partidosSuspension: n
@@ -2247,10 +2247,10 @@
         '<div class="campo-row">' +
           // Nombre
           '<label class="campo"><span>Nombre en FC Mobile</span>' +
-            '<input class="input" id="ag-nombre" maxlength="24" ' +
+            '<input class="input" id="ag-nombre" maxlength="32" ' +
               'placeholder="Ej: GOAT_PEREZ" autocomplete="off">' +
             '<small style="color:var(--text-secondary);font-size:11px;margin-top:2px;display:block">' +
-              'Solo letras, números y guión bajo. Máximo 24 caracteres.' +
+              'Solo letras, números y guión bajo. Máximo 32 caracteres.' +
             '</small>' +
           '</label>' +
 
@@ -2347,8 +2347,8 @@
           if (!nombreNorm || nombreNorm.length < 2) {
             errorCampo(fondo, '#ag-nombre', 'El nombre debe tener al menos 2 caracteres.');
             hayError = true;
-          } else if (nombreNorm.length > 24) {
-            errorCampo(fondo, '#ag-nombre', 'Máximo 24 caracteres (actual: ' + nombreNorm.length + ').');
+          } else if (nombreNorm.length > 32) {
+            errorCampo(fondo, '#ag-nombre', 'Máximo 32 caracteres (actual: ' + nombreNorm.length + ').');
             hayError = true;
           } else {
             const dupl = (GL.ctx.jugadores || []).find(x => x.nombre_usuario === nombreNorm);
@@ -2521,7 +2521,7 @@
             : await sb.from('jornadas').insert(Object.assign({
                 torneo_id: torneo.id, grupo_id: Mod.grupoJornadas, numero: n
               }, values));
-          if (error) { GL.notificar(error.message, 'error'); btn.disabled = false; return; }
+          if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); btn.disabled = false; return; }
           const grupoAud = GL.ctx.grupos.find(g => g.id === Mod.grupoJornadas);
           GL.auditoria && GL.auditoria.registrar('jornada_horario_actualizado', 'jornada', null, {
             numero: n,
@@ -2653,7 +2653,7 @@
     });
 
     if (error) {
-      GL.notificar('Error al cerrar: ' + error.message, 'error'); return;
+      GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); return;
     }
     if (data && !data.ok) {
       GL.notificar('No se pudo cerrar: ' + data.error, 'error'); return;

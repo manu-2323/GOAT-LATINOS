@@ -74,7 +74,7 @@
         if (gen) gen.addEventListener('click', () => generarSiguiente(el));
         el.querySelector('[data-export]').addEventListener('click', () =>
           GL.exportarPNG('bracket-export', 'GOATS_Eliminatorias'));
-      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message, null, 'las eliminatorias'); }
+      } catch (e) { console.error(e); el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'las eliminatorias'), null, 'las eliminatorias'); }
       iniciarIconos();
     }
   };
@@ -285,7 +285,7 @@
       estado: 'pendiente',
       es_extra: true
     });
-    if (error) { GL.notificar('Error al crear partido extra: ' + error.message, 'error'); return; }
+    if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'las eliminatorias'), 'error'); return; }
     GL.notificar(
       'Partido extra creado. ' + GL.nombreJugador(localExtra) + ' juega de local (mejor clasificado en fase regular).',
       'exito');
@@ -518,7 +518,7 @@
             .update({ estado: 'jugado', goles_local: ia, goles_visitante: ib })
             .eq('id', c.ida.id);
           if (r1.error) {
-            GL.notificar('Error al guardar la ida: ' + r1.error.message, 'error');
+            GL.notificar(GL.mensaje(r1.error, 'guardar', 'las eliminatorias'), 'error');
             btn.disabled = false; btn.textContent = 'Guardar resultado'; return;
           }
 
@@ -527,7 +527,7 @@
             .update({ estado: 'jugado', goles_local: va, goles_visitante: vb })
             .eq('id', c.vuelta.id);
           if (r2.error) {
-            GL.notificar('Error al guardar la vuelta: ' + r2.error.message + '. La ida ya quedó guardada. Revisá manualmente.', 'error');
+            GL.notificar(GL.mensaje(r2.error, 'guardar', 'la vuelta') + ' La ida ya quedó guardada; comprueba el resultado manualmente.', 'error');
             btn.disabled = false; btn.textContent = 'Guardar resultado'; return;
           }
 
@@ -592,7 +592,7 @@
       const { data: yaExisten, error: errVerif } = await sb.from('partidos').select('id')
         .eq('torneo_id', GL.torneo().id).gte('jornada', base).lte('jornada', base + 1).limit(1);
       if (errVerif) {
-        GL.notificar('Error al verificar la base de datos: ' + errVerif.message, 'error'); return;
+        GL.notificar(GL.mensaje(errVerif, 'guardar', 'las eliminatorias'), 'error'); return;
       }
       if (yaExisten && yaExisten.length) {
         GL.notificar('Esta ronda ya fue generada. Revisá los partidos existentes antes de regenerar.', 'error'); return;
@@ -615,7 +615,7 @@
 
       const { error, data: insertados } = await sb.from('partidos').insert(rows).select('id');
       if (error) {
-        GL.notificar('Error al generar la ronda: ' + error.message, 'error'); return;
+        GL.notificar(GL.mensaje(error, 'guardar', 'las eliminatorias'), 'error'); return;
       }
       if (!insertados || insertados.length !== rows.length) {
         GL.notificar(

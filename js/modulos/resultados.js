@@ -60,7 +60,7 @@
           el.querySelectorAll('[data-partido]').forEach(x => x.classList.toggle('activo', x === b));
           pintarPanel();
         }));
-      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message, null, 'los resultados'); }
+      } catch (e) { console.error(e); el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'los resultados'), null, 'los resultados'); }
       iniciarIconos();
     }
   };
@@ -160,9 +160,12 @@
         '<strong>Arrastrá la captura aquí</strong><p>o hacé clic para elegir un archivo · JPG/PNG máx. 5 MB</p>' +
         (Mod.archivo ? '<img id="preview" alt="Vista previa de la captura" src="' + URL.createObjectURL(Mod.archivo) + '">' : '') +
       '</div>' +
-      '<button type="button" class="btn sec block mt" id="elegir-captura">' + icono('upload', 16) + 'Seleccionar captura</button>' +
+      '<button type="button" class="btn-secundario block mt" id="elegir-captura">' + icono('upload', 16) + 'Seleccionar captura</button>' +
       '<input type="file" id="archivo" accept="image/jpeg,image/png" class="oculto">' +
-      (Mod.archivo ? '<button type="button" class="btn block mt" id="analizar">' + icono('scan-eye', 17) + 'Analizar captura</button>' : '') +
+      /* 1.2.0: el botón de IA siempre está visible; se habilita al elegir foto. */
+      '<button type="button" class="btn-primario block mt" id="analizar" ' + (Mod.archivo ? '' : 'disabled aria-disabled="true"') + '>' +
+        icono('scan-eye', 17) + 'Analizar captura con IA</button>' +
+      (Mod.archivo ? '' : '<p class="muted" style="font-size:11px;margin-top:6px">Elige una captura para activar el análisis automático.</p>') +
       '</div>';
   }
 
@@ -217,11 +220,11 @@
       if (btnElegir) btnElegir.addEventListener('click', () => input.click());
     }
     const analizar = g('#analizar');
-    if (analizar) analizar.addEventListener('click', () => analizarCaptura(p));
+    if (analizar) analizar.addEventListener('click', () => GL.conAccion(analizar, 'analizar', () => analizarCaptura(p)));
     const rehacer = g('#re-hacer');
     if (rehacer) rehacer.addEventListener('click', () => { Mod.datosIA = null; Mod.archivo = null; Mod.render(panel.closest('#vista') || document.getElementById('vista')); });
     const guardar = g('#guardar');
-    if (guardar) guardar.addEventListener('click', () => guardarResultado(p, panel));
+    if (guardar) guardar.addEventListener('click', () => GL.conAccion(guardar, 'guardar', () => guardarResultado(p, panel)));
   }
 
   function procesarArchivo(file, panel, p) {
@@ -248,9 +251,12 @@
     if (!Mod.archivo) return;
     Mod.analizando = true;
     const panel = document.getElementById('panel-resultado');
-    panel.innerHTML = '<div class="card center"><div class="analizando" style="justify-content:center">' +
-      '<span class="spinner"></span>Analizando captura con Gemini AI...</div></div>';
-    GL.notificar('Analizando captura con Gemini AI...', 'info', 'loader-circle');
+    GL.estado(panel, 'cargando', {
+      titulo: 'Leyendo la captura…',
+      texto: 'Extrayendo el marcador y las estadísticas visibles. Puedes revisar y corregir los datos antes de guardar.',
+      icono: 'scan-eye'
+    });
+    GL.notificar('Leyendo la captura…', 'info', 'loader-circle');
     iniciarIconos();
     try {
       if (!sb) throw new Error('Supabase no configurado');
@@ -265,7 +271,7 @@
       GL.notificar('Datos extraídos. Confirmá o corregí antes de guardar.', 'exito');
     } catch (e) {
       console.error(e);
-      GL.notificar('No se pudo analizar: ' + e.message + '. Podés usar el ingreso manual.', 'error');
+      GL.notificar(GL.mensaje(e, 'analizar', 'la captura') + ' Puedes introducir el resultado manualmente.', 'error');
     } finally {
       Mod.analizando = false;
       Mod.render(document.getElementById('vista'));
@@ -393,7 +399,7 @@
 
     } catch (e) {
       console.error(e);
-      GL.notificar('No se pudo guardar: ' + e.message, 'error');
+      GL.notificar(GL.mensaje(e, 'guardar', 'los resultados'), 'error');
       if (btn) { btn.disabled = false; btn.innerHTML = icono('save', 17) + 'Confirmar y Guardar'; }
     }
   }

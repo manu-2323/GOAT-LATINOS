@@ -42,7 +42,7 @@
 
   function avisarError(e) {
     console.error('[exportar-png]', e);
-    GL.notificar('No se pudo exportar: ' + (e && e.message ? e.message : 'intentalo de nuevo.'), 'error');
+    GL.notificar(GL.mensaje(e, 'png', 'la imagen'), 'error');
   }
 
   /* ── Esperar fuentes ── */

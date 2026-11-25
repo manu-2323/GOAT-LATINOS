@@ -34,7 +34,7 @@
           '<div class="seccion-head"><div class="seccion-titulo"><h2>Perfil del jugador</h2>' +
             '<p>Estadísticas individuales de la temporada</p></div>' +
             '<div class="seccion-acciones">' +
-              (GL.esAdmin() ? '<label class="campo" style="margin:0"><select class="input" id="sel-jugador">' +
+              (GL.esAdmin() ? '<label class="campo" style="margin:0"><select class="input" id="sel-jugador" aria-label="Elegir jugador para ver su perfil">' +
                 GL.jugadores().map(x => '<option value="' + x.id + '"' + (x.id === j.id ? ' selected' : '') + '>' +
                   esc(x.nombre_usuario) + '</option>').join('') + '</select></label>' : '') +
               (Mod.jugadorId === Auth.jugador.id ? '<button type="button" class="btn sec" data-editar>' +
@@ -112,7 +112,7 @@
         const dc = el.querySelector('[data-eliminar-cuenta]');
         if (dc) dc.addEventListener('click', () => eliminarCuenta(el));
         enlazar(el);
-      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message, null, 'el perfil'); }
+      } catch (e) { console.error(e); el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'el perfil'), null, 'el perfil'); }
       iniciarIconos();
     }
   };
@@ -146,7 +146,7 @@
           (j.avatar_url ? '<button type="button" class="btn peligro sm" id="quitar-foto">' + icono('trash-2', 15) + 'Quitar foto</button>' : '') +
           '</div></div>' +
         '<div class="campo-row mt">' +
-          '<label class="campo"><span>Nombre en FC Mobile</span><input class="input" id="perfil-nombre" maxlength="24" value="' + esc(nombre) + '"></label>' +
+          '<label class="campo"><span>Nombre en FC Mobile</span><input class="input" id="perfil-nombre" maxlength="32" value="' + esc(nombre) + '"></label>' +
           '<label class="campo"><span>País</span><select class="input" id="perfil-pais">' + GL.opcionesPais(j.pais, true) + '</select></label>' +
           '<label class="campo"><span>Teléfono / WhatsApp</span><input class="input" type="tel" id="perfil-tel" maxlength="20" value="' + esc(j.telefono || '') + '" placeholder="9999-9999"></label>' +
         '</div>' +
@@ -159,23 +159,28 @@
       onAbrir(fondo, cerrar) {
         const input = fondo.querySelector('#avatar-file');
         const avatar = fondo.querySelector('.avatar');
-        input.addEventListener('change', () => {
-          archivo = input.files && input.files[0];
+        input.addEventListener('change', async () => {
+          const seleccionado = input.files && input.files[0];
           quitarFoto = false;
-          if (!archivo) return;
-          if (!/^image\/(jpeg|png)$/.test(archivo.type)) {
-            GL.notificar('Usá una imagen JPG o PNG.', 'error'); input.value = ''; archivo = null; return;
-          }
-          if (archivo.size > CONFIG.MAX_AVATAR_BYTES) {
-            GL.notificar('La imagen supera los 2 MB.', 'error'); input.value = ''; archivo = null; return;
-          }
-          const lector = new FileReader();
-          lector.onload = () => {
+          archivo = null;
+          if (!seleccionado) return;
+          GL.notificar('Preparando tu foto…', 'info', 'loader-circle');
+          try {
+            // 1.2.0: validación real, recorte 1:1 y compresión antes de subir.
+            const procesada = await GL.imagen.procesar(seleccionado, {
+              maxBytes: CONFIG.MAX_AVATAR_BYTES, lado: 512
+            });
+            archivo = new File([procesada.blob], procesada.nombre, { type: procesada.mime });
             avatar.classList.add('avatar-con-foto');
-            avatar.style.backgroundImage = 'url(' + lector.result + ')';
+            avatar.style.backgroundImage = 'url(' + procesada.vistaPrevia + ')';
+            avatar.style.aspectRatio = '1 / 1';
             avatar.textContent = '';
-          };
-          lector.readAsDataURL(archivo);
+            GL.notificar('Foto lista (' + Math.round(procesada.tamano / 1024) + ' KB).', 'exito');
+          } catch (e) {
+            console.error('[perfil] imagen:', e);
+            GL.notificar(GL.mensaje(e, 'subir', 'la foto'), 'error');
+            input.value = '';
+          }
         });
         const quitar = fondo.querySelector('#quitar-foto');
         if (quitar) quitar.addEventListener('click', () => {
@@ -211,7 +216,12 @@
               nombre_usuario: fondo.querySelector('#perfil-nombre').value,
               pais: paisVal,
               zona_horaria: zonaVal,
-              telefono: telRaw ? GL.tel.normalizar(telRaw, paisVal) : ''
+              telefono: telRaw ? GL.tel.normalizar(telRaw, paisVal) : '',
+              // 1.2.0: campos separados; `telefono` se mantiene por compatibilidad.
+              telefono_e164: telRaw ? GL.tel.e164(telRaw, paisVal) : '',
+              telefono_nacional: telRaw ? GL.tel.nacional(telRaw, paisVal) : '',
+              pais_telefono: paisVal,
+              telefono_verificado: !!(telRaw && GL.tel.esValido(telRaw, paisVal))
             };
             if (!Auth.jugador) {
               await Auth.actualizarNombreJuego(cambios.nombre_usuario, zonaVal);
@@ -224,7 +234,7 @@
             GL.notificar('Perfil actualizado.', 'exito');
             Mod.render(el);
             window.dispatchEvent(new CustomEvent('gl:auth', { detail: { evento: 'PROFILE_UPDATED' } }));
-          } catch (e) { GL.notificar(e.message, 'error'); boton.disabled = false; }
+          } catch (e) { console.error('[perfil]', e); GL.notificar(GL.mensaje(e, 'guardar', 'el perfil'), 'error'); boton.disabled = false; }
         });
       }
     });
@@ -252,7 +262,7 @@
             dibujarMenu(); pintarSesion();
             window.dispatchEvent(new CustomEvent('gl:auth', { detail: { evento: 'SIGNED_OUT' } }));
             Mod.render(el);
-          } catch (e) { GL.notificar(e.message, 'error'); boton.disabled = false; }
+          } catch (e) { console.error('[perfil]', e); GL.notificar(GL.mensaje(e, 'guardar', 'el perfil'), 'error'); boton.disabled = false; }
         });
       }
     });

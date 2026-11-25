@@ -59,11 +59,15 @@ async function mostrar(id) {
     if (!mod || typeof mod.render !== 'function') throw new Error('Módulo "' + archivo + '" no disponible.');
     if (item.tab && typeof mod.setTab === 'function') mod.setTab(item.tab);
     await mod.render(vista);
+    // 1.2.0: las tablas con desplazamiento deben ser alcanzables por teclado.
+    vista.querySelectorAll('.tabla-scroll, .tabla-wrap, .tabla-wrap-scroll').forEach(t => {
+      if (!t.hasAttribute('tabindex')) t.setAttribute('tabindex', '0');
+    });
     if (token === _tokenVista) iniciarIconos();
   } catch (e) {
     console.error(e);
     if (token === _tokenVista) {
-      vista.innerHTML = GL.error(e.message);
+      vista.innerHTML = GL.error(GL.mensaje(e, 'cargar', item.nombre), null, item.nombre);
       enlazarLogin(vista);
       iniciarIconos();
     }
@@ -118,6 +122,9 @@ async function arrancar() {
   try { await Promise.all([GL.cargarPaises(true), GL.cargarContexto(true)]); } catch (e) { console.warn(e); }
   dibujarMenu(); pintarSesion(); pintarTemporada();
   await mostrar(rutaActual());
+  if (Auth.usuario && GL.esAdmin() && window.OnboardingAdmin) {
+    setTimeout(() => OnboardingAdmin.iniciar(false), 700);
+  }
 }
 
 window.addEventListener('hashchange', () => mostrar(rutaActual()));
@@ -134,6 +141,10 @@ window.addEventListener('gl:auth', async () => {
   // Mostrar tour de bienvenida al nuevo jugador (solo una vez)
   if (Auth.usuario && !GL.esAdmin() && window.OnboardingTour) {
     setTimeout(() => OnboardingTour.iniciar(false), 600);
+  }
+  // 1.2.0: recorrido guiado para administradores.
+  if (Auth.usuario && GL.esAdmin() && window.OnboardingAdmin) {
+    setTimeout(() => OnboardingAdmin.iniciar(false), 700);
   }
 });
 window.addEventListener('load', arrancar);

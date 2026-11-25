@@ -432,7 +432,7 @@
 
       } catch (e) {
         console.error(e);
-       el.innerHTML = GL.error(e.message, null, 'las estadísticas globales');
+       el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'las estadísticas'), null, 'las estadísticas globales');
         iniciarIconos();
       }
     },

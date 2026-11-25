@@ -61,7 +61,7 @@ const PantallaAuth = {
           '<p class="auth-cambiar" style="margin-top:4px"><button type="button" class="auth-enlace" data-modo="admin">Acceso de administrador</button></p>'
         : '<h2>Sumate a la liga</h2><p>Tu nombre en el juego es clave: el administrador lo usará para asignarte.</p>' +
           '<form id="form-registro">' +
-            '<label>Nombre en FC Mobile<input class="input" type="text" id="rg-nombre" maxlength="24" placeholder="Ej. CR7_LATINO" required></label>' +
+            '<label>Nombre en FC Mobile<input class="input" type="text" id="rg-nombre" maxlength="32" placeholder="Ej. CR7_LATINO" required></label>' +
             PantallaAuth.indicador('rg-nombre-estado') +
             '<div class="campo-row">' +
               '<label>País<select class="input" id="rg-pais">' + GL.opcionesPais('', false) + '</select></label>' +

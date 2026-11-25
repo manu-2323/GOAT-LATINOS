@@ -62,7 +62,7 @@
           GL.exportarTabla(Mod.grupoId, 'GOATS_Tabla_Grupo' + GL.letraGrupo(GL.grupo(Mod.grupoId))));
       } catch (e) {
         console.error(e);
-        el.innerHTML = GL.error(e.message, null, 'la tabla de posiciones');
+        el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'la tabla'), null, 'la tabla de posiciones');
       }
       iniciarIconos();
     }

@@ -1,0 +1,22 @@
+{
+  "name": "goats-latinos",
+  "version": "1.2.0",
+  "private": true,
+  "description": "GOATS LATINOS · League Manager — HTML, CSS y JavaScript vanilla",
+  "scripts": {
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "audit:a11y": "playwright test --grep accesibilidad",
+    "lighthouse": "lighthouse http://127.0.0.1:4173/ --only-categories=performance,accessibility,best-practices,seo --output=json --output-path=docs/lighthouse-report.json --chrome-flags='--headless --no-sandbox'",
+    "supabase:lint": "supabase db lint --local"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.65.1",
+    "@supabase/cli": "^1.0.0",
+    "jsdom": "^26.1.0",
+    "libphonenumber-js": "^1.13.17",
+    "lighthouse": "^12.8.2",
+    "vitest": "^5.1.2"
+  }
+}
