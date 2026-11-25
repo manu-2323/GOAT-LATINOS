@@ -79,14 +79,24 @@
     }
   };
 
-  function horariosTexto() {
+  /* Horarios reales de los participantes, agrupados por zona elegida. */
+  function horariosTexto(ids) {
+    const jugadores = (ids && ids.length
+      ? Array.from(new Set(ids)).map(id => GL.jugador(id)).filter(Boolean)
+      : GL.jugadores());
     const grupos = {};
-    Object.entries(PAISES).forEach(([codigo, datos]) => {
-      const horario = datos.horario || ZONAS_HORARIAS.medio;
-      if (!grupos[horario]) grupos[horario] = [];
-      grupos[horario].push(datos.nombre || codigo);
+    jugadores.forEach(j => {
+      const zona = GL.zonaJugador(j);
+      const horario = GL.horarioZona(zona);
+      const clave = horario + '|' + GL.etiquetaZona(zona);
+      if (!grupos[clave]) grupos[clave] = [];
+      if (!grupos[clave].includes(j.nombre_usuario)) grupos[clave].push(j.nombre_usuario);
     });
-    return Object.entries(grupos).map(([horario, nombres]) => nombres.join(' / ') + ': ' + horario).join('\n');
+    const lineas = Object.entries(grupos).map(([clave, nombres]) => {
+      const separador = clave.indexOf('|');
+      return nombres.join(', ') + ': ' + clave.slice(0, separador) + ' (' + clave.slice(separador + 1) + ')';
+    });
+    return lineas.length ? lineas.join('\n') : 'Horarios por definir.';
   }
 
   async function generarApertura(grupoId, jornada) {
@@ -101,10 +111,13 @@
       return '· ' + bandera(l && l.pais) + ' ' + GL.nombreJugador(p.local_id).toUpperCase() +
         '  VS  ' + bandera(v && v.pais) + ' ' + GL.nombreJugador(p.visitante_id).toUpperCase();
     }).join('\n');
+    const participantes = partidos.flatMap(p => [p.local_id, p.visitante_id]).filter(Boolean);
     return 'JORNADA ABIERTA — GRUPO ' + letra + '\n' +
       'JORNADA: #' + jornada + ' / #' + total + '\n' +
       'PUNTOS EN DISPUTA: #' + pts + ' / #' + ptsTemporada + '\n\n' +
-      'HORARIOS DE JORNADA (según país):\n' + horariosTexto() + '\n\n' +
+      'HORARIOS DE JORNADA (hora local de cada jugador):\n' + horariosTexto(participantes) + '\n' +
+      'Referencia: ' + CONFIG.HORA_INICIO_REFERENCIA + '–' + CONFIG.HORA_FIN_REFERENCIA +
+      ' en ' + GL.etiquetaZona(CONFIG.ZONA_REFERENCIA) + '.\n\n' +
       'Formato: Mismo día\n\n' +
       (lista || '· Partidos por definir') + '\n\n' +
       'Al finalizar el tiempo reglamentario, se publicarán los marcadores y estadísticas.\n' +

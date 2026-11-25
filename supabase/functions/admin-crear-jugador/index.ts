@@ -34,6 +34,17 @@ Deno.serve(async (req) => {
     const b = await req.json();
     if (!b.email || !b.password || !b.nombre_usuario) throw new Error('Faltan datos obligatorios');
 
+    // La zona IANA se valida en el servidor: Intl la rechaza si no existe.
+    let zonaHoraria = 'America/Managua';
+    if (b.zona_horaria) {
+      try {
+        new Intl.DateTimeFormat('es-ES', { timeZone: String(b.zona_horaria) });
+        zonaHoraria = String(b.zona_horaria);
+      } catch (_) {
+        throw new Error('La ciudad o zona horaria no es válida');
+      }
+    }
+
     const { data: creado, error: errAuth } = await admin.auth.admin.createUser({
       email: b.email,
       password: b.password,
@@ -48,6 +59,7 @@ Deno.serve(async (req) => {
         nombre_usuario: b.nombre_usuario,
         email: String(b.email || '').trim().toLowerCase(),
         pais: b.pais || 'AR',
+        zona_horaria: zonaHoraria,
         telefono: b.telefono || '',
         rol: 'jugador',
         activo: true,

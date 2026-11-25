@@ -82,20 +82,21 @@ const Auth = {
   },
 
   /* Registro: el jugador escribe el nombre con el que aparece en FC Mobile. */
-  async registrar(nombreJuego, correo, clave, pais, telefono) {
+  async registrar(nombreJuego, correo, clave, pais, telefono, zonaHoraria) {
     if (!sb) throw new Error('Supabase no está configurado.');
     const nombre = GL.seguroTexto(nombreJuego).slice(0, 24);
     if (nombre.length < 3) throw new Error('El nombre debe tener al menos 3 caracteres.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(correo || '').trim())) throw new Error('Ingresá un correo válido.');
     if (String(clave || '').length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
     if (!pais) throw new Error('Seleccioná tu país.');
+    const zona = GL._zonaResuelta(zonaHoraria) || GL.zonaPorPais(pais);
 
     const disponible = await Auth.nombreDisponible(nombre);
     if (!disponible.ok) throw new Error(disponible.mensaje);
 
     const { data, error } = await sb.auth.signUp({
       email: String(correo).trim().toLowerCase(), password: clave,
-      options: { data: { nombre_usuario: nombre, nombre: nombre } }
+      options: { data: { nombre_usuario: nombre, nombre: nombre, zona_horaria: zona } }
     });
     if (error) throw new Error(Auth.traducir(error.message));
     // Si Supabase exige confirmación de correo, avisamos y no simulamos una sesión.
@@ -114,6 +115,7 @@ const Auth = {
           nombre_usuario,
           email: String(correo).trim().toLowerCase(),
           pais: String(pais).toUpperCase(),
+          zona_horaria:   zona,
           telefono:       typeof telefono === 'object' ? (telefono.visual || '') : String(telefono || '').replace(/[^\d+\s\-]/g, '').slice(0, 25),
           telefono_e164:  typeof telefono === 'object' ? (telefono.e164   || '') : '',
           pais_telefono:  typeof telefono === 'object' ? (telefono.paisTel || pais).toUpperCase() : String(pais || '').toUpperCase(),
@@ -168,7 +170,7 @@ const Auth = {
     if (sb) await sb.auth.signOut();
   },
 
-  async actualizarNombreJuego(nombre) {
+  async actualizarNombreJuego(nombre, zonaHoraria) {
     if (!sb || !Auth.usuario) throw new Error('Inicia sesión para continuar.');
     const n = GL.seguroTexto(nombre).slice(0, 24);
     if (n.length < 3) throw new Error('El nombre debe tener al menos 3 caracteres.');
@@ -179,7 +181,8 @@ const Auth = {
       if (error) throw new Error(Auth.traducir(error.message));
       Auth.jugador = data;
     }
-    await sb.auth.updateUser({ data: { nombre_usuario: n } });
+    const zona = GL._zonaResuelta(zonaHoraria);
+    await sb.auth.updateUser({ data: zona ? { nombre_usuario: n, zona_horaria: zona } : { nombre_usuario: n } });
     GL.invalidar();
     return Auth.jugador;
   },
@@ -196,6 +199,11 @@ const Auth = {
     if (Object.prototype.hasOwnProperty.call(cambios, 'pais')) {
       if (!/^[A-Z]{2}$/.test(String(cambios.pais || '').toUpperCase())) throw new Error('Seleccioná un país válido.');
       datos.pais = String(cambios.pais).toUpperCase();
+    }
+    if (Object.prototype.hasOwnProperty.call(cambios, 'zona_horaria')) {
+      const zona = GL._zonaResuelta(cambios.zona_horaria);
+      if (!zona) throw new Error('Elegí una ciudad o zona horaria válida.');
+      datos.zona_horaria = zona;
     }
     if (Object.prototype.hasOwnProperty.call(cambios, 'telefono')) {
       datos.telefono = String(cambios.telefono || '').replace(/[^\d+]/g, '').slice(0, 20);

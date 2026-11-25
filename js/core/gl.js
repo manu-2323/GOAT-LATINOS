@@ -53,7 +53,10 @@ const GL = {
     if (typeof sb !== 'undefined' && sb) {
       const { data, error } = await sb.from('paises').select('codigo,nombre').eq('activo', true).order('nombre');
       if (!error && data && data.length) {
-        GL.paises = data.map(p => ({ codigo: String(p.codigo).toUpperCase(), nombre: p.nombre }));
+        GL.paises = data.map(p => ({
+          codigo: String(p.codigo).toUpperCase(), nombre: p.nombre,
+          zona: (PAISES[String(p.codigo).toUpperCase()] || {}).zona || CONFIG.ZONA_REFERENCIA
+        }));
       } else if (error) {
         console.warn('Países:', error.message);
       }
@@ -62,8 +65,12 @@ const GL = {
       GL.paises = Object.entries(PAISES).map(([codigo, v]) => ({ codigo, nombre: v.nombre }));
     }
     GL.paises.forEach(p => {
-      if (!PAISES[p.codigo]) PAISES[p.codigo] = { nombre: p.nombre, horario: ZONAS_HORARIAS.medio };
-      else PAISES[p.codigo].nombre = p.nombre;
+      if (!PAISES[p.codigo]) {
+        PAISES[p.codigo] = { nombre: p.nombre, horario: ZONAS_HORARIAS.medio, zona: p.zona || CONFIG.ZONA_REFERENCIA };
+      } else {
+        PAISES[p.codigo].nombre = p.nombre;
+        if (!PAISES[p.codigo].zona) PAISES[p.codigo].zona = p.zona || CONFIG.ZONA_REFERENCIA;
+      }
     });
     GL._paisesCargados = true;
     return GL.paises;
@@ -75,9 +82,148 @@ const GL = {
     return (dynamic && dynamic.nombre) || (PAISES[c] && PAISES[c].nombre) || String(codigo || '—');
   },
 
-  horarioPais(codigo) {
+  /* ---------- Horarios por zona horaria (Intl.DateTimeFormat) ----------
+     Referencia deportiva: 11:00 – 21:00 en America/Managua.
+     Cada jugador ve ese mismo instante convertido a su zona elegida.
+     Ningún horario depende solo del país (México, Brasil y Chile tienen varias zonas). */
+  _zonaResuelta(zona) {
+    const nombre = String(zona || '').trim();
+    if (!nombre) return '';
+    try { new Intl.DateTimeFormat('es-ES', { timeZone: nombre }); return nombre; }
+    catch (e) { return ''; }
+  },
+
+  zonaPorPais(codigo) {
     const c = String(codigo || '').toUpperCase();
-    return (PAISES[c] && PAISES[c].horario) || ZONAS_HORARIAS.medio;
+    const fijo = PAISES[c];
+    const dinamico = GL.paises.find(p => p.codigo === c);
+    return GL._zonaResuelta((fijo && fijo.zona) || (dinamico && dinamico.zona)) || CONFIG.ZONA_REFERENCIA;
+  },
+
+  /* Prioridad: zona elegida por el jugador → zona habitual del país → referencia. */
+  zonaJugador(jugador, codigoPais) {
+    const j = jugador || {};
+    return GL._zonaResuelta(j.zona_horaria) || GL.zonaPorPais(j.pais || codigoPais);
+  },
+
+  partesEnZona(instante, zona) {
+    const z = GL._zonaResuelta(zona) || CONFIG.ZONA_REFERENCIA;
+    const fecha = instante instanceof Date ? instante : new Date(instante);
+    const partes = {};
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: z, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(fecha).forEach(p => {
+      if (p.type !== 'literal') partes[p.type] = Number(p.value);
+    });
+    if (partes.hour === 24) partes.hour = 0;
+    return partes;
+  },
+
+  /* Date UTC cuyo reloj local en la zona de referencia marca la hora pedida. */
+  momentoReferencia(fecha, fin) {
+    const base = fecha instanceof Date && !isNaN(fecha.getTime()) ? fecha : new Date();
+    const p = GL.partesEnZona(base, CONFIG.ZONA_REFERENCIA);
+    const hhmm = String(fin ? CONFIG.HORA_FIN_REFERENCIA : CONFIG.HORA_INICIO_REFERENCIA).split(':');
+    const objetivo = Date.UTC(p.year, p.month - 1, p.day, Number(hhmm[0]) || 0, Number(hhmm[1]) || 0);
+    let instante = objetivo;
+    // Ajuste iterativo: cubre cambios estacionales (horario de verano).
+    for (let i = 0; i < 4; i++) {
+      const q = GL.partesEnZona(instante, CONFIG.ZONA_REFERENCIA);
+      const obtenido = Date.UTC(q.year, q.month - 1, q.day, q.hour, q.minute);
+      const delta = objetivo - obtenido;
+      if (!delta) break;
+      instante += delta;
+    }
+    return new Date(instante);
+  },
+
+  horaEnZona(instante, zona) {
+    const z = GL._zonaResuelta(zona) || CONFIG.ZONA_REFERENCIA;
+    const fecha = instante instanceof Date ? instante : new Date(instante);
+    return new Intl.DateTimeFormat('es-ES', {
+      timeZone: z, hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).format(fecha).replace(/^24:/, '00:');
+  },
+
+  offsetZona(instante, zona) {
+    const fecha = instante instanceof Date ? instante : new Date(instante);
+    const p = GL.partesEnZona(fecha, zona);
+    const localComoUTC = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute);
+    const actual = Math.floor(fecha.getTime() / 60000) * 60000;
+    const minutos = Math.round((localComoUTC - actual) / 60000);
+    const signo = minutos < 0 ? '-' : '+';
+    const abs = Math.abs(minutos);
+    return 'UTC' + signo + String(Math.floor(abs / 60)).padStart(2, '0') + ':' + String(abs % 60).padStart(2, '0');
+  },
+
+  /* Texto corto del horario de juego en una zona (ej. "12:00 – 22:00"). */
+  horarioZona(zona, fecha) {
+    const z = GL.zonaJugador({ zona_horaria: zona });
+    return GL.horaEnZona(GL.momentoReferencia(fecha, false), z) + ' – ' +
+      GL.horaEnZona(GL.momentoReferencia(fecha, true), z);
+  },
+
+  horarioJugador(jugador, fecha, codigoPais) {
+    const j = jugador || {};
+    return GL.horarioZona(GL.zonaJugador(j, codigoPais || j.pais), fecha);
+  },
+
+  /* Compatibilidad: ahora devuelve el horario calculado para la zona del país. */
+  horarioPais(codigo, fecha) { return GL.horarioZona(GL.zonaPorPais(codigo), fecha); },
+
+  horarioZonaDetalle(zona, fecha) {
+    const z = GL.zonaJugador({ zona_horaria: zona });
+    return GL.horarioZona(z, fecha) + ' · ' + GL.etiquetaZona(z) +
+      ' (' + GL.offsetZona(GL.momentoReferencia(fecha, false), z) + ')';
+  },
+
+  notaHorarios() {
+    return 'Horarios estimados: ' + CONFIG.HORA_INICIO_REFERENCIA + ' – ' + CONFIG.HORA_FIN_REFERENCIA +
+      ' en ' + GL.etiquetaZona(CONFIG.ZONA_REFERENCIA) +
+      '. Cada jugador ve su hora local según la ciudad elegida en su perfil.';
+  },
+
+  etiquetaZona(zona) {
+    const z = GL._zonaResuelta(zona);
+    if (!z) return 'Zona por definir';
+    const opcion = ZONAS_HORARIAS_DISPONIBLES.find(x => x.zona === z);
+    if (opcion) return opcion.ciudad + ' (' + GL.nombrePais(opcion.pais) + ')';
+    if (z === CONFIG.ZONA_REFERENCIA) return 'Managua (Nicaragua)';
+    return z.split('/').pop().replace(/_/g, ' ');
+  },
+
+  /* Los países con una sola zona se preseleccionan; los que tienen varias
+     obligan al jugador a elegir su ciudad. */
+  zonaPorDefectoFormulario(pais) {
+    const opciones = ZONAS_HORARIAS_DISPONIBLES.filter(x => x.pais === String(pais || '').toUpperCase());
+    return opciones.length === 1 ? opciones[0].zona : '';
+  },
+
+  opcionesZonaHoraria(valor, pais) {
+    const actual = GL._zonaResuelta(valor) || GL.zonaPorDefectoFormulario(pais);
+    const codigo = String(pais || '').toUpperCase();
+    const lista = codigo
+      ? ZONAS_HORARIAS_DISPONIBLES.filter(x => x.pais === codigo)
+      : ZONAS_HORARIAS_DISPONIBLES;
+    const visibles = new Set(lista.map(x => x.zona));
+    const extra = actual && !visibles.has(actual)
+      ? '<option value="' + esc(actual) + '" selected>' + esc(GL.etiquetaZona(actual)) + '</option>' : '';
+    return '<option value="">Seleccioná tu ciudad o zona horaria</option>' +
+      lista.map(x => '<option value="' + esc(x.zona) + '"' + (x.zona === actual ? ' selected' : '') + '>' +
+        esc(x.ciudad + ' — ' + GL.nombrePais(x.pais)) + '</option>').join('') + extra;
+  },
+
+  /* Actualiza el selector y su nota al cambiar de país. */
+  actualizarZona(select, pais, nota, conservar) {
+    if (!select) return;
+    select.innerHTML = GL.opcionesZonaHoraria(conservar ? select.value : '', pais);
+    if (nota) {
+      nota.innerHTML = select.value
+        ? icono('clock', 13) + ' Horario de juego: ' + esc(GL.horarioZonaDetalle(select.value))
+        : icono('info', 13) + ' Elegí tu ciudad para ver tu horario de juego.';
+    }
+    iniciarIconos();
   },
 
   opcionesPais(valor, incluirVacio) {
@@ -336,8 +482,8 @@ const GL = {
   // 'jugadores' solo lo lee el admin (por RLS); no necesita filtrar aquí.
   // 'jugadores_publicos' es la vista ya filtrada en la base de datos.
   _columnas: {
-    jugadores:         'id,nombre_usuario,pais,avatar_url,activo,suspendido,rol,torneo_id,numero,telefono,email,user_id,super_admin,created_at',
-    jugadores_publicos:'id,nombre_usuario,pais,avatar_url,activo,suspendido,torneo_id,numero',
+    jugadores:         'id,nombre_usuario,pais,zona_horaria,avatar_url,activo,suspendido,rol,torneo_id,numero,telefono,email,user_id,super_admin,created_at',
+    jugadores_publicos:'id,nombre_usuario,pais,zona_horaria,avatar_url,activo,suspendido,torneo_id,numero',
     sanciones:         'id,jugador_id,torneo_id,tipo,puntos_descuento,partidos_suspension,motivo,created_at'
   },
 
@@ -458,6 +604,7 @@ const GL = {
     return j ? j.nombre_usuario : 'Por definir';
   },
   paisJugador(id) { const j = GL.jugador(id); return j ? j.pais : ''; },
+  zonaHorariaJugador(id) { const j = GL.jugador(id); return j ? GL.zonaJugador(j) : GL.zonaPorPais(''); },
 
   grupoDeJugador(id) {
     // ctx.miembros ya está filtrado al torneo activo desde cargarContexto

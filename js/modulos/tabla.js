@@ -118,8 +118,8 @@
     const cards = partidos.map((p, i) => {
       const r = GL.resultado(p);
       const local = GL.jugador(p.local_id) || {}, visita = GL.jugador(p.visitante_id) || {};
-      const horarioLocal = GL.horarioPais(local.pais);
-      const horarioVisita = GL.horarioPais(visita.pais);
+      const horarioLocal = GL.horarioJugador(local);
+      const horarioVisita = GL.horarioJugador(visita);
       return '<div class="partido-card partido-card-fixture" style="animation-delay:' + (i * .05) + 's">' +
         '<div class="equipo-row local">' +
           '<div class="equipo">' + icono('home', 15) + '<span>' + esc(GL.nombreJugador(p.local_id)) + '</span>' + GL.banderaHTML(local.pais, 15) + '</div>' +
@@ -139,7 +139,8 @@
       (cards ? '<div class="partidos-lista">' + cards + '</div>' :
         '<p class="vacio-mensaje">' + (jornada.virtual
           ? 'Esta jornada todavía no tiene partidos programados.'
-          : 'No hay partidos programados para esta jornada.') + '</p>') + '</div>';
+          : 'No hay partidos programados para esta jornada.') + '</p>') +
+      (cards ? '<p class="nota-pie">' + esc(GL.notaHorarios()) + '</p>' : '') + '</div>';
   }
 
   Modulos.tabla = Mod;

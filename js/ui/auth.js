@@ -73,6 +73,10 @@ const PantallaAuth = {
                 '<div class="campo-estado" id="rg-tel-estado" aria-live="polite"></div>' +
               '</label>' +
             '</div>' +
+            '<label>Ciudad o zona horaria<select class="input" id="rg-zona" required>' +
+              GL.opcionesZonaHoraria('', '') +
+            '</select></label>' +
+            '<p class="nota-pie" id="rg-zona-nota"></p>' +
             '<label>Correo electrónico<input class="input" type="email" id="rg-correo" autocomplete="email" placeholder="tu@gmail.com" required></label>' +
             PantallaAuth.indicador('rg-correo-estado') +
             PantallaAuth.campoClave('rg-clave', 'Contraseña (mínimo 8 caracteres)', 'new-password') +
@@ -198,6 +202,8 @@ const PantallaAuth = {
       const telPrefijo    = o.querySelector('#rg-tel-prefijo');
       const telEstado     = o.querySelector('#rg-tel-estado');
       const paisSelect    = o.querySelector('#rg-pais');
+      const zonaSelect    = o.querySelector('#rg-zona');
+      const zonaNota      = o.querySelector('#rg-zona-nota');
       let   _telE164      = '';   // valor final a guardar
       let   _paisTelISO   = '';   // ISO del país del teléfono
 
@@ -300,9 +306,14 @@ const PantallaAuth = {
 
       paisSelect.addEventListener('change', () => {
         actualizarPrefijo(paisSelect.value);
+        // México, Brasil, Chile y Argentina tienen varias zonas: el jugador elige su ciudad.
+        GL.actualizarZona(zonaSelect, paisSelect.value, zonaNota);
       });
+      zonaSelect.addEventListener('change', () =>
+        GL.actualizarZona(zonaSelect, paisSelect.value, zonaNota, true));
 
       // Inicializar con el país por defecto si ya hay uno seleccionado
+      GL.actualizarZona(zonaSelect, paisSelect.value, zonaNota);
       if (paisSelect.value) actualizarPrefijo(paisSelect.value);
       clave2.addEventListener('input', () => {
         if (!clave2.value) return;
@@ -317,6 +328,7 @@ const PantallaAuth = {
         const err = o.querySelector('#rg-error'); err.textContent = '';
         const form = ev.target;
         if (!nombreOk) { err.textContent = 'Esperá a que el nombre aparezca como disponible.'; return; }
+        if (!zonaSelect.value) { err.textContent = 'Elegí tu ciudad o zona horaria para ver los horarios correctos.'; return; }
         if (clave.value.length < 8) { err.textContent = 'La contraseña debe tener al menos 8 caracteres.'; return; }
         if (clave.value !== clave2.value) { err.textContent = 'Las contraseñas no coinciden.'; return; }
         ocupado(form, true);
@@ -330,7 +342,8 @@ const PantallaAuth = {
               visual:  telInput.value.trim(),
               e164:    _telE164,
               paisTel: _paisTelISO || o.querySelector('#rg-pais').value
-            }
+            },
+            zonaSelect.value
           );
           // Con acceso obligatorio, solo se cierra si Supabase devolvió sesión.
           // Si el correo requiere confirmación, Auth.registrar lanza y el overlay permanece.

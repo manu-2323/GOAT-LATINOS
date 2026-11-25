@@ -1,6 +1,6 @@
 # GOATS LATINOS · League Manager — Configuración
 
-Versión actual: **1.0.11**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
+Versión actual: **1.0.12**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
 
 ## 1. Arranque
 
@@ -29,10 +29,13 @@ Todo el SQL está en `supabase/` y es idempotente. Ejecutalo en Supabase → SQL
 5. `migration-registro-seguro.sql` — RPC `gl_nombre_disponible(text)`, retiro de `gl_correo_existe`,
    vista pública `jugadores_publicos` sin campos sensibles y limpieza de políticas residuales.
    Ejecutar **después** de las migraciones base para no revertir el endurecimiento.
+6. `migration-zonas-horarias.sql` — columna `jugadores.zona_horaria` con backfill por país,
+   vista pública actualizada y validación de formato IANA. Ejecutar **después** de
+   `migration-registro-seguro.sql` para conservar la vista con la columna nueva.
 
 Estado verificado en remoto: 16 países activos, 1 torneo activo, 2 grupos, columnas `numero`,
-`email`, `super_admin`, `avatar_url`, bucket `avatares` público, RPC `gl_nombre_disponible`
-disponible para `anon`/`authenticated` y RPC `gl_correo_existe` revocada.
+`email`, `super_admin`, `avatar_url`, `zona_horaria`, bucket `avatares` público, RPC
+`gl_nombre_disponible` disponible para `anon`/`authenticated` y RPC `gl_correo_existe` revocada.
 
 Consulta rápida de verificación:
 
@@ -45,8 +48,8 @@ select proname from pg_proc where proname like 'gl_%' order by proname;
 
 La lectura de tablas del torneo es pública; la escritura está restringida a administradores.
 `public.jugadores` es privada: `anon` no tiene `SELECT` y la app lee solo la vista
-`public.jugadores_publicos`, que expone `id`, `nombre_usuario`, `pais`, `avatar_url`, `activo`,
-`suspendido`, `torneo_id` y `numero`. Nunca expone `email`, `telefono`, `user_id`, `rol` ni
+`public.jugadores_publicos`, que expone `id`, `nombre_usuario`, `pais`, `zona_horaria`, `avatar_url`,
+`activo`, `suspendido`, `torneo_id` y `numero`. Nunca expone `email`, `telefono`, `user_id`, `rol` ni
 `super_admin`. El trigger `gl_proteger_rol` impide que un jugador se autoasigne `rol`, `activo`,
 `suspendido`, `torneo_id`, `super_admin` o `email`. `service_role` y el `super_admin` pueden
 actualizar esos campos.
@@ -175,17 +178,36 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Capa visual**: el overlay cubre toda la pantalla (incluido el banner offline) y bloquea el scroll
   del fondo mientras se autentica.
 
-## 8. Mejoras 1.0.5
+## 8. Mejoras 1.0.12 — Horarios internacionales
+
+- **Zona por jugador**: el registro y el perfil piden **ciudad o zona horaria** (`zona_horaria`,
+  valor IANA). Países con una sola zona se preseleccionan; México, Brasil, Chile y Argentina
+  obligan a elegir ciudad. Ejemplos: `America/Mexico_City`, `America/Tijuana`, `America/Manaus`,
+  `America/Santiago`, `America/Argentina/Buenos_Aires`.
+- **Referencia deportiva**: `11:00 – 21:00` en `America/Managua`. No hay fecha/hora programada
+  en `public.partidos`, por eso se muestra el horario estimado de la jornada, no una fecha falsa.
+- **Conversión real**: `Intl.DateTimeFormat` convierte ese instante a la zona de cada jugador,
+  respetando cambios estacionales (Tijuana y Santiago cambian; Ciudad de México y Buenos Aires no).
+- **Vistas afectadas**: fixture y “Partidos de hoy” muestran la hora de local y visitante;
+  administración muestra la zona junto al horario; mensajes de WhatsApp agrupan por zona real.
+- **Backend**: la columna existe en `public.jugadores` y en la vista pública; el alta desde
+  administración envía la zona y la Edge Function la valida con `Intl` antes de insertar.
+- **Novatos**: notas con el horario local y su offset (`UTC-06:00`), selector con nombres de
+  ciudad y mensaje de ayuda si todavía no eligieron zona.
+
+## 9. Mejoras 1.0.5
 
 - **Países dinámicos**: tabla `paises` cargada al arrancar; banderas reales vía `flagcdn.com` en tabla,
   fixture, perfil y administración. La bandera emoji queda solo para textos de WhatsApp.
-- **Horarios por país**: base UTC-6 Nicaragua/Costa Rica `11:00 AM – 9:00 PM`, con ajuste por zona
-  según el país (`PAISES` / `ZONAS_HORARIAS`). Se muestran en fixture, perfil y administración.
+- **Horarios por país** (histórico, reemplazado en 1.0.12 por la sección 8): base UTC-6
+  Nicaragua/Costa Rica `11:00 AM – 9:00 PM`, con ajuste por país (`PAISES` / `ZONAS_HORARIAS`).
+  Los textos `PAISES[].horario` se conservan solo como respaldo.
 - **Perfil completo**: foto JPG/PNG de hasta 2 MB en bucket `avatares`, nombre, país, teléfono y
   horario con vista previa. Botón **Eliminar mi cuenta** con confirmación estricta.
 - **Registro validado**: checkmark de nombre en vivo (debounce 500 ms) contra la RPC segura, correo
   sin enumeración, validación de contraseña y confirmación, mensaje específico para Gmail.
-- **Mensajes**: vista previa de WhatsApp, botón de envío y horarios agrupados por país.
+- **Mensajes**: vista previa de WhatsApp, botón de envío y horarios; desde 1.0.12 se agrupan
+  por zona horaria real de cada participante.
 - **Estadísticas globales**: top 5 de goles, vallas, victorias, diferencia y posesión; rachas;
   head-to-head; gráfico Chart.js local y exportación PNG.
 - **Administración**: distinción de `Administrador principal`, pestaña restringida a `super_admin`,
@@ -193,7 +215,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **IA**: Gemini Flash-Lite (`gemini-3.5-flash-lite`, modelo 2.0 retirado por Google) reemplaza a la integración anterior; toast con icono animado
   `Analizando captura con Gemini AI...`.
 
-## 9. Decisiones de diseño
+## 10. Decisiones de diseño
 
 - **Sin emojis en la UI.** El código de país se muestra como chip tipográfico y bandera de imagen.
   Las banderas emoji se usan únicamente en textos generados para WhatsApp.
@@ -207,7 +229,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Confirmaciones**: acciones destructivas usan modal; el resto de acciones confirman con toast.
 - Todas las vistas muestran skeleton mientras cargan y reinicializan Lucide después de cada render.
 
-## 10. Solución de problemas
+## 11. Solución de problemas
 
 | Síntoma | Acción |
 |---|---|

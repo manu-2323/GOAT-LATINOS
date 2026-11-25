@@ -54,7 +54,7 @@
               '<div class="sub">' +
                 '<span class="pais-celda">' + GL.banderaHTML(j.pais, 18) +
                   '<span class="codigo-pais">' + esc(j.pais || '—') + '</span></span>' +
-                '<span class="muted" style="font-size:12px">' + esc(GL.horarioPais(j.pais)) + '</span>' +
+                '<span class="muted" style="font-size:12px" title="' + esc(GL.etiquetaZona(GL.zonaJugador(j))) + '">' + esc(GL.horarioJugador(j)) + '</span>' +
                  ((j.telefono && (GL.esAdmin() || (Auth.usuario && j.user_id === Auth.usuario.id)))
                   ? GL.linkWhatsapp(j, j.nombre_usuario) : '') +
                 (pos ? GL.badge('Posición ' + pos + ' · Grupo ' + GL.letraGrupo(grupo), 'gold', 'trophy') : '') +
@@ -149,7 +149,10 @@
           '<label class="campo"><span>País</span><select class="input" id="perfil-pais">' + GL.opcionesPais(j.pais, true) + '</select></label>' +
           '<label class="campo"><span>Teléfono / WhatsApp</span><input class="input" type="tel" id="perfil-tel" maxlength="20" value="' + esc(j.telefono || '') + '" placeholder="9999-9999"></label>' +
         '</div>' +
-        '<p class="nota-pie" id="perfil-horario">' + icono('clock', 13) + 'Horario de juego: ' + esc(GL.horarioPais(j.pais)) + '</p>',
+        '<label class="campo"><span>Ciudad o zona horaria</span><select class="input" id="perfil-zona" required>' +
+          GL.opcionesZonaHoraria(j.zona_horaria, j.pais || (Auth.jugador && Auth.jugador.pais)) +
+        '</select></label>' +
+        '<p class="nota-pie" id="perfil-horario"></p>',
       acciones: '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
         '<button type="button" class="btn" id="perfil-guardar">Guardar cambios</button>',
       onAbrir(fondo, cerrar) {
@@ -181,16 +184,20 @@
           avatar.textContent = GL.iniciales(nombre);
         });
         const pais = fondo.querySelector('#perfil-pais');
+        const zona = fondo.querySelector('#perfil-zona');
         const horario = fondo.querySelector('#perfil-horario');
-        pais.addEventListener('change', () => {
-          horario.innerHTML = icono('clock', 13) + 'Horario de juego: ' + esc(GL.horarioPais(pais.value));
-          iniciarIconos();
-        });
+        pais.addEventListener('change', () => GL.actualizarZona(zona, pais.value, horario));
+        zona.addEventListener('change', () => GL.actualizarZona(zona, pais.value, horario, true));
+        GL.actualizarZona(zona, pais.value, horario, true);
         fondo.querySelector('#perfil-guardar').addEventListener('click', async () => {
           const boton = fondo.querySelector('#perfil-guardar');
           const telRaw = fondo.querySelector('#perfil-tel').value.trim();
           const paisVal = pais.value;
+          const zonaVal = zona.value;
 
+          if (!zonaVal) {
+            GL.notificar('Elegí tu ciudad o zona horaria para ver los horarios correctos.', 'advertencia'); return;
+          }
           // Validar teléfono contra el país seleccionado
           const v = GL.tel.validar(telRaw, paisVal);
           if (!v.ok) {
@@ -202,10 +209,11 @@
             const cambios = {
               nombre_usuario: fondo.querySelector('#perfil-nombre').value,
               pais: paisVal,
+              zona_horaria: zonaVal,
               telefono: telRaw ? GL.tel.normalizar(telRaw, paisVal) : ''
             };
             if (!Auth.jugador) {
-              await Auth.actualizarNombreJuego(cambios.nombre_usuario);
+              await Auth.actualizarNombreJuego(cambios.nombre_usuario, zonaVal);
             } else {
               await Auth.actualizarPerfil(cambios);
               if (archivo) await Auth.subirAvatar(archivo);
@@ -325,7 +333,8 @@
       '<div class="flex" style="justify-content:space-between"><span class="dorado mono">Jornada ' + p.jornada + '</span>' +
         GL.badge(local ? 'Local' : 'Visitante', 'gold', local ? 'home' : 'plane') + '</div>' +
       '<div style="font-family:Rajdhani;font-size:21px;font-weight:700;margin:8px 0">vs ' + esc(GL.nombreJugador(rival && rival.id)) + '</div>' +
-      '<div class="muted" style="font-size:12px">' + esc(horarioPais(j.pais)) + ' · ' + esc(nombrePais(j.pais)) + '</div></div>';
+      '<div class="muted" style="font-size:12px">' + esc(GL.horarioJugador(j)) + ' · ' +
+        esc(GL.etiquetaZona(GL.zonaJugador(j))) + '</div></div>';
   }
   function h2h(partidos, id, rivalId) {
     const js = partidos.filter(p => p.estado !== 'pendiente' &&

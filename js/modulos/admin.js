@@ -98,7 +98,7 @@
           '<span>' + esc(j.nombre_usuario) + (faltas >= 3 ? ' ' + icono('octagon-alert', 14, 'rojo-txt') + '<span class="sr-only" title="Veto próximo torneo">Veto próximo torneo</span>' : '') + '</span></div></td>' +
         '<td><span class="pais-celda" title="' + esc(GL.nombrePais(j.pais)) + '">' + GL.banderaHTML(j.pais, 16) +
           '<span class="codigo-pais">' + esc(j.pais || '—') + '</span></span></td>' +
-        '<td class="izq"><span class="muted" style="font-size:11px">' + esc(GL.horarioPais(j.pais)) + '</span></td>' +
+        '<td class="izq"><span class="muted" style="font-size:11px" title="' + esc(GL.etiquetaZona(GL.zonaJugador(j))) + '">' + esc(GL.horarioJugador(j)) + '</span></td>' +
         '<td>' + GL.linkWhatsapp(j.telefono, j.nombre_usuario) + '</td>' +
         '<td>' + (g ? 'Grupo ' + GL.letraGrupo(g) : 'Sin asignar') + '</td>' +
         '<td>' + GL.badge(j.rol === 'admin' ? (j.super_admin ? 'Principal' : 'Admin') : 'Jugador', j.rol === 'admin' ? 'gold' : 'neutral') + '</td>' +
@@ -523,14 +523,26 @@
         '<label class="campo"><span>País</span><select class="input" id="ed-pais">' +
         GL.opcionesPais(j.pais, true) +
         '</select></label>' +
+        '<label class="campo"><span>Ciudad o zona horaria</span><select class="input" id="ed-zona" required>' +
+        GL.opcionesZonaHoraria(j.zona_horaria, j.pais) +
+        '</select></label>' +
+        '<p class="nota-pie" id="ed-horario"></p>' +
         '<label class="campo"><span>Teléfono</span><input class="input" id="ed-tel" value="' + esc(j.telefono || '') + '"></label>' +
         ('numero' in j ? '<label class="campo"><span>Número del jugador</span><input class="input" type="number" min="0" max="99" id="ed-numero" value="' + esc(j.numero || '') + '"></label>' : ''),
       acciones: '<button type="button" class="btn sec" data-cerrar>Cancelar</button><button type="button" class="btn" id="ed-guardar">Guardar</button>',
       onAbrir(fondo, cerrar) {
+        const pais = fondo.querySelector('#ed-pais');
+        const zona = fondo.querySelector('#ed-zona');
+        const nota = fondo.querySelector('#ed-horario');
+        pais.addEventListener('change', () => GL.actualizarZona(zona, pais.value, nota));
+        zona.addEventListener('change', () => GL.actualizarZona(zona, pais.value, nota, true));
+        GL.actualizarZona(zona, pais.value, nota, true);
         fondo.querySelector('#ed-guardar').addEventListener('click', async () => {
+          if (!zona.value) { GL.notificar('Elegí la ciudad o zona horaria del jugador.', 'advertencia'); return; }
           const update = {
             nombre_usuario: GL.seguroTexto(fondo.querySelector('#ed-nombre').value).toUpperCase().replace(/\s+/g, '_'),
-            pais: fondo.querySelector('#ed-pais').value,
+            pais: pais.value,
+            zona_horaria: zona.value,
             telefono: fondo.querySelector('#ed-tel').value.trim()
           };
           if ('numero' in j) {
@@ -1111,6 +1123,10 @@
           '<label class="campo"><span>País</span><select class="input" id="ag-pais">' +
             GL.opcionesPais('', false) +
           '</select></label></div>' +
+        '<label class="campo"><span>Ciudad o zona horaria</span><select class="input" id="ag-zona" required>' +
+          GL.opcionesZonaHoraria('', '') +
+        '</select></label>' +
+        '<p class="nota-pie" id="ag-horario"></p>' +
         '<div class="campo-row">' +
           '<label class="campo"><span>Teléfono</span><input class="input" id="ag-tel"></label>' +
           '<label class="campo"><span>Grupo</span><select class="input" id="ag-grupo">' +
@@ -1123,10 +1139,18 @@
         '<p class="nota-pie">La cuenta se crea en Supabase Auth mediante una función segura del servidor. Entregale la contraseña al jugador por un canal privado.</p>',
       acciones: '<button type="button" class="btn sec" data-cerrar>Cancelar</button><button type="button" class="btn" id="ag-crear">Crear jugador</button>',
       onAbrir(fondo, cerrar) {
+        const pais = fondo.querySelector('#ag-pais');
+        const zona = fondo.querySelector('#ag-zona');
+        const nota = fondo.querySelector('#ag-horario');
+        pais.addEventListener('change', () => GL.actualizarZona(zona, pais.value, nota));
+        zona.addEventListener('change', () => GL.actualizarZona(zona, pais.value, nota, true));
+        GL.actualizarZona(zona, pais.value, nota);
         fondo.querySelector('#ag-crear').addEventListener('click', async () => {
+          if (!zona.value) { GL.notificar('Elegí la ciudad o zona horaria del jugador.', 'advertencia'); return; }
           const body = {
             nombre_usuario: GL.seguroTexto(fondo.querySelector('#ag-nombre').value).toUpperCase().replace(/\s+/g, '_'),
-            pais: fondo.querySelector('#ag-pais').value,
+            pais: pais.value,
+            zona_horaria: zona.value,
             telefono: fondo.querySelector('#ag-tel').value.trim(),
             grupo_id: fondo.querySelector('#ag-grupo').value,
             torneo_id: GL.torneo().id,

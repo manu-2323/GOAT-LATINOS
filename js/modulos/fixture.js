@@ -241,7 +241,8 @@
       const r = GL.resultado(p);
       const local = GL.jugador(p.local_id) || {};
       const visita = GL.jugador(p.visitante_id) || {};
-      const horario = GL.horarioPais(local.pais);
+      const horarioLocal = GL.horarioJugador(local);
+      const horarioVisita = GL.horarioJugador(visita);
       const waLocal = GL.linkWhatsapp(local.telefono, local.nombre_usuario);
       const waVisita = GL.linkWhatsapp(visita.telefono, visita.nombre_usuario);
       const contacto = (waLocal || waVisita)
@@ -259,11 +260,14 @@
           '<div class="equipo visita">' + GL.banderaHTML(visita.pais, 15) +
             '<span>' + esc(GL.nombreJugador(p.visitante_id)) + '</span>' + icono('plane', 15) + '</div></div>' +
         '<div class="detalles-partido">' +
-          '<div class="horario-linea" style="justify-content:center">' + icono('clock', 13) +
-            '<span>Horario ' + esc(GL.nombrePais(local.pais)) + ': ' + esc(horario) + '</span></div>' +
+          '<div class="horario-linea">' + icono('clock', 13) +
+            '<span>' + esc(GL.nombreJugador(p.local_id)) + ': ' + esc(horarioLocal) + '</span></div>' +
+          '<div class="horario-linea">' + icono('clock', 13) +
+            '<span>' + esc(GL.nombreJugador(p.visitante_id)) + ': ' + esc(horarioVisita) + '</span></div>' +
           contacto +
         '</div></div>';
-    }).join('') + '</div>';
+    }).join('') + '</div>' +
+      '<p class="nota-pie">' + esc(GL.notaHorarios()) + '</p>';
   }
 
   Modulos.fixture = Mod;
