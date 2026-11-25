@@ -8,7 +8,8 @@ window.Modulos = Modulos;
 const SECCIONES = [
   { titulo: 'Competencia', items: [
     { id: 'tabla',        nombre: 'Tabla',          icono: 'layout-list',  nivel: 'publico' },
-    { id: 'fixture',      nombre: 'Calendario',     icono: 'calendar',     nivel: 'publico' },
+    { id: 'calendario',   nombre: 'Calendario',     icono: 'calendar-days', nivel: 'publico' },
+    { id: 'fixture',      nombre: 'Fixture',        icono: 'calendar',     nivel: 'publico' },
     { id: 'estadisticas', nombre: 'Estadísticas',   icono: 'bar-chart-2',  nivel: 'publico', modulo: 'stats-jornada' },
     { id: 'estadisticas-globales', nombre: 'Estadísticas globales', icono: 'chart-no-axes-column-increasing', nivel: 'publico', modulo: 'stats-globales' }
   ]},
@@ -30,7 +31,7 @@ const SECCIONES = [
 // Los 4 accesos fijos siempre visibles en la barra móvil
 const NAV_MOVIL_FIJOS = [
   { id: 'tabla',        corto: 'Tabla',     icono: 'layout-list'  },
-  { id: 'fixture',      corto: 'Fixture',   icono: 'calendar'     },
+  { id: 'calendario',   corto: 'Calendario', icono: 'calendar-days' },
   { id: 'estadisticas', corto: 'Stats',     icono: 'bar-chart-2'  },
   { id: 'eliminatorias',corto: 'Copa',      icono: 'git-merge'    }
 ];
@@ -40,6 +41,7 @@ const NAV_MOVIL_MAS = [
   { id: 'perfil',               corto: 'Mi perfil',          icono: 'user',                    nivel: 'jugador' },
   { id: 'notificaciones',       corto: 'Notificaciones',     icono: 'bell',                    nivel: 'jugador' },
   { id: 'estadisticas-globales',corto: 'Stats globales',     icono: 'chart-no-axes-column-increasing', nivel: 'publico' },
+  { id: 'fixture',               corto: 'Fixture',           icono: 'calendar',               nivel: 'publico' },
   { id: 'eliminatorias',        corto: 'Eliminatorias',      icono: 'git-merge',               nivel: 'publico' },
   { id: 'dashboard-admin',      corto: 'Control',            icono: 'layout-dashboard',        nivel: 'admin'   },
   { id: 'mensajes',             corto: 'Mensajes',           icono: 'message-square',          nivel: 'admin'   },
