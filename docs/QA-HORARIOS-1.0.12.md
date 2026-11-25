@@ -65,4 +65,15 @@ Formulario de registro:
 
 ## Publicación
 
-- Pendiente de commit/push y verificación en GitHub Pages al cierre de esta mejora.
+- Commit `0b89f95` (“Corregir horarios internacionales con zonas IANA (1.0.12)”), pusheado a
+  `origin/main` desde `4483242`.
+- GitHub Pages: run `45526231492` (n.º 14, `head_sha 0b89f95`) **completado con `success`**.
+- Sitio live `https://manu-2323.github.io/GOAT-LATINOS/`: `CONFIG.VERSION = 1.0.12`;
+  `GL.horarioZona('America/Tijuana') = 09:00 – 19:00` y
+  `GL.horarioZona('America/Santiago') = 14:00 – 00:00`.
+- `index.html` en vivo: 11 scripts y 1 hoja de estilos con `?v=1.0.12` (12 referencias).
+- Consola sin errores. Red: `paises`, `torneos`, `grupos`, `jugadores_publicos`, `grupo_jugadores`,
+  `jornadas`, `clasificacion` y `sanciones` devolvieron `200`. No hubo llamadas a `jugadores`
+  ni a `gl_correo_existe`.
+- Edge Function `admin-crear-jugador` desplegada en producción con validación de zona por `Intl`.
+- Cierre: mejora 16 publicada y verificada en local y en vivo.
