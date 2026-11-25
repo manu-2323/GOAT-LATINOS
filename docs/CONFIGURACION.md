@@ -1,6 +1,6 @@
 # GOATS LATINOS · League Manager — Configuración
 
-Versión actual: **1.0.10**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
+Versión actual: **1.0.11**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
 
 ## 1. Arranque
 
@@ -25,11 +25,14 @@ Todo el SQL está en `supabase/` y es idempotente. Ejecutalo en Supabase → SQL
 2. `migration-numero-jugador.sql` — compatibilidad con el número del jugador.
 3. `migration-admin-email.sql` — correo vinculado al perfil (si no se usó la configuración completa).
 4. `migration-mejoras-1-9.sql` — tabla `paises` (16 países), `super_admin`, `avatar_url`, helper
-   `gl_es_super_admin()`, bucket `avatares`, `gl_correo_existe()` y protección de campos sensibles.
-5. `migration-correo-existe.sql` — reafirma la RPC `gl_correo_existe(text)` usada por el registro.
+   `gl_es_super_admin()`, bucket `avatares` y protección de campos sensibles.
+5. `migration-registro-seguro.sql` — RPC `gl_nombre_disponible(text)`, retiro de `gl_correo_existe`,
+   vista pública `jugadores_publicos` sin campos sensibles y limpieza de políticas residuales.
+   Ejecutar **después** de las migraciones base para no revertir el endurecimiento.
 
 Estado verificado en remoto: 16 países activos, 1 torneo activo, 2 grupos, columnas `numero`,
-`email`, `super_admin`, `avatar_url`, bucket `avatares` público y RPC `gl_correo_existe` disponible.
+`email`, `super_admin`, `avatar_url`, bucket `avatares` público, RPC `gl_nombre_disponible`
+disponible para `anon`/`authenticated` y RPC `gl_correo_existe` revocada.
 
 Consulta rápida de verificación:
 
@@ -41,8 +44,17 @@ select proname from pg_proc where proname like 'gl_%' order by proname;
 ```
 
 La lectura de tablas del torneo es pública; la escritura está restringida a administradores.
-El trigger `gl_proteger_rol` impide que un jugador se autoasigne `rol`, `activo`, `suspendido`,
-`torneo_id`, `super_admin` o `email`. `service_role` y el `super_admin` pueden actualizar esos campos.
+`public.jugadores` es privada: `anon` no tiene `SELECT` y la app lee solo la vista
+`public.jugadores_publicos`, que expone `id`, `nombre_usuario`, `pais`, `avatar_url`, `activo`,
+`suspendido`, `torneo_id` y `numero`. Nunca expone `email`, `telefono`, `user_id`, `rol` ni
+`super_admin`. El trigger `gl_proteger_rol` impide que un jugador se autoasigne `rol`, `activo`,
+`suspendido`, `torneo_id`, `super_admin` o `email`. `service_role` y el `super_admin` pueden
+actualizar esos campos.
+
+El registro valida el nombre con `gl_nombre_disponible(text)`, una RPC `SECURITY DEFINER` con
+`search_path = ''` que devuelve solo `{ ok, mensaje }`. No se consultan filas de `jugadores`
+desde el navegador y la comprobación de correo se dejó de exponer para evitar enumeración de
+cuentas.
 
 ## 3. Seguridad de credenciales
 
@@ -51,7 +63,8 @@ El trigger `gl_proteger_rol` impide que un jugador se autoasigne `rol`, `activo`
 | URL + anon key | `js/core/config.js` (público, ya configurado) |
 | **SERVICE_ROLE_KEY** | Solo secret de Supabase Edge Functions |
 | **GEMINI_API_KEY** | Solo secret de la función `analizar-captura` |
-| **ADMIN_PASSWORD** | Solo secret de las funciones de administración |
+| **ADMIN_PASSWORD** | Solo secret de `admin-gestionar-admins` y `admin-obtener-clave` |
+| Contraseña bootstrap | Constante server-side en `admin-bootstrap`; nunca en frontend, repo ni docs |
 
 > La Service Role Key, la API key de Gemini y la clave de administrador **nunca** se escriben en el
 > frontend, en este repo ni en docs. Si expusiste alguna, rotala desde Supabase → Settings → API
@@ -72,9 +85,11 @@ No reescribas los valores actuales salvo rotación intencional.
 
 - No hay lista fija de correos: **cualquier correo puede ingresar como admin si conoce la clave**.
 - En la pantalla de acceso, tocá **Acceso de administrador**, escribí el correo y la clave.
-- `admin-bootstrap` valida la clave contra `ADMIN_PASSWORD`, crea/actualiza la cuenta y promueve la
-  fila en `jugadores` usando Service Role. El navegador nunca compara la clave. Tiene límite de
-  5 intentos por minuto.
+- `admin-bootstrap` valida la clave contra la constante bootstrap del propio Edge Function, crea/
+  actualiza la cuenta y promueve la fila en `jugadores` usando Service Role. El navegador nunca
+  compara la clave. Se bloquea de forma permanente después del primer alta exitosa y limita intentos.
+- Las altas posteriores de administradores usan `admin-gestionar-admins` con `ADMIN_PASSWORD` y
+  `admin-promover`, ambos restringidos al `super_admin`.
 - El **primer administrador** queda marcado como `super_admin`. Ese rol habilita la pestaña
   **Administradores**, la gestión de otros admins, la consulta de la clave y la edición de países.
 - `admin-gestionar-admins` exige `super_admin`. Los nuevos administrarios se crean con
@@ -92,12 +107,13 @@ where user_id = (select id from auth.users where lower(email) = lower('TU_EMAIL@
 
 ## 4. Edge Functions
 
-Hay **6 funciones desplegadas**. Desde la CLI (con `--yes` para entornos no interactivos):
+Hay **7 funciones desplegadas**. Desde la CLI (con `--yes` para entornos no interactivos):
 
 ```bash
 supabase functions deploy analizar-captura --yes
 supabase functions deploy admin-crear-jugador --yes
 supabase functions deploy admin-bootstrap --yes
+supabase functions deploy admin-promover --yes
 supabase functions deploy admin-gestionar-admins --yes
 supabase functions deploy admin-obtener-clave --yes
 supabase functions deploy eliminar-cuenta --yes
@@ -148,6 +164,14 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
   tabla, fixture ni estadísticas sin `Auth.usuario`. Al cerrar sesión vuelve el login.
 - **Registro**: el overlay solo se cierra si Supabase devuelve sesión. Si el correo requiere
   confirmación, permanece el formulario con el mensaje correspondiente.
+- **1.0.11**: el nombre se valida con `gl_nombre_disponible`; antes fallaba con `42501` porque
+  `anon` intentaba leer `public.jugadores`. El correo ya no se comprueba en vivo: el formulario
+  muestra “Lo verificaremos al crear la cuenta.” y `auth.signUp()` resuelve la existencia con un
+  mensaje genérico. Los nombres históricos siguen reservados aunque no tengan cuenta vinculada.
+- **Confirmación de correo**: verificado en `/auth/v1/settings` (`mailer_autoconfirm: false`).
+  Por eso `signUp()` crea la cuenta pero no devuelve sesión; el overlay permanece con
+  “Cuenta creada. Revisá tu correo…”. Después de confirmar, la persona inicia sesión con su
+  contraseña y queda pendiente de aprobación hasta que un admin le asigne grupo.
 - **Capa visual**: el overlay cubre toda la pantalla (incluido el banner offline) y bloquea el scroll
   del fondo mientras se autentica.
 
@@ -159,8 +183,8 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
   según el país (`PAISES` / `ZONAS_HORARIAS`). Se muestran en fixture, perfil y administración.
 - **Perfil completo**: foto JPG/PNG de hasta 2 MB en bucket `avatares`, nombre, país, teléfono y
   horario con vista previa. Botón **Eliminar mi cuenta** con confirmación estricta.
-- **Registro validado**: checkmark de correo y nombre en vivo (debounce 500 ms), validación de
-  contraseña y confirmación, mensaje específico para Gmail.
+- **Registro validado**: checkmark de nombre en vivo (debounce 500 ms) contra la RPC segura, correo
+  sin enumeración, validación de contraseña y confirmación, mensaje específico para Gmail.
 - **Mensajes**: vista previa de WhatsApp, botón de envío y horarios agrupados por país.
 - **Estadísticas globales**: top 5 de goles, vallas, victorias, diferencia y posesión; rachas;
   head-to-head; gráfico Chart.js local y exportación PNG.
@@ -190,6 +214,8 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 | "Falta configurar SERVICE_ROLE_KEY" | Verificá el secret en Supabase → Edge Functions → Secrets con el nombre exacto `SERVICE_ROLE_KEY`. |
 | "Falta configurar GEMINI_API_KEY" | Cargá la key de Google AI Studio y redeployá `analizar-captura`. |
 | "Solo el administrador principal puede..." | Ingresá con la cuenta marcada como `super_admin` o corregí el flag con Service Role. |
-| El registro dice que el correo existe | `gl_correo_existe` devuelve `true`; iniciá sesión o usá otro correo. |
+| El registro dice que el nombre está en uso | Es un nombre histórico reservado; elegí otro o pedí a un admin que vincule esa fila. |
+| “No se pudo verificar el nombre” | Revisá que `gl_nombre_disponible` esté ejecutada en remoto (`supabase/migration-registro-seguro.sql`). |
+| El correo dice “Lo verificaremos al crear la cuenta” | Comportamiento normal: no enumeramos correos; `signUp` informa si ya existe. |
 | La tabla no muestra banderas | Revisá que `paises` tenga filas activas y que `flagcdn.com` sea accesible. |
 | El gráfico no aparece | Confirmá que `librerias/chart.umd.js` esté presente y que `index.html` lo cargue antes de los módulos. |

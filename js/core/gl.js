@@ -337,7 +337,7 @@ const GL = {
   // 'jugadores_publicos' es la vista ya filtrada en la base de datos.
   _columnas: {
     jugadores:         'id,nombre_usuario,pais,avatar_url,activo,suspendido,rol,torneo_id,numero,telefono,email,user_id,super_admin,created_at',
-    jugadores_publicos:'id,nombre_usuario,pais,avatar_url,activo,suspendido,rol,torneo_id,numero',
+    jugadores_publicos:'id,nombre_usuario,pais,avatar_url,activo,suspendido,torneo_id,numero',
     sanciones:         'id,jugador_id,torneo_id,tipo,puntos_descuento,partidos_suspension,motivo,created_at'
   },
 

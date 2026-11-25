@@ -174,18 +174,8 @@ const PantallaAuth = {
           PantallaAuth.estado(estadoCorreo, valor ? 'Ingresá un correo válido.' : '', valor ? 'mal' : '', 'info');
           return;
         }
-        PantallaAuth.estado(estadoCorreo, 'Verificando correo...', 'neutral', 'loader-circle');
-        PantallaAuth._timers.correo = setTimeout(async () => {
-          try {
-            const existe = await Auth.correoExiste(valor);
-            if (correo.value.trim() !== valor) return;
-            PantallaAuth.estado(estadoCorreo,
-              existe ? 'Este correo ya está registrado. Ingresá con él.' : 'Correo disponible',
-              existe ? 'mal' : 'bien', existe ? 'circle-x' : 'circle-check-big');
-          } catch (e) {
-            PantallaAuth.estado(estadoCorreo, 'No se pudo verificar el correo.', 'neutral', 'info');
-          }
-        }, 500);
+        // No consultamos si el correo existe: eso permitiría enumerar cuentas.
+        PantallaAuth.estado(estadoCorreo, 'Lo verificaremos al crear la cuenta.', 'neutral', 'info');
       };
 
       const verificarClave = () => {

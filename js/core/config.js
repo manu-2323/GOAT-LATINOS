@@ -6,7 +6,7 @@ const CONFIG = {
   SUPABASE_URL: 'https://zmjzlvsdlfzmhptmtmjx.supabase.co',
   SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptanpsdnNkbGZ6bWhwdG10bWp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0ODE4MDIsImV4cCI6MjExMTA1NzgwMn0.4FosjYMKwl3n6ab-8Zw48lwxdmk1NQzsHAxynNFiRoA',
   NOMBRE_LIGA: 'GOATS LATINOS',
-  VERSION: '1.0.10',
+  VERSION: '1.0.11',
   BUCKET_CAPTURAS: 'capturas-partidos',
   BUCKET_AVATARES: 'avatares',
   JORNADAS_FASE_REGULAR: 22,

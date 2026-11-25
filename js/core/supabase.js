@@ -59,31 +59,26 @@ const Auth = {
 
   esAdmin() { return !!(Auth.jugador && Auth.jugador.rol === 'admin'); },
 
+  /* La tabla jugadores es privada: anon no tiene SELECT. La disponibilidad
+     se resuelve con una RPC SECURITY DEFINER que no devuelve filas. */
   nombreDisponible(nombre) {
     const n = GL.seguroTexto(nombre).slice(0, 24);
     if (n.length < 3) return Promise.resolve({ ok: false, mensaje: 'Usá al menos 3 caracteres.' });
     if (!sb) return Promise.resolve({ ok: false, mensaje: 'Supabase no está configurado.' });
-    return sb.from('jugadores').select('id').ilike('nombre_usuario', n).limit(5)
+    return sb.rpc('gl_nombre_disponible', { p_nombre: n })
       .then(({ data, error }) => {
         if (error) return { ok: false, mensaje: 'No se pudo verificar el nombre.' };
-        const normal = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const ocupado = (data || []).some(j => normal(j.nombre_usuario) === normal(n));
-        return ocupado
-          ? { ok: false, mensaje: 'Ese nombre ya está en uso. Elegí otro.' }
-          : { ok: true, mensaje: 'Nombre disponible' };
-      });
+        return {
+          ok: !!(data && data.ok),
+          mensaje: (data && data.mensaje) || 'Nombre disponible'
+        };
+      })
+      .catch(() => ({ ok: false, mensaje: 'No se pudo verificar el nombre.' }));
   },
 
-  correoExiste(correo) {
-    if (!sb) return Promise.resolve(false);
-    return sb.rpc('gl_correo_existe', { p_correo: String(correo || '').trim().toLowerCase() })
-      .then(({ data, error }) => {
-        if (!error) return !!data;
-        // Si la RPC no existe, intentamos con una consulta pública de jugadores.
-        return sb.from('jugadores').select('id').eq('email', String(correo || '').trim().toLowerCase()).limit(1)
-          .then(r => !!(r.data && r.data.length));
-      })
-      .catch(() => false);
+  /* No enumeramos correos: auth.signUp() responde con mensaje genérico. */
+  correoExiste() {
+    return Promise.resolve(false);
   },
 
   /* Registro: el jugador escribe el nombre con el que aparece en FC Mobile. */
@@ -95,9 +90,6 @@ const Auth = {
     if (String(clave || '').length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
     if (!pais) throw new Error('Seleccioná tu país.');
 
-    if (await Auth.correoExiste(correo)) {
-      throw new Error('Ese correo ya está registrado en la liga. Iniciá sesión.');
-    }
     const disponible = await Auth.nombreDisponible(nombre);
     if (!disponible.ok) throw new Error(disponible.mensaje);
 
