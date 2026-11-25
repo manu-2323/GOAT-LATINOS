@@ -1,6 +1,6 @@
 # GOATS LATINOS · League Manager — Configuración
 
-Versión actual: **1.0.14**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
+Versión actual: **1.0.15**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
 
 ## 1. Arranque
 
@@ -38,6 +38,10 @@ Ejecutalo en Supabase → SQL Editor en este orden:
    wrappers que validan `public.gl_es_admin()` con `auth.uid()`, revoca `EXECUTE` a `anon`/`PUBLIC`,
    fija `search_path` en funciones `SECURITY DEFINER` y termina con `notify pgrst, 'reload schema'`.
    Aplicada en producción sin errores; ver `docs/QA-AUDITORIA-1.0.13.md`.
+8. `migration-fix-rls-recursion.sql` (1.0.15) — reemplaza las subconsultas a `jugadores` dentro de
+   políticas RLS por `gl_es_admin()` / `gl_es_super_admin()` (SECURITY DEFINER). Sin esto, cualquier
+   usuario con sesión recibía `42P17: infinite recursion detected in policy for relation jugadores`.
+   Aplicada en producción; ver `docs/QA-RLS-1.0.15.md`.
 
 Estado verificado en remoto: 16 países activos, 1 torneo activo, 2 grupos, columnas `numero`,
 `email`, `super_admin`, `avatar_url`, `zona_horaria`, bucket `avatares` público, RPC
@@ -238,7 +242,20 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Verificación**: datos sintéticos con denominadores `posN=2`, `paseN=2` y `promGoles=2`; render sin
   `undefined`/`NaN` y consola sin errores. Detalle en `docs/QA-ESTADISTICAS-1.0.14.md`.
 
-## 11. Mejoras 1.0.5
+## 11. Mejoras 1.0.15 — Políticas RLS sin recursión
+
+- **Causa**: varias políticas de `jugadores` (y de `partidos`, `auditoria`, `notificaciones`, etc.)
+  consultaban `public.jugadores` desde su propio `USING`/`WITH CHECK`. Al iniciar sesión, evaluar
+  esa política volvía a evaluar las políticas de `jugadores` y PostgreSQL devolvía `500` con
+  `42P17: infinite recursion detected in policy for relation jugadores`.
+- **Fix**: esas subconsultas se cambiaron por `public.gl_es_admin()` y `public.gl_es_super_admin()`,
+  funciones `SECURITY DEFINER` con `search_path` fijo que devuelven el mismo resultado sin reevaluar
+  RLS. Los permisos efectivos no cambian: un jugador sigue viendo solo su fila y un admin ve todas.
+- **Verificación**: con la cuenta de pruebas logueada, `GET /rest/v1/jugadores` y
+  `GET /rest/v1/partidos` devuelven `200`, el módulo de estadísticas globales renderiza con
+  `PJ con datos` y la consola no registra errores. Detalle en `docs/QA-RLS-1.0.15.md`.
+
+## 12. Mejoras 1.0.5
 
 - **Países dinámicos**: tabla `paises` cargada al arrancar; banderas reales vía `flagcdn.com` en tabla,
   fixture, perfil y administración. La bandera emoji queda solo para textos de WhatsApp.
@@ -258,7 +275,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **IA**: Gemini Flash-Lite (`gemini-3.5-flash-lite`, modelo 2.0 retirado por Google) reemplaza a la integración anterior; toast con icono animado
   `Analizando captura con Gemini AI...`.
 
-## 12. Decisiones de diseño
+## 13. Decisiones de diseño
 
 - **Sin emojis en la UI.** El código de país se muestra como chip tipográfico y bandera de imagen.
   Las banderas emoji se usan únicamente en textos generados para WhatsApp.
@@ -272,7 +289,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Confirmaciones**: acciones destructivas usan modal; el resto de acciones confirman con toast.
 - Todas las vistas muestran skeleton mientras cargan y reinicializan Lucide después de cada render.
 
-## 13. Solución de problemas
+## 14. Solución de problemas
 
 | Síntoma | Acción |
 |---|---|
