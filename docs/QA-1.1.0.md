@@ -89,10 +89,22 @@ El estado remoto final se consultó después de esas limpiezas.
 
 ## Publicación
 
-Pendiente de registro final: commit/push a `main`, ejecución de GitHub Pages y verificación del
-sitio live en `https://manu-2323.github.io/GOAT-LATINOS/`.
+- Commit funcional `9c0d896` en `main`.
+- GitHub Pages: run `45569624972`, deployment `8051353870`, estado **success**.
+- Sitio live `https://manu-2323.github.io/GOAT-LATINOS/`: `CONFIG.VERSION = 1.1.0`,
+  `config.js?v=1.1.0` con HTTP 200, sin errores de consola en carga limpia.
+- El torneo visible en live es `GOATS LATINOS 2026 · 2026`, sin datos deportivos.
+- Login admin en live con el correo autorizado y la clave vigente: sesión iniciada,
+  `rol='admin'` y `super_admin=true`; la clave no se transcribe aquí. Cierre de sesión correcto.
+
+## Incidencia de QA en live
+
+Durante la verificación aparecieron `AbortError` de `navigator.locks` y un refresh token inválido
+por las pestañas QA antiguas abiertas en el mismo origen `manu-2323.github.io`. Al cerrar esas
+pestañas y limpiar el almacenamiento local del origen, la carga quedó limpia y el torneo 2026 se
+mostró correctamente. No requirió cambios de código.
 
 ## Resultado
 
-Funcional y listo para publicar, con la salvedad de que el valor antiguo del secret de servicio
-debe considerarse inválido; el despliegue depende únicamente de `SUPABASE_SERVICE_ROLE_KEY`.
+Publicado y funcional en `1.1.0`. El valor antiguo del secret de servicio debe considerarse
+inválido; el despliegue depende únicamente de `SUPABASE_SERVICE_ROLE_KEY`.
