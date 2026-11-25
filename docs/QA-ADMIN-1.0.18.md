@@ -69,7 +69,15 @@ No se borró ni se modificó ningún partido, gol, clasificación, sanción, gru
 - No se usó `node` porque no está instalado; la validación de sintaxis se hizo cargando el sitio en
   Chromium, sin errores de parseo ni excepciones.
 
+## Publicación
+
+- Commits: `7dca074` (cambios funcionales y migración) y `7dedd91` (QA), en `main`.
+- GitHub Pages: run `45560850829`, deployment `8050175834`, estado **success**.
+- Sitio live `https://manu-2323.github.io/GOAT-LATINOS/`: `CONFIG.VERSION = 1.0.18`, sin errores de
+  consola al cargar.
+- `admin-bootstrap` en producción: HTTP 403 con el mensaje de función retirada.
+
 ## Resultado
 
-Apto para publicación 1.0.18. El acceso admin quedó reducido a dos correos autorizados, con clave
-compartida validada como hash en Supabase, y ambos administradores conservan su perfil deportivo.
+Publicado 1.0.18. El acceso admin quedó reducido a dos correos autorizados, con clave compartida
+validada como hash en Supabase, y ambos administradores conservan su perfil deportivo.
