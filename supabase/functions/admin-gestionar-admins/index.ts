@@ -35,8 +35,8 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const serviceKey = Deno.env.get('SERVICE_ROLE_KEY');
-    if (!serviceKey) throw new Error('Falta configurar SERVICE_ROLE_KEY');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY');
+    if (!serviceKey) throw new Error('Falta configurar la clave de servicio del servidor');
 
     const token = (req.headers.get('Authorization') || '').replace('Bearer ', '');
     if (!token) throw new Error('Falta token de sesión');

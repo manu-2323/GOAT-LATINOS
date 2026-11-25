@@ -528,12 +528,13 @@
         const uid = (await sb.auth.getUser()).data?.user?.id;
         await sb.rpc('gl_registrar_auditoria', {
           p_torneo_id:     GL.torneoId() || null,
-          p_grupo_id:      grupoId       || null,
           p_accion:        accion,
           p_entidad_tipo:  entidadTipo,
           p_entidad_id:    entidadId     || null,
           p_realizado_por: uid,
-          p_detalle:       detalle       || {}
+          p_detalle:       grupoId
+            ? Object.assign({}, detalle || {}, { grupo_id: grupoId })
+            : (detalle || {})
         });
       } catch (e) {
         console.warn('[Auditoría]', e.message);

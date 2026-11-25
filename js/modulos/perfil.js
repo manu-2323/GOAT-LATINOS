@@ -17,8 +17,6 @@
           el.innerHTML = pendiente();
         const btn = el.querySelector('[data-actualizar-nombre]');
         if (btn) btn.addEventListener('click', () => editarPerfil(el, Auth.jugador || {}));
-        const btnTour = el.querySelector('[data-ver-tour]');
-        if (btnTour && window.OnboardingTour) btnTour.addEventListener('click', () => OnboardingTour.iniciar(true));
           iniciarIconos(); return;
         }
         if (!Mod.jugadorId || !(Auth.jugador.rol === 'admin' && Mod.jugadorId !== Auth.jugador.id)) {
@@ -106,10 +104,11 @@
           el.querySelector('#h2h-resultado').innerHTML = riv.value ? h2h(mios, j.id, riv.value) : '<p class="vacio-mensaje">Elegí un rival para ver el historial.</p>';
           iniciarIconos();
         });
-        const nb = el.querySelector('[data-editar]')?.addEventListener('click', () => editarPerfil(el, j));
-      el.querySelector('[data-ver-tour]')?.addEventListener('click', () => window.OnboardingTour && OnboardingTour.iniciar(true));
-        const dt = el.querySelector('[data-ver-tour]');
-        if (dt) dt.addEventListener('click', () => OnboardingTour.iniciar(false));
+        el.querySelector('[data-editar]')?.addEventListener('click', () => editarPerfil(el, j));
+        // Un solo handler: "Ver tour" siempre reinicia el recorrido desde el paso 1.
+        el.querySelector('[data-ver-tour]')?.addEventListener('click', () => {
+          if (window.OnboardingTour) OnboardingTour.iniciar(true);
+        });
         const dc = el.querySelector('[data-eliminar-cuenta]');
         if (dc) dc.addEventListener('click', () => eliminarCuenta(el));
         enlazar(el);

@@ -1,6 +1,7 @@
 // Supabase Edge Function: admin-crear-jugador
-// Crea un usuario de Auth y su fila en `jugadores` usando la SERVICE ROLE.
-// Verifica que quien llama sea administrador. La clave secreta NUNCA se expone al frontend.
+// Crea o elimina (action:'delete') un usuario de Auth y su fila en `jugadores`
+// usando la SERVICE ROLE. Verifica que quien llama sea administrador.
+// La clave secreta NUNCA se expone al frontend.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -15,8 +16,8 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const serviceKey = Deno.env.get('SERVICE_ROLE_KEY');
-    if (!serviceKey) throw new Error('Falta configurar SERVICE_ROLE_KEY');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY');
+    if (!serviceKey) throw new Error('Falta configurar la clave de servicio del servidor');
 
     const token = (req.headers.get('Authorization') || '').replace('Bearer ', '');
     if (!token) throw new Error('Falta token de sesión');
@@ -32,6 +33,49 @@ Deno.serve(async (req) => {
     if (!perfil || perfil.rol !== 'admin') throw new Error('No tenés permisos de administrador');
 
     const b = await req.json();
+    const action = String(b.action || 'create');
+
+    if (action === 'delete') {
+      const jugadorId = String(b.jugador_id || '');
+      if (!jugadorId) throw new Error('Falta el jugador a eliminar');
+
+      const { data: objetivos, error: errObjetivo } = await admin.from('jugadores')
+        .select('id,user_id,rol,nombre_usuario')
+        .eq('id', jugadorId)
+        .limit(1);
+      if (errObjetivo) throw errObjetivo;
+      const objetivo = objetivos && objetivos.length ? objetivos[0] : null;
+      if (!objetivo) throw new Error('El jugador ya no existe');
+      if (objetivo.rol === 'admin') {
+        throw new Error('Las cuentas administradoras se gestionan desde la pestaña Admins');
+      }
+
+      await admin.from('partidos').delete().or(`local_id.eq.${objetivo.id},visitante_id.eq.${objetivo.id}`);
+      await admin.from('clasificacion').delete().eq('jugador_id', objetivo.id);
+      await admin.from('sanciones').delete().eq('jugador_id', objetivo.id);
+      await admin.from('notificaciones').delete().eq('jugador_id', objetivo.id);
+      await admin.from('grupo_jugadores').delete().eq('jugador_id', objetivo.id);
+
+      const { error: errJugador } = await admin.from('jugadores').delete().eq('id', objetivo.id);
+      if (errJugador) throw errJugador;
+
+      if (objetivo.user_id) {
+        const { error: errAvatar } = await admin.storage.from('avatares')
+          .remove([objetivo.user_id + '/']);
+        if (errAvatar) console.warn('No se pudo borrar el avatar:', errAvatar.message);
+
+        const { error: errAuth } = await admin.auth.admin.deleteUser(objetivo.user_id);
+        if (errAuth) throw errAuth;
+      }
+
+      return new Response(JSON.stringify({
+        ok: true,
+        action: 'delete',
+        mensaje: 'Jugador y cuenta eliminados correctamente.'
+      }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
+    }
+
+    if (action !== 'create') throw new Error('Acción no válida');
     if (!b.email || !b.password || !b.nombre_usuario) throw new Error('Faltan datos obligatorios');
 
     // La zona IANA se valida en el servidor: Intl la rechaza si no existe.

@@ -309,6 +309,24 @@ const PantallaAuth = {
         // México, Brasil, Chile y Argentina tienen varias zonas: el jugador elige su ciudad.
         GL.actualizarZona(zonaSelect, paisSelect.value, zonaNota);
       });
+
+      // El botón del prefijo rota entre los códigos disponibles y actualiza
+      // el país/zona y la validación igual que el cambio de país.
+      telPrefijo.addEventListener('click', () => {
+        const prefijos = Array.from(new Set(Object.values(PREFIJOS)));
+        const actual = PREFIJOS[_paisTelISO] || '+?';
+        const indice = prefijos.indexOf(actual);
+        const siguiente = prefijos[(indice + 1 + prefijos.length) % prefijos.length] || prefijos[0];
+        if (!siguiente) return;
+        const iso = Object.keys(PREFIJOS).find(k => PREFIJOS[k] === siguiente) || '';
+        actualizarPrefijo(iso);
+        if (iso && Array.from(paisSelect.options).some(op => op.value === iso)) {
+          paisSelect.value = iso;
+        }
+        GL.actualizarZona(zonaSelect, paisSelect.value, zonaNota);
+        validarTelefono();
+      });
+
       zonaSelect.addEventListener('change', () =>
         GL.actualizarZona(zonaSelect, paisSelect.value, zonaNota, true));
 

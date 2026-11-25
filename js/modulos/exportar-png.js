@@ -5,16 +5,44 @@
    ===================================================================== */
 (function () {
 
-  /* ── Cargar html2canvas bajo demanda ── */
-  async function cargarHtml2Canvas() {
-    if (typeof html2canvas === 'function') return;
-    await new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-      s.onload = res;
-      s.onerror = () => rej(new Error('No se pudo cargar html2canvas. Verificá tu conexión.'));
-      document.head.appendChild(s);
-    });
+  /* ── Cargar html2canvas bajo demanda (8 s por fuente + CDN alternativo) ── */
+  const CDNS_H2C = [
+    'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+    'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'
+  ];
+  let _promesaH2C = null;
+
+  function cargarHtml2Canvas() {
+    if (typeof html2canvas === 'function') return Promise.resolve();
+    if (_promesaH2C) return _promesaH2C;
+    _promesaH2C = (async () => {
+      for (const src of CDNS_H2C) {
+        try {
+          await new Promise((res, rej) => {
+            const s = document.createElement('script');
+            s.src = src;
+            s.async = true;
+            const t = setTimeout(() => {
+              s.remove();
+              rej(new Error('La descarga tardó más de 8 segundos.'));
+            }, 8000);
+            s.onload = () => { clearTimeout(t); res(); };
+            s.onerror = () => { clearTimeout(t); s.remove(); rej(new Error('No se pudo descargar la biblioteca.')); };
+            document.head.appendChild(s);
+          });
+          if (typeof html2canvas === 'function') return;
+        } catch (e) {
+          console.warn('[exportar-png] CDN sin respuesta:', src, e.message);
+        }
+      }
+      throw new Error('No se pudo cargar html2canvas. Revisá tu conexión e intentá de nuevo.');
+    })().catch(e => { _promesaH2C = null; throw e; });
+    return _promesaH2C;
+  }
+
+  function avisarError(e) {
+    console.error('[exportar-png]', e);
+    GL.notificar('No se pudo exportar: ' + (e && e.message ? e.message : 'intentalo de nuevo.'), 'error');
   }
 
   /* ── Esperar fuentes ── */
@@ -32,7 +60,7 @@
   }
 
   /* ── Capturar nodo ya renderizado ── */
-  async function capturar(nodo, escala) {
+  async function capturar(nodo, escala, prepararClon) {
     const e = Math.min(escala || 2, 3);
     await precargarImagenes(nodo);
     const canvas = await html2canvas(nodo, {
@@ -47,8 +75,12 @@
       windowHeight           : nodo.offsetHeight,
       x: 0, y: 0, scrollX: 0, scrollY: 0,
       foreignObjectRendering : false,
-      imageTimeout           : 8000
+      imageTimeout           : 8000,
+      onclone(doc, clon) { if (typeof prepararClon === 'function') prepararClon(doc, clon); }
     });
+    if (!canvas || canvas.width < 10 || canvas.height < 10) {
+      throw new Error('La imagen generada quedó vacía. Intentá de nuevo.');
+    }
     // Límite de seguridad: > 16 384 px puede fallar en móvil/Safari
     const MAX = 16000;
     if (canvas.width > MAX || canvas.height > MAX) {
@@ -75,7 +107,6 @@
   /* ── Dividir canvas grande en partes ── */
   function dividirCanvas(canvas, maxAlto) {
     const partes = [];
-    const parteH = maxAlto * canvas.width / canvas.width; // proporcional
     let y = 0;
     while (y < canvas.height) {
       const alto = Math.min(maxAlto, canvas.height - y);
@@ -112,32 +143,47 @@
           '</div>' +
         '</div>';
       document.body.appendChild(fondo);
+      iniciarIconos();
 
-      // Si el canvas es muy alto, ofrecer descarga por partes
       const MAX_PREVIEW_H = 12000;
       fondo.querySelector('.exp-preview-img').src = canvas.toDataURL('image/png');
 
-      const cerrar = () => { fondo.remove(); res(false); };
-      fondo.querySelector('#exp-cerrar').addEventListener('click', cerrar);
-      fondo.querySelector('#exp-cancelar').addEventListener('click', cerrar);
-      fondo.addEventListener('click', e => { if (e.target === fondo) cerrar(); });
-      document.addEventListener('keydown', function esc(e) {
-        if (e.key === 'Escape') { cerrar(); document.removeEventListener('keydown', esc); }
-      });
-
-      fondo.querySelector('#exp-descargar').addEventListener('click', () => {
-        // Si el canvas supera el límite, dividir en partes
-        if (canvas.height > MAX_PREVIEW_H) {
-          const partes = dividirCanvas(canvas, MAX_PREVIEW_H);
-          partes.forEach((c, i) => descargar(c, nombre + '_parte' + (i + 1)));
-          GL.notificar('Exportado en ' + partes.length + ' partes por tamaño.', 'info');
-        } else {
-          descargar(canvas, nombre);
-          GL.notificar('Imagen descargada.', 'exito', 'image');
-        }
+      let cerrado = false;
+      const onEscape = e => { if (e.key === 'Escape') { e.preventDefault(); cerrar(); } };
+      function cerrar(resultado) {
+        if (cerrado) return;
+        cerrado = true;
+        document.removeEventListener('keydown', onEscape);
         fondo.remove();
-        res(true);
-      });
+        res(resultado);
+      }
+      document.addEventListener('keydown', onEscape);
+
+      fondo.querySelector('#exp-cerrar').addEventListener('click', () => cerrar(false), { once: true });
+      fondo.querySelector('#exp-cancelar').addEventListener('click', () => cerrar(false), { once: true });
+      fondo.addEventListener('click', e => { if (e.target === fondo) cerrar(false); });
+
+      fondo.querySelector('#exp-descargar').addEventListener('click', async () => {
+        try {
+          if (canvas.height > MAX_PREVIEW_H) {
+            const partes = dividirCanvas(canvas, MAX_PREVIEW_H);
+            // Descargas secuenciales con breve espera: evita que el navegador
+            // bloquee varios clics simultáneos como descargas múltiples.
+            for (let i = 0; i < partes.length; i++) {
+              descargar(partes[i], nombre + '_parte' + (i + 1));
+              if (i < partes.length - 1) await new Promise(r => setTimeout(r, 350));
+            }
+            GL.notificar('Exportado en ' + partes.length + ' partes por tamaño.', 'info');
+          } else {
+            descargar(canvas, nombre);
+            GL.notificar('Imagen descargada.', 'exito', 'image');
+          }
+          cerrar(true);
+        } catch (e) {
+          avisarError(e);
+          cerrar(false);
+        }
+      }, { once: true });
     });
   }
 
@@ -148,15 +194,30 @@
 
     const contenedor = document.createElement('div');
     contenedor.className = 'exp-contenedor';
+    contenedor.dataset.expPlantilla = '1';
     if (anchoFijo) contenedor.style.width = anchoFijo + 'px';
-    contenedor.style.cssText += ';position:fixed;left:-9999px;top:0;z-index:-1;visibility:hidden';
+    // Fuera de pantalla y transparente en la página real; html2canvas trabaja
+    // sobre un clon, donde se fuerza visibility/opacity para que el PNG tenga
+    // contenido (antes quedaba oculto por heredar visibility:hidden).
+    contenedor.style.cssText +=
+      ';position:fixed;left:-10000px;top:0;z-index:-1;visibility:visible;opacity:0;pointer-events:none';
     contenedor.innerHTML = html;
     document.body.appendChild(contenedor);
 
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
+    const prepararClon = (doc, clon) => {
+      if (!clon) return;
+      clon.style.setProperty('visibility', 'visible', 'important');
+      clon.style.setProperty('opacity', '1', 'important');
+      clon.style.setProperty('position', 'fixed', 'important');
+      clon.style.setProperty('left', '0', 'important');
+      clon.style.setProperty('top', '0', 'important');
+      clon.style.setProperty('z-index', '99999', 'important');
+    };
+
     try {
-      const canvas = await capturar(contenedor, 2);
+      const canvas = await capturar(contenedor, 2, prepararClon);
       await mostrarVistaPreviaYDescargar(canvas, nombre);
     } finally {
       contenedor.remove();
@@ -409,8 +470,7 @@
     try {
       await capturarPlantilla(htmlPlantillaTabla(grupoId, jornada), nombre || 'GOATS_Tabla', 720);
     } catch (e) {
-      console.error(e);
-      GL.notificar('No se pudo exportar: ' + e.message, 'error');
+      avisarError(e);
     }
   }
 
@@ -419,8 +479,7 @@
     try {
       await capturarPlantilla(htmlPlantillaStats(grupoId, jornadaNum), nombre || 'GOATS_Stats', 640);
     } catch (e) {
-      console.error(e);
-      GL.notificar('No se pudo exportar: ' + e.message, 'error');
+      avisarError(e);
     }
   }
 
@@ -429,8 +488,7 @@
     try {
       await capturarPlantilla(htmlPlantillaPerfil(jugadorId), nombre || 'GOATS_Perfil', 560);
     } catch (e) {
-      console.error(e);
-      GL.notificar('No se pudo exportar: ' + e.message, 'error');
+      avisarError(e);
     }
   }
 
@@ -439,21 +497,21 @@
     const el = document.getElementById(elementId);
     if (!el) { GL.notificar('No se encontró el contenido a exportar.', 'error'); return; }
     GL.notificar('Preparando imagen…', 'info', 'loader-circle');
+    const overflowPrev = el.style.overflow;
+    const maxHPrev     = el.style.maxHeight;
     try {
       await cargarHtml2Canvas();
       await esperarFuentes();
-      const overflowPrev = el.style.overflow;
-      const maxHPrev     = el.style.maxHeight;
       el.style.overflow  = 'visible';
       el.style.maxHeight = 'none';
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       const canvas = await capturar(el, 2);
-      el.style.overflow  = overflowPrev;
-      el.style.maxHeight = maxHPrev;
       await mostrarVistaPreviaYDescargar(canvas, nombre || 'GOATS_export');
     } catch (e) {
-      console.error(e);
-      GL.notificar('No se pudo exportar: ' + e.message, 'error');
+      avisarError(e);
+    } finally {
+      el.style.overflow  = overflowPrev;
+      el.style.maxHeight = maxHPrev;
     }
   }
 

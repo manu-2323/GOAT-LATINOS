@@ -47,6 +47,27 @@ const GL = {
     return GL.cargarScript(ruta).then(() => (window.Modulos || {})[id]);
   },
 
+  /* ---------- Exportación a PNG: stubs disponibles desde el primer clic ----------
+     Los módulos se cargan bajo demanda. Estos delegados cargan exportar-png.js
+     y llaman a la implementación real; el módulo puede sobrescribirlos sin
+     recursion porque la delegación siempre invoca al método del módulo. */
+  _delegarExport(nombre, args) {
+    return GL.modulo('exportar-png').then(modulo => {
+      const clave = nombre === 'exportarPNG' ? 'exportar' : nombre;
+      const fn = modulo && modulo[clave];
+      if (typeof fn !== 'function') throw new Error('La exportación a PNG no está disponible.');
+      GL[nombre] = fn; // el módulo real ya cargado reemplaza al stub
+      return fn.apply(GL, args);
+    }).catch(e => {
+      GL.notificar(e && e.message ? e.message : 'No se pudo preparar la exportación a PNG.', 'error');
+    });
+  },
+
+  exportarPNG(id, nombre) { return GL._delegarExport('exportarPNG', [id, nombre]); },
+  exportarTabla(grupoId, nombre) { return GL._delegarExport('exportarTabla', [grupoId, nombre]); },
+  exportarStats(grupoId, jornadaNum, nombre) { return GL._delegarExport('exportarStats', [grupoId, jornadaNum, nombre]); },
+  exportarPerfil(jugadorId, nombre) { return GL._delegarExport('exportarPerfil', [jugadorId, nombre]); },
+
   /* ---------- Países dinámicos (tabla `paises`) ---------- */
   async cargarPaises(force) {
     if (GL._paisesCargados && !force) return GL.paises;
@@ -780,11 +801,6 @@ const GL = {
     a.href = URL.createObjectURL(blob); a.download = nombre + '.txt';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  },
-
-  exportarPNG(id, nombre) {
-    GL.modulo('exportar-png').then(m => m && m.exportar(id, nombre))
-      .catch(e => GL.notificar(e.message, 'error'));
   },
 
   /* ---------- Consultas a Supabase ---------- */

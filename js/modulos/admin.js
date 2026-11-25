@@ -3,6 +3,8 @@
    A: Jugadores  B: Jornadas  C: Disciplina  D: Administradores  E: Configuración
    ===================================================================== */
 (function () {
+  const MAX_JORNADAS = 30; // Rango permitido para el total de jornadas (1..30)
+
   const Mod = {
     titulo: 'Administración',
     tab: 'resumen',
@@ -17,21 +19,8 @@
       try {
         await GL.cargarContexto(true);
         if (!GL.torneo()) {
-          el.innerHTML = '<div class="card">' +
-            '<div class="card-titulo">' + icono('trophy', 20) + 'No hay torneo activo</div>' +
-            '<p class="muted">Creá el primer torneo y los grupos A/B para empezar a cargar datos.</p>' +
-            '<button type="button" class="btn mt" id="crear-primero">' + icono('plus', 16) + 'Crear torneo inicial</button></div>';
-          el.querySelector('#crear-primero').addEventListener('click', async () => {
-            const { data: t, error } = await sb.from('torneos').insert({
-              nombre: CONFIG.NOMBRE_LIGA, temporada: 'Temporada 1', estado: 'activo', total_jornadas: 22
-            }).select().single();
-            if (error) { GL.notificar(error.message, 'error'); return; }
-            await sb.from('grupos').insert([
-              { torneo_id: t.id, nombre: 'Grupo A' }, { torneo_id: t.id, nombre: 'Grupo B' }
-            ]);
-            GL.invalidar(); await GL.cargarContexto(true);
-            GL.notificar('Torneo inicial creado.', 'exito'); Mod.render(el);
-          });
+          el.innerHTML = htmlSinTorneo();
+          enlazar(el, el);
           iniciarIconos(); return;
         }
         Mod.partidosCache = await GL.partidos({ torneo_id: GL.torneoId() });
@@ -52,23 +41,9 @@
             (superAdmin ? tabBtn('admins', 'shield-check', 'Admins') : '') +
             tabBtn('config', 'settings-2', 'Config') +
           '</div><div id="contenido-admin"></div>';
-        const cont = el.querySelector('#contenido-admin');
-        const pintar = () => {
-          cont.innerHTML =
-            Mod.tab === 'resumen'    ? htmlResumen(superAdmin) :
-            Mod.tab === 'jugadores'  ? htmlJugadores() :
-            Mod.tab === 'jornadas'   ? htmlJornadas() :
-            Mod.tab === 'disciplina' ? htmlDisciplina() :
-            Mod.tab === 'admins'     ? (superAdmin ? htmlAdmins() : GL.accesoDenegado('admin')) :
-            htmlConfig();
-          enlazar(cont, el);
-          iniciarIconos();
-        };
-        pintar();
+        pintarAdmin(el);
         el.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
-          Mod.tab = b.dataset.tab;
-          el.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('activo', x === b));
-          pintar();
+          irATab(b.dataset.tab, el);
         }));
       } catch (e) { console.error(e); el.innerHTML = GL.error(e.message, null, 'la administración'); }
       iniciarIconos();
@@ -78,6 +53,112 @@
   function tabBtn(id, ico, label) {
     return '<button type="button" class="tab' + (Mod.tab === id ? ' activo' : '') + '" data-tab="' + id + '">' +
       icono(ico, 16) + label + '</button>';
+  }
+
+  /* ---------------- Helpers comunes de arranque / estado ---------------- */
+
+  // Fecha legible en DD/MM/YYYY. Acepta Date, ISO con o sin hora y DD/MM/YYYY.
+  function aDDMMYYYY(valor) {
+    if (!valor) return 'Por definir';
+    const texto = String(valor).trim();
+    const barra = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(texto);
+    if (barra) return texto;
+    const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(texto);
+    if (iso) return iso[3] + '/' + iso[2] + '/' + iso[1];
+    const d = new Date(texto);
+    if (isNaN(d.getTime())) return texto;
+    return String(d.getDate()).padStart(2, '0') + '/' +
+      String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+  }
+
+  // Convierte DD/MM/YYYY a YYYY-MM-DD (tipo date de Postgres). null si no es válida.
+  function fechaDDMMYYYYaISO(valor) {
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(valor || '').trim());
+    if (!m) return null;
+    const d = Number(m[1]), mes = Number(m[2]), anio = Number(m[3]);
+    if (d < 1 || mes < 1 || mes > 12 || anio < 1900) return null;
+    const f = new Date(Date.UTC(anio, mes - 1, d));
+    if (f.getUTCFullYear() !== anio || f.getUTCMonth() !== mes - 1 || f.getUTCDate() !== d) return null;
+    return anio + '-' + String(mes).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  }
+
+  // Normaliza la respuesta de cualquier RPC {ok, mensaje, ...}.
+  function leerRpc(data, error, textoFallo) {
+    if (error) return { ok: false, mensaje: error.message || textoFallo || 'No se pudo completar la operación.' };
+    const r = data || {};
+    if (r.ok === false) return {
+      ok: false,
+      mensaje: r.mensaje || r.error || textoFallo || 'No se pudo completar la operación.',
+      datos: r
+    };
+    return { ok: true, mensaje: r.mensaje || textoFallo || 'Operación completada.', datos: r };
+  }
+
+  // Recarga el contexto global y la caché de partidos. sinTorneo fuerza el estado vacío.
+  async function recargarContextoAdmin(opciones) {
+    if (opciones && opciones.sinTorneo) GL.ctx.torneo = null;
+    GL.invalidar();
+    await GL.cargarContexto(true);
+    Mod.partidosCache = GL.torneoId() ? await GL.partidos({ torneo_id: GL.torneoId() }) : [];
+    if (!GL.grupos().some(g => g.id === Mod.grupoJornadas))
+      Mod.grupoJornadas = GL.grupos().length ? GL.grupos()[0].id : null;
+  }
+
+  // Pinta solamente el contenido de la pestaña activa (lo usa render y el acceso rápido).
+  function pintarAdmin(root) {
+    const cont = root.querySelector('#contenido-admin');
+    if (!cont) return;
+    const superAdmin = GL.esSuperAdmin();
+    if (!superAdmin && Mod.tab === 'admins') Mod.tab = 'jugadores';
+    cont.innerHTML =
+      Mod.tab === 'resumen'    ? htmlResumen(superAdmin) :
+      Mod.tab === 'jugadores'  ? htmlJugadores() :
+      Mod.tab === 'jornadas'   ? htmlJornadas() :
+      Mod.tab === 'disciplina' ? htmlDisciplina() :
+      Mod.tab === 'admins'     ? htmlAdmins() :
+      htmlConfig();
+    enlazar(cont, root);
+    iniciarIconos();
+  }
+
+  function irATab(tab, root) {
+    if (tab === 'admins' && !GL.esSuperAdmin()) {
+      GL.notificar('Acceso restringido: solo el administrador principal puede abrir Administradores.', 'advertencia');
+      return;
+    }
+    Mod.tab = tab || 'resumen';
+    root.querySelectorAll('[data-tab]').forEach(x =>
+      x.classList.toggle('activo', x.dataset.tab === Mod.tab));
+    pintarAdmin(root);
+  }
+
+  function htmlSinTorneo() {
+    return '<div class="card">' +
+      '<div class="card-titulo">' + icono('trophy', 20) + 'Sin torneo activo</div>' +
+      '<p class="muted">Todavía no hay un torneo en curso. Creá uno para cargar jugadores, jornadas y resultados.</p>' +
+      '<p class="nota-pie">El torneo nuevo se crea con sus grupos listos para cargar la temporada.</p>' +
+      '<button type="button" class="btn mt" id="tor-crear">' + icono('plus', 16) + 'Crear Torneo</button>' +
+      '</div>';
+  }
+
+  // Bloque visible tanto en Resumen como en Configuración.
+  function htmlAccionesTorneo() {
+    const t = GL.torneo() || {};
+    return '<div class="card mt">' +
+      '<div class="card-titulo">' + icono('trophy', 19) + 'Arrancar desde cero</div>' +
+      '<p class="muted" style="font-size:12px">' +
+        (t.id
+          ? 'Torneo actual: <strong>' + esc(t.nombre || CONFIG.NOMBRE_LIGA) + '</strong> · ' +
+            esc(t.temporada || 'Sin temporada') + ' · ' + (Number(t.total_jornadas) || 22) + ' jornadas.'
+          : 'No hay torneo activo: creá uno para empezar.') +
+      '</p>' +
+      '<div class="seccion-acciones" style="flex-wrap:wrap;gap:8px">' +
+        '<button type="button" class="btn" id="tor-crear">' + icono('plus', 16) + 'Crear Torneo</button>' +
+        (t.id
+          ? '<button type="button" class="btn peligro" id="tor-eliminar">' +
+              icono('trash-2', 16) + 'Eliminar torneo actual' + '</button>'
+          : '<span class="muted" style="font-size:12px">No hay torneo para eliminar.</span>') +
+      '</div></div>';
   }
 
   /* ---------------- RESUMEN (pantalla de inicio del admin) ---------------- */
@@ -120,7 +201,7 @@
     if (jornadasAbiertas.length > 1)
       alertas.push({ tipo: 'warn', ico: 'flag', msg: jornadasAbiertas.length + ' jornadas abiertas al mismo tiempo — revisá si alguna debería cerrarse', tab: 'jornadas' });
     if (!torneo.id)
-      alertas.push({ tipo: 'error', ico: 'trophy', msg: 'No hay torneo activo. Creá uno desde Configuración.', tab: 'config' });
+      alertas.push({ tipo: 'error', ico: 'trophy', msg: 'No hay torneo activo. Usá el botón Crear Torneo.', tab: 'resumen' });
 
     // ── Actividad reciente: últimos 5 partidos cargados ──
     const recientes = partidos
@@ -188,7 +269,7 @@
                 ' <strong>' + r.texto + '</strong> ' +
                 esc(GL.nombreJugador(p.visitante_id)) +
               '</span>' +
-              '<span class="actividad-meta">J' + p.jornada + ' · ' + esc(GL.fecha(p.updated_at || p.created_at)) + '</span>' +
+              '<span class="actividad-meta">J' + p.jornada + ' · ' + esc(aDDMMYYYY(p.updated_at || p.created_at)) + '</span>' +
             '</li>';
           }).join('') +
           '</ul>' +
@@ -206,7 +287,8 @@
         '</div>' +
       '</div>';
 
-    return '<div class="grid dos mt">' +
+    return htmlAccionesTorneo() +
+      '<div class="grid dos mt">' +
         htmlJornada +
         '<div class="card">' +
           '<div class="card-titulo">' + icono('bar-chart-2', 19) + 'Resumen del torneo</div>' +
@@ -246,7 +328,10 @@
         (g ? (primeraSemana ? iconBtn('grupo-' + j.id, 'users', 'Cambiar de grupo') : '')
            : iconBtn('asignar-' + j.id, 'user-plus', 'Asignar grupo')) +
         iconBtn('sancion-' + j.id, 'triangle-alert', 'Aplicar sanción') +
-        iconBtn('suspender-' + j.id, 'user-x', 'Suspender / expulsar');
+        iconBtn('suspender-' + j.id, 'user-x', 'Suspender / expulsar') +
+        (j.rol === 'admin'
+          ? ''
+          : accionBtn('eliminar-' + j.id, 'trash-2', 'Eliminar jugador'));
       const accionesMovil = accionBtn('editar-' + j.id, 'pencil', 'Editar jugador') +
         (g ? (primeraSemana ? accionBtn('grupo-' + j.id, 'users', 'Cambiar de grupo') : '')
            : accionBtn('asignar-' + j.id, 'user-plus', 'Asignar grupo')) +
@@ -299,6 +384,7 @@
       if (tipo === 'asignar')  modalGrupo(j, root, true);
       if (tipo === 'sancion')  modalSancion(j, root);
       if (tipo === 'suspender') modalSuspender(j, root);
+      if (tipo === 'eliminar')  modalEliminarJugador(j, root);
     };
 
     const ACCIONES_PELIGROSAS = ['suspender', 'eliminar', 'expulsar'];
@@ -416,9 +502,11 @@
       return '<div class="timeline-item ' + (n === actual ? 'activa' : '') + (jdata.estado === 'cerrada' ? ' cerrada' : '') + '">' +
         '<div class="timeline-num">' + n + '</div>' +
         '<div class="timeline-contenido"><strong>Jornada ' + n + '</strong>' +
-          '<small>' + esc(GL.fecha(jdata.fecha)) + ' · ' +
+          '<small>' + esc(aDDMMYYYY(jdata.fecha)) + ' · ' +
             (jdata.fecha_inicio && jdata.hora_limite
-              ? GL.fechaHoraEnZona(jdata.fecha_inicio, CONFIG.ZONA_REFERENCIA) + ' – ' + GL.fechaHoraEnZona(jdata.hora_limite, CONFIG.ZONA_REFERENCIA)
+              ? aDDMMYYYY(jdata.fecha_inicio) + ' · ' +
+                GL.horaEnZona(jdata.fecha_inicio, CONFIG.ZONA_REFERENCIA) + ' – ' +
+                GL.horaEnZona(jdata.hora_limite, CONFIG.ZONA_REFERENCIA)
               : 'Horario por definir') +
             ' · ' + hechos + '/' + parts.length + ' partidos</small>' +
           (jdata.estado === 'cerrada' ? GL.badge('Cerrada', 'red') : GL.badge('Abierta', 'green')) +
@@ -450,7 +538,7 @@
         '<td class="num">-' + (s.puntos_descuento || 0) + '</td>' +
         '<td class="num">' + (s.partidos_suspension || 0) + '</td>' +
         '<td>' + esc(s.motivo || '—') + '</td>' +
-        '<td>' + esc(GL.fecha(s.created_at)) + '</td></tr>';
+        '<td>' + esc(aDDMMYYYY(s.created_at)) + '</td></tr>';
     }).join('');
     return '<div class="seccion-head"><div class="seccion-titulo"><h2>Disciplina</h2>' +
       '<p>' + sanciones.length + ' sanciones registradas en el torneo</p></div>' +
@@ -500,11 +588,14 @@
   /* ---------------- E. Configuración ---------------- */
   function htmlConfig() {
     const t = GL.torneo() || {};
-    return '<div class="grid dos">' +
-      '<div class="card"><div class="card-titulo">' + icono('settings-2', 19) + 'Datos del torneo</div>' +
+    return htmlAccionesTorneo() +
+      '<div class="card mt"><div class="card-titulo">' + icono('settings-2', 19) + 'Datos generales del torneo</div>' +
         '<label class="campo"><span>Nombre</span><input class="input" id="cfg-nombre" value="' + esc(t.nombre || '') + '"></label>' +
         '<label class="campo"><span>Temporada</span><input class="input" id="cfg-temporada" value="' + esc(t.temporada || '') + '"></label>' +
-        '<label class="campo"><span>Total de jornadas</span><input class="input" type="number" min="' + CONFIG.JORNADAS_FASE_REGULAR + '" max="' + CONFIG.JORNADAS_FASE_REGULAR + '" id="cfg-jornadas" value="' + (t.total_jornadas || CONFIG.JORNADAS_FASE_REGULAR) + '"></label>' +
+        '<label class="campo"><span>Total de jornadas (1..' + MAX_JORNADAS + ')</span>' +
+          '<input class="input" type="number" min="1" max="' + MAX_JORNADAS + '" id="cfg-jornadas" value="' +
+          (Number(t.total_jornadas) || CONFIG.JORNADAS_FASE_REGULAR) + '"></label>' +
+        '<p class="nota-pie">El generador aleatorio solo trabaja con 22 jornadas. Para otro valor, cargá las jornadas de forma manual en el paso 3.</p>' +
         '<label class="campo"><span>Estado</span><select class="input" id="cfg-estado">' +
           '<option value="activo"' + (t.estado === 'activo' ? ' selected' : '') + '>Activo</option>' +
           '<option value="finalizado"' + (t.estado === 'finalizado' ? ' selected' : '') + '>Finalizado</option>' +
@@ -514,11 +605,179 @@
         '<p class="nota-pie">Este texto se usa en la apertura de cada jornada. Si está vacío, el generador de mensajes bloquea la vista previa.</p>' +
         '<button type="button" class="btn" id="guardar-cfg">' + icono('save', 16) + 'Guardar cambios</button>' +
       '</div>' +
-      '<div class="card"><div class="card-titulo">' + icono('rotate-ccw', 19) + 'Nueva temporada</div>' +
-        '<p class="muted" style="font-size:12px">Archiva el torneo actual y crea uno nuevo con grupos A y B. Los datos históricos se conservan.</p>' +
-        '<label class="campo mt"><span>Nombre de la nueva temporada</span><input class="input" id="nueva-temp" placeholder="Ej. 2026 · Clausura"></label>' +
-        '<button type="button" class="btn peligro block" id="nuevo-torneo">' + icono('plus', 16) + 'Archivar y crear nuevo torneo</button>' +
-      '</div></div>';
+      htmlNuevaTemporada();
+  }
+
+  /* ---------------- Nueva Temporada (pasos numerados) ---------------- */
+
+  function telefonoLegible(j) {
+    const n = GL.tel.normalizar(String((j && j.telefono) || ''), (j && j.pais) || '');
+    if (!n) return 'Sin teléfono';
+    const pref = GL.tel.prefijo((j && j.pais) || '');
+    const local = pref && n.startsWith(pref) ? n.slice(pref.length) : n;
+    const partes = local.match(/.{1,4}/g) || [local];
+    return (pref ? '+' + pref + ' ' : '+') + partes.join(' ');
+  }
+
+  function pasoHTML(numero, titulo, ico, cuerpo) {
+    return '<div class="card mt">' +
+      '<div class="card-titulo"><span class="badge gold">' + numero + '</span>' +
+        icono(ico, 18) + titulo + '</div>' + cuerpo + '</div>';
+  }
+
+  function opcionesJugadoresGrupo(grupoId, seleccionado) {
+    const lista = GL.jugadores(grupoId);
+    return '<option value="">Seleccioná un jugador</option>' +
+      lista.map(j => {
+        const etiqueta = String(j.nombre_usuario || '').toUpperCase() + ' · ' + telefonoLegible(j);
+        return '<option value="' + esc(j.id) + '"' + (seleccionado === j.id ? ' selected' : '') + '>' +
+          esc(etiqueta) + '</option>';
+      }).join('');
+  }
+
+  function filaPartidoHTML(grupoId, datos) {
+    const d = datos || {};
+    return '<div class="campo-row" data-fila-partido style="align-items:end">' +
+      '<label class="campo" style="margin:0;flex:1"><span>Local</span>' +
+        '<select class="input" data-local>' + opcionesJugadoresGrupo(grupoId, d.local) + '</select></label>' +
+      '<label class="campo" style="margin:0;flex:1"><span>Visitante</span>' +
+        '<select class="input" data-visita>' + opcionesJugadoresGrupo(grupoId, d.visitante) + '</select></label>' +
+      '<button type="button" class="btn-icon" data-quitar-partido title="Quitar partido" aria-label="Quitar partido">' +
+        icono('x', 16) + '</button>' +
+      '</div>';
+  }
+
+  function jornadasGuardadasHTML() {
+    const tid = GL.torneoId();
+    const guardadas = GL.ctx.jornadas
+      .filter(j => j.torneo_id === tid && !j.virtual)
+      .slice()
+      .sort((a, b) => (a.numero || 0) - (b.numero || 0));
+    if (!guardadas.length) return '<p class="muted" style="font-size:12px">Todavía no hay jornadas guardadas en la base de datos.</p>';
+    return '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+      '<th>Jornada</th><th>Grupo</th><th>Fecha</th><th>Acción</th>' +
+      '</tr></thead><tbody>' + guardadas.map(j => {
+        const g = GL.ctx.grupos.find(x => x.id === j.grupo_id);
+        return '<tr>' +
+          '<td>Jornada ' + esc(j.numero) + '</td>' +
+          '<td>' + (g ? 'Grupo ' + esc(GL.letraGrupo(g)) : '—') + '</td>' +
+          '<td>' + esc(aDDMMYYYY(j.fecha || j.fecha_inicio)) + '</td>' +
+          '<td><button type="button" class="btn sec sm" data-nt-borrar-jornada="' + esc(j.numero) +
+            '" data-grupo="' + esc(j.grupo_id || '') + '">' + icono('trash-2', 14) + 'Eliminar jornada</button></td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  function htmlNuevaTemporada() {
+    const t = GL.torneo() || {};
+    const total = Number(t.total_jornadas) || CONFIG.JORNADAS_FASE_REGULAR;
+    const grupos = GL.grupos();
+    const jugadores = GL.jugadores();
+    const grupoInicial = grupos.length ? grupos[0].id : '';
+    const modoManual = total !== 22;
+
+    const pasoDatos =
+      '<p class="muted" style="font-size:12px">Definí la identidad de la temporada y cuántas jornadas tendrá. Se aceptan de 1 a ' +
+        MAX_JORNADAS + ' jornadas.</p>' +
+      '<div class="campo-row">' +
+        '<label class="campo"><span>Nombre de la liga</span><input class="input" id="nt-nombre" maxlength="40" value="' +
+          esc(t.nombre || CONFIG.NOMBRE_LIGA) + '"></label>' +
+        '<label class="campo"><span>Temporada</span><input class="input" id="nt-temporada" maxlength="30" value="' +
+          esc(t.temporada || '') + '"></label>' +
+      '</div>' +
+      '<label class="campo"><span>Número de jornadas</span><input class="input" type="number" min="1" max="' +
+        MAX_JORNADAS + '" id="nt-jornadas" value="' + total + '"></label>' +
+      '<button type="button" class="btn" id="nt-guardar-datos">' + icono('save', 16) + 'Guardar datos</button>';
+
+    const filasJugadores = jugadores.length
+      ? '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+          '<th class="izq">Nombre</th><th>Teléfono</th><th>Grupo</th><th>Acciones</th>' +
+        '</tr></thead><tbody>' + jugadores.map(j => {
+          const g = GL.grupoDeJugador(j.id);
+          const esAdmin = j.rol === 'admin';
+          return '<tr>' +
+            '<td class="izq">' + esc(j.nombre_usuario) + (esAdmin ? ' ' + GL.badge('Admin', 'gold') : '') + '</td>' +
+            '<td>' + esc(telefonoLegible(j)) + '</td>' +
+            '<td>' + (g ? 'Grupo ' + esc(GL.letraGrupo(g)) : 'Sin asignar') + '</td>' +
+            '<td>' +
+              (g
+                ? '<button type="button" class="btn sec sm" data-nt-quitar="' + esc(j.id) + '">Quitar del grupo</button> '
+                : '<button type="button" class="btn sm" data-nt-asignar="' + esc(j.id) + '">Asignar Grupo</button> ') +
+              (esAdmin
+                ? '<span class="muted" style="font-size:11px">Las cuentas admin no se borran desde aquí.</span>'
+                : '<button type="button" class="btn sec sm" data-nt-eliminar="' + esc(j.id) + '">Eliminar</button>') +
+            '</td></tr>';
+        }).join('') + '</tbody></table></div>'
+      : GL.vacio('No hay jugadores inscritos en este torneo.', 'users', null,
+          'Usá el alta rápida de arriba para cargar el primer jugador.');
+
+    const pasoJugadores =
+      '<p class="muted" style="font-size:12px">Alta rápida: se crea la cuenta, se guarda el jugador y se lo asigna al grupo elegido.</p>' +
+      '<div class="campo-row">' +
+        '<label class="campo"><span>Nombre de usuario</span><input class="input" id="nt-jug-nombre" maxlength="24" placeholder="Ej. GOAT_PEREZ"></label>' +
+        '<label class="campo"><span>Correo</span><input class="input" type="email" id="nt-jug-email" placeholder="jugador@correo.com"></label>' +
+        '<label class="campo"><span>Clave</span><input class="input" id="nt-jug-clave" value="' +
+          Math.random().toString(36).slice(2, 10) + '" autocomplete="new-password"></label>' +
+      '</div>' +
+      '<div class="campo-row">' +
+        '<label class="campo"><span>País</span><select class="input" id="nt-jug-pais">' + GL.opcionesPais('NI', true) + '</select></label>' +
+        '<label class="campo"><span>Teléfono</span><input class="input" id="nt-jug-tel" inputmode="numeric" placeholder="Solo dígitos"></label>' +
+        '<label class="campo"><span>Grupo</span><select class="input" id="nt-jug-grupo">' +
+          (grupos.length
+            ? grupos.map(g => '<option value="' + esc(g.id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</option>').join('')
+            : '<option value="">Sin grupos disponibles</option>') +
+        '</select></label>' +
+      '</div>' +
+      '<button type="button" class="btn" id="nt-jug-crear">' + icono('user-plus', 16) + 'Crear jugador</button>' +
+      '<div class="mt" id="nt-lista-jugadores">' + filasJugadores + '</div>';
+
+    const avisoRandom = total !== 22
+      ? '<div style="background:rgba(245,197,24,.1);border:1px solid var(--accent-gold);border-radius:8px;' +
+          'padding:10px 14px;margin-bottom:10px;font-size:13px">' +
+          icono('triangle-alert', 14) + ' El generador aleatorio trabaja con <strong>22 jornadas</strong> y este torneo tiene ' +
+          total + '. Usá el modo <strong>Cargar manualmente</strong> para respetar la configuración actual.' +
+        '</div>'
+      : '<p class="muted" style="font-size:12px">Genera las 22 jornadas con el calendario aleatorio del servidor.</p>';
+
+    const pasoJornadas =
+      '<p class="muted" style="font-size:12px">Elegí un modo. El modo manual respeta el número de jornadas configurado en el paso 1.</p>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:18px;margin:8px 0 14px">' +
+        '<label style="display:flex;gap:8px;align-items:center;cursor:pointer">' +
+          '<input type="radio" name="nt-modo" id="nt-modo-aleatorio" value="aleatorio"' + (modoManual ? '' : ' checked') + '>' +
+          'Generar aleatoriamente</label>' +
+        '<label style="display:flex;gap:8px;align-items:center;cursor:pointer">' +
+          '<input type="radio" name="nt-modo" id="nt-modo-manual" value="manual"' + (modoManual ? ' checked' : '') + '>' +
+          'Cargar manualmente</label>' +
+      '</div>' +
+      '<div id="nt-panel-aleatorio" style="display:' + (modoManual ? 'none' : 'block') + '">' +
+        avisoRandom +
+        '<button type="button" class="btn" id="nt-generar-fixture">' + icono('shuffle', 16) + 'Generar calendario aleatorio</button>' +
+      '</div>' +
+      '<div id="nt-panel-manual" style="display:' + (modoManual ? 'block' : 'none') + '">' +
+        '<div class="campo-row">' +
+          '<label class="campo"><span>Número de jornada</span><input class="input" type="number" min="1" max="' +
+            MAX_JORNADAS + '" id="nt-manual-numero" value="1"></label>' +
+          '<label class="campo"><span>Fecha (DD/MM/YYYY)</span><input class="input" id="nt-manual-fecha" placeholder="DD/MM/YYYY"></label>' +
+          '<label class="campo"><span>Grupo</span><select class="input" id="nt-manual-grupo">' +
+            (grupos.length
+              ? grupos.map(g => '<option value="' + esc(g.id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</option>').join('')
+              : '<option value="">Sin grupos disponibles</option>') +
+          '</select></label>' +
+        '</div>' +
+        '<div id="nt-partidos">' + filaPartidoHTML(grupoInicial, {}) + '</div>' +
+        '<div class="seccion-acciones" style="flex-wrap:wrap;gap:8px;margin-top:8px">' +
+          '<button type="button" class="btn sec" id="nt-agregar-partido">' + icono('plus', 15) + 'Agregar partido</button>' +
+          '<button type="button" class="btn" id="nt-guardar-jornada">' + icono('save', 16) + 'Guardar jornada</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="mt"><strong>Jornadas guardadas</strong>' + jornadasGuardadasHTML() + '</div>';
+
+    return '<div class="seccion-head mt"><div class="seccion-titulo"><h2>Nueva Temporada</h2>' +
+        '<p>Prepará la temporada en tres pasos: datos, jugadores y jornadas.</p>' +
+      '</div></div>' +
+      pasoHTML(1, 'Datos', 'settings-2', pasoDatos) +
+      pasoHTML(2, 'Jugadores', 'users', pasoJugadores) +
+      pasoHTML(3, 'Jornadas', 'calendar-days', pasoJornadas);
   }
 
   async function mensajeInvoke(error) {
@@ -528,23 +787,403 @@
     } catch (e) { return error.message; }
   }
 
+  /* ---------------- Acciones de torneo y Nueva Temporada ---------------- */
+
+  function validarTotal(valor) {
+    const n = Number(valor);
+    if (!Number.isInteger(n) || n < 1 || n > MAX_JORNADAS)
+      return { ok: false, mensaje: 'El número de jornadas debe estar entre 1 y ' + MAX_JORNADAS + '.' };
+    return { ok: true, valor: n };
+  }
+
+  function abrirCrearTorneo(root) {
+    const hayTorneo = !!GL.torneo();
+    GL.dialogo({
+      titulo: 'Crear Torneo',
+      icono: 'trophy',
+      ancho: 'md',
+      confirmTexto: 'Crear torneo',
+      cuerpo:
+        '<p class="modal-texto">Se creará un torneo nuevo y quedará activo. ' +
+          (hayTorneo ? 'El torneo anterior quedará archivado.' : 'Con él se cargan los grupos para empezar.') + '</p>' +
+        '<label class="campo"><span>Nombre de la liga</span><input class="input" id="tor-nombre" maxlength="40" value="' +
+          esc(CONFIG.NOMBRE_LIGA) + '"></label>' +
+        '<label class="campo"><span>Temporada</span><input class="input" id="tor-temporada" maxlength="30" ' +
+          'placeholder="Ej. 2026 · Clausura"></label>' +
+        '<label class="campo"><span>Número de jornadas (1..' + MAX_JORNADAS + ')</span>' +
+          '<input class="input" type="number" min="1" max="' + MAX_JORNADAS + '" id="tor-jornadas" value="' +
+          CONFIG.JORNADAS_FASE_REGULAR + '"></label>',
+      onConfirmar(fondo, cerrar, setBloqueado) {
+        const nombre = fondo.querySelector('#tor-nombre').value.trim();
+        const temporada = fondo.querySelector('#tor-temporada').value.trim();
+        const jornadas = validarTotal(fondo.querySelector('#tor-jornadas').value);
+        if (!nombre) { fondo.setError('Ingresá el nombre de la liga.'); return; }
+        if (!temporada) { fondo.setError('Ingresá la temporada.'); return; }
+        if (!jornadas.ok) { fondo.setError(jornadas.mensaje); return; }
+        setBloqueado(true);
+        (async () => {
+          try {
+            const { data, error } = await sb.rpc('gl_crear_torneo', {
+              p_nombre_liga: nombre,
+              p_temporada: temporada,
+              p_total_jornadas: jornadas.valor
+            });
+            const r = leerRpc(data, error, 'No se pudo crear el torneo.');
+            if (!r.ok) { fondo.setError(r.mensaje); setBloqueado(false); return; }
+            cerrar();
+            await recargarContextoAdmin();
+            GL.notificar(r.mensaje || 'Torneo "' + nombre + '" creado correctamente.', 'exito');
+            Mod.tab = 'resumen';
+            Mod.render(root);
+          } catch (e) {
+            fondo.setError(e.message);
+            setBloqueado(false);
+          }
+        })();
+      }
+    });
+    iniciarIconos();
+  }
+
+  function abrirEliminarTorneo(root) {
+    const t = GL.torneo();
+    if (!t) { GL.notificar('No hay torneo activo para eliminar.', 'advertencia'); return; }
+    GL.dialogo({
+      titulo: 'Eliminar torneo actual',
+      icono: 'triangle-alert',
+      tipo: 'peligro',
+      ancho: 'sm',
+      confirmTexto: 'Eliminar torneo',
+      consecuencias:
+        '<ul>' +
+          '<li>Se eliminará el torneo <strong>' + esc(t.nombre || CONFIG.NOMBRE_LIGA) + '</strong> y sus datos asociados.</li>' +
+          '<li>No se pueden eliminar cuentas administradoras: solo se quita el torneo.</li>' +
+          '<li>Después la pantalla quedará en estado «sin torneo: creá uno».</li>' +
+        '</ul>',
+      cuerpo: '<p class="modal-texto">Esta acción no se puede deshacer. ¿Querés continuar?</p>',
+      onConfirmar(fondo, cerrar, setBloqueado) {
+        setBloqueado(true);
+        (async () => {
+          try {
+            const { data, error } = await sb.rpc('gl_eliminar_torneo', { p_torneo_id: t.id });
+            const r = leerRpc(data, error, 'No se pudo eliminar el torneo.');
+            if (!r.ok) { fondo.setError(r.mensaje); setBloqueado(false); return; }
+            cerrar();
+            await recargarContextoAdmin({ sinTorneo: true });
+            GL.notificar(r.mensaje || 'Torneo eliminado. Creá uno para empezar.', 'exito');
+            Mod.tab = 'resumen';
+            Mod.render(root);
+          } catch (e) {
+            fondo.setError(e.message);
+            setBloqueado(false);
+          }
+        })();
+      }
+    });
+  }
+
+  // Guarda datos generales (config) o del paso 1. El total de jornadas va por RPC.
+  async function guardarDatosTorneo(cont, root, origen) {
+    if (!GL.torneo()) { GL.notificar('No hay torneo activo.', 'error'); return; }
+    const pref = origen === 'nt' ? 'nt-' : 'cfg-';
+    const nombre = cont.querySelector('#' + pref + 'nombre').value.trim();
+    const temporada = cont.querySelector('#' + pref + 'temporada').value.trim();
+    const jornadas = validarTotal(cont.querySelector('#' + pref + 'jornadas').value);
+    if (!nombre) { GL.notificar('Ingresá el nombre de la liga.', 'advertencia'); return; }
+    if (!temporada) { GL.notificar('Ingresá la temporada.', 'advertencia'); return; }
+    if (!jornadas.ok) { GL.notificar(jornadas.mensaje, 'advertencia'); return; }
+
+    try {
+      const update = { nombre, temporada };
+      if (origen === 'cfg') {
+        update.estado = cont.querySelector('#cfg-estado').value;
+        update.reglamento = cont.querySelector('#cfg-reglamento').value.trim();
+      }
+      const { error: errUpdate } = await sb.from('torneos').update(update).eq('id', GL.torneo().id);
+      if (errUpdate) { GL.notificar('Error al guardar los datos: ' + errUpdate.message, 'error'); return; }
+
+      const { data, error } = await sb.rpc('gl_actualizar_total_jornadas', {
+        p_torneo_id: GL.torneo().id,
+        p_total: jornadas.valor
+      });
+      const r = leerRpc(data, error, 'No se pudo actualizar el total de jornadas.');
+      if (!r.ok) { GL.notificar(r.mensaje, 'error'); return; }
+      await recargarContextoAdmin();
+      GL.notificar(r.mensaje || 'Datos guardados. El torneo tiene ' + jornadas.valor + ' jornadas.', 'exito');
+      Mod.render(root);
+    } catch (e) { GL.notificar('No se pudo guardar: ' + e.message, 'error'); }
+  }
+
+  async function crearJugadorRapido(cont, root) {
+    const torneo = GL.torneo();
+    if (!torneo) { GL.notificar('No hay torneo activo.', 'error'); return; }
+    const nombreRaw = cont.querySelector('#nt-jug-nombre').value;
+    const nombre = GL.seguroTexto(nombreRaw).toUpperCase().replace(/\s+/g, '_');
+    const email = cont.querySelector('#nt-jug-email').value.trim().toLowerCase();
+    const clave = cont.querySelector('#nt-jug-clave').value;
+    const pais = cont.querySelector('#nt-jug-pais').value;
+    const telRaw = cont.querySelector('#nt-jug-tel').value.trim();
+    const grupo = cont.querySelector('#nt-jug-grupo').value;
+
+    if (nombre.length < 2 || nombre.length > 24) {
+      GL.notificar('El nombre debe tener entre 2 y 24 caracteres válidos.', 'advertencia'); return;
+    }
+    if ((GL.ctx.jugadores || []).some(x => x.nombre_usuario === nombre)) {
+      GL.notificar('Ese nombre ya está en uso por otro jugador.', 'advertencia'); return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      GL.notificar('Ingresá un correo electrónico válido.', 'advertencia'); return;
+    }
+    if (clave.length < 8) {
+      GL.notificar('La contraseña debe tener al menos 8 caracteres.', 'advertencia'); return;
+    }
+    if (!pais) { GL.notificar('Seleccioná el país del jugador.', 'advertencia'); return; }
+    const validacionTel = telRaw ? GL.tel.validar(telRaw, pais) : { ok: true };
+    if (!validacionTel.ok) {
+      GL.notificar(validacionTel.mensaje || 'El teléfono no es válido para el país elegido.', 'advertencia'); return;
+    }
+    if (!grupo) { GL.notificar('Seleccioná un grupo para el jugador.', 'advertencia'); return; }
+
+    const btn = cont.querySelector('#nt-jug-crear');
+    btn.disabled = true; btn.textContent = 'Creando…';
+    try {
+      const { data, error } = await sb.functions.invoke('admin-crear-jugador', {
+        body: {
+          nombre_usuario: nombre,
+          email,
+          password: clave,
+          pais,
+          zona_horaria: GL.zonaPorPais(pais),
+          telefono: telRaw ? GL.tel.normalizar(telRaw, pais) : '',
+          grupo_id: grupo,
+          torneo_id: torneo.id
+        }
+      });
+      if (error) throw new Error(await mensajeInvoke(error));
+      if (data && data.ok === false) throw new Error(data.mensaje || data.error || 'No se pudo crear el jugador.');
+      await recargarContextoAdmin();
+      GL.notificar(nombre + ' creado y asignado al grupo.', 'exito');
+      Mod.render(root);
+    } catch (e) {
+      GL.notificar('No se pudo crear el jugador: ' + e.message, 'error');
+      btn.disabled = false; btn.textContent = 'Crear jugador';
+    }
+  }
+
+  async function cambiarGrupoRapido(j, root, quitar) {
+    if (!j) return;
+    if (quitar) {
+      try {
+        const { error } = await sb.from('grupo_jugadores').delete().eq('jugador_id', j.id);
+        if (error) { GL.notificar('No se pudo quitar del grupo: ' + error.message, 'error'); return; }
+        await recargarContextoAdmin();
+        GL.notificar(j.nombre_usuario + ' quedó sin grupo.', 'exito');
+        Mod.render(root);
+      } catch (e) { GL.notificar('No se pudo quitar del grupo: ' + e.message, 'error'); }
+      return;
+    }
+    const grupos = GL.grupos();
+    if (!grupos.length) { GL.notificar('No hay grupos disponibles.', 'advertencia'); return; }
+    GL.dialogo({
+      titulo: 'Asignar Grupo — ' + esc(j.nombre_usuario),
+      icono: 'users',
+      confirmTexto: 'Asignar grupo',
+      cuerpo: '<p class="modal-texto">Elegí el grupo del torneo actual.</p>' +
+        '<label class="campo"><span>Grupo</span><select class="input" id="nt-grupo-select">' +
+          grupos.map(g => '<option value="' + esc(g.id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</option>').join('') +
+        '</select></label>',
+      onConfirmar(fondo, cerrar, setBloqueado) {
+        const gid = fondo.querySelector('#nt-grupo-select').value;
+        if (!gid) { fondo.setError('Seleccioná un grupo.'); return; }
+        setBloqueado(true);
+        (async () => {
+          try {
+            const { error } = await sb.from('grupo_jugadores').insert({ grupo_id: gid, jugador_id: j.id });
+            if (error) { fondo.setError(error.message); setBloqueado(false); return; }
+            cerrar();
+            await recargarContextoAdmin();
+            GL.notificar(j.nombre_usuario + ' asignado al grupo.', 'exito');
+            Mod.render(root);
+          } catch (e) { fondo.setError(e.message); setBloqueado(false); }
+        })();
+      }
+    });
+  }
+
+  function enlazarFilasPartido(cont) {
+    cont.querySelectorAll('[data-quitar-partido]').forEach(b => b.addEventListener('click', () => {
+      const filas = cont.querySelectorAll('[data-fila-partido]');
+      if (filas.length <= 1) { GL.notificar('Debe quedar al menos un partido.', 'advertencia'); return; }
+      b.closest('[data-fila-partido]').remove();
+    }));
+  }
+
+  function renderFilasPartido(cont, grupoId, datos) {
+    const zona = cont.querySelector('#nt-partidos');
+    if (!zona) return;
+    const filas = datos && datos.length ? datos : [{}];
+    zona.innerHTML = filas.map(d => filaPartidoHTML(grupoId, d)).join('');
+    enlazarFilasPartido(cont);
+    iniciarIconos();
+  }
+
+  function actualizarPanelModo(cont, modo) {
+    const aleatorio = cont.querySelector('#nt-panel-aleatorio');
+    const manual = cont.querySelector('#nt-panel-manual');
+    if (aleatorio) aleatorio.style.display = modo === 'aleatorio' ? 'block' : 'none';
+    if (manual) manual.style.display = modo === 'manual' ? 'block' : 'none';
+  }
+
+  async function generarFixtureAleatorio(root) {
+    if (!GL.torneo()) { GL.notificar('No hay torneo activo.', 'error'); return; }
+    GL.dialogo({
+      titulo: 'Generar calendario aleatorio',
+      icono: 'shuffle',
+      tipo: 'peligro',
+      ancho: 'sm',
+      confirmTexto: 'Generar calendario',
+      consecuencias: '<ul><li>El generador trabaja con <strong>22 jornadas</strong>.</li>' +
+        '<li>Reemplazará los partidos generados anteriormente.</li></ul>',
+      cuerpo: '<p class="modal-texto">¿Querés generar el calendario aleatorio del torneo actual?</p>',
+      onConfirmar(fondo, cerrar, setBloqueado) {
+        setBloqueado(true);
+        (async () => {
+          try {
+            const { data, error } = await sb.rpc('gl_generar_fixture', { p_torneo_id: GL.torneoId() });
+            const r = leerRpc(data, error, 'No se pudo generar el calendario.');
+            if (!r.ok) { fondo.setError(r.mensaje); setBloqueado(false); return; }
+            cerrar();
+            await recargarContextoAdmin();
+            GL.notificar(r.mensaje || 'Calendario generado correctamente.', 'exito');
+            Mod.render(root);
+          } catch (e) { fondo.setError(e.message); setBloqueado(false); }
+        })();
+      }
+    });
+  }
+
+  async function guardarJornadaManual(cont, root) {
+    const torneo = GL.torneo();
+    if (!torneo) { GL.notificar('No hay torneo activo.', 'error'); return; }
+    const n = Number(cont.querySelector('#nt-manual-numero').value);
+    const fechaISO = fechaDDMMYYYYaISO(cont.querySelector('#nt-manual-fecha').value);
+    const grupo = cont.querySelector('#nt-manual-grupo').value;
+    const total = Number(torneo.total_jornadas) || CONFIG.JORNADAS_FASE_REGULAR;
+    if (!Number.isInteger(n) || n < 1 || n > total) {
+      GL.notificar('La jornada debe estar entre 1 y ' + total + '.', 'advertencia'); return;
+    }
+    if (!fechaISO) { GL.notificar('Ingresá una fecha válida con formato DD/MM/YYYY.', 'advertencia'); return; }
+    if (!grupo) { GL.notificar('Seleccioná un grupo.', 'advertencia'); return; }
+
+    const pares = Array.from(cont.querySelectorAll('[data-fila-partido]')).map(fila => ({
+      local_id: fila.querySelector('[data-local]').value,
+      visitante_id: fila.querySelector('[data-visita]').value
+    }));
+    if (!pares.length) { GL.notificar('Agregá al menos un partido.', 'advertencia'); return; }
+    if (pares.some(p => !p.local_id || !p.visitante_id)) {
+      GL.notificar('Completá los dos jugadores de cada partido.', 'advertencia'); return;
+    }
+    if (pares.some(p => p.local_id === p.visitante_id)) {
+      GL.notificar('Un jugador no puede enfrentarse a sí mismo.', 'advertencia'); return;
+    }
+
+    const btn = cont.querySelector('#nt-guardar-jornada');
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      const { data, error } = await sb.rpc('gl_guardar_jornada_manual', {
+        p_torneo_id: torneo.id,
+        p_grupo_id: grupo,
+        p_numero: n,
+        p_fecha: fechaISO,
+        p_partidos: pares.map(p => ({ local_id: p.local_id, visitante_id: p.visitante_id }))
+      });
+      const r = leerRpc(data, error, 'No se pudo guardar la jornada.');
+      if (!r.ok) { GL.notificar(r.mensaje, 'error'); btn.disabled = false; btn.textContent = 'Guardar jornada'; return; }
+      await recargarContextoAdmin();
+      GL.notificar(r.mensaje || 'Jornada ' + n + ' guardada para el ' + aDDMMYYYY(fechaISO) + '.', 'exito');
+      Mod.render(root);
+    } catch (e) {
+      GL.notificar('No se pudo guardar la jornada: ' + e.message, 'error');
+      btn.disabled = false; btn.textContent = 'Guardar jornada';
+    }
+  }
+
+  function borrarJornadaManual(n, grupoId, root) {
+    if (!GL.torneo()) { GL.notificar('No hay torneo activo.', 'error'); return; }
+    GL.dialogo({
+      titulo: 'Eliminar jornada ' + n,
+      icono: 'trash-2',
+      tipo: 'peligro',
+      ancho: 'sm',
+      confirmTexto: 'Eliminar jornada',
+      consecuencias: '<ul><li>Se borrará la jornada ' + n + ' y sus partidos.</li>' +
+        '<li>El resto del torneo no se modifica.</li></ul>',
+      cuerpo: '<p class="modal-texto">¿Querés eliminar esta jornada guardada?</p>',
+      onConfirmar(fondo, cerrar, setBloqueado) {
+        setBloqueado(true);
+        (async () => {
+          try {
+            const { data, error } = await sb.rpc('gl_borrar_jornada_manual', {
+              p_torneo_id: GL.torneoId(),
+              p_grupo_id: grupoId,
+              p_numero: Number(n)
+            });
+            const r = leerRpc(data, error, 'No se pudo eliminar la jornada.');
+            if (!r.ok) { fondo.setError(r.mensaje); setBloqueado(false); return; }
+            cerrar();
+            await recargarContextoAdmin();
+            GL.notificar(r.mensaje || 'Jornada ' + n + ' eliminada.', 'exito');
+            Mod.render(root);
+          } catch (e) { fondo.setError(e.message); setBloqueado(false); }
+        })();
+      }
+    });
+  }
+
+  function modalEliminarJugador(j, root) {
+    if (!j) return;
+    if (j.rol === 'admin') {
+      GL.notificar('Las cuentas administradoras no se eliminan desde esta opción.', 'advertencia'); return;
+    }
+    GL.dialogo({
+      titulo: 'Eliminar jugador',
+      icono: 'user-x',
+      tipo: 'peligro',
+      ancho: 'sm',
+      confirmTexto: 'Eliminar jugador',
+      consecuencias: '<ul><li>Se eliminará la cuenta de <strong>' + esc(j.nombre_usuario) + '</strong>.</li>' +
+        '<li>También se borrarán sus partidos, sanciones y grupos.</li>' +
+        '<li>Las cuentas administradoras no se eliminan desde aquí.</li></ul>',
+      cuerpo: '<p class="modal-texto">Esta acción no se puede deshacer. ¿Querés continuar?</p>',
+      onConfirmar(fondo, cerrar, setBloqueado) {
+        setBloqueado(true);
+        (async () => {
+          try {
+            const { data, error } = await sb.functions.invoke('admin-crear-jugador', {
+              body: { action: 'delete', jugador_id: j.id }
+            });
+            if (error) throw new Error(await mensajeInvoke(error));
+            if (data && data.ok === false) throw new Error(data.mensaje || data.error || 'No se pudo eliminar el jugador.');
+            cerrar();
+            await recargarContextoAdmin();
+            GL.notificar((data && data.mensaje) || j.nombre_usuario + ' eliminado correctamente.', 'exito');
+            Mod.render(root);
+          } catch (e) {
+            fondo.setError(e.message);
+            GL.notificar('No se pudo eliminar el jugador: ' + e.message, 'error');
+            setBloqueado(false);
+          }
+        })();
+      }
+    });
+    iniciarIconos();
+  }
+
   /* ---------------- Enlaces de eventos ---------------- */
   function enlazar(cont, root) {
     // Botones de acceso rápido desde el resumen
     cont.querySelectorAll('[data-tab-ir]').forEach(b => {
-      b.addEventListener('click', () => {
-        Mod.tab = b.dataset.tabIr;
-        root.querySelectorAll('[data-tab]').forEach(x =>
-          x.classList.toggle('activo', x.dataset.tab === Mod.tab));
-        root.querySelector('#contenido-admin').innerHTML =
-          Mod.tab === 'jugadores'  ? htmlJugadores() :
-          Mod.tab === 'jornadas'   ? htmlJornadas() :
-          Mod.tab === 'disciplina' ? htmlDisciplina() :
-          Mod.tab === 'admins'     ? htmlAdmins() :
-          htmlConfig();
-        enlazar(root.querySelector('#contenido-admin'), root);
-        iniciarIconos();
-      });
+      b.addEventListener('click', () => irATab(b.dataset.tabIr, root));
     });
     /* ── Menú flotante / bottom sheet para móvil ── */
     cont.querySelectorAll('.btn-menu-acciones').forEach(btn => {
@@ -573,6 +1212,9 @@
             : null,
           !expulsado
             ? { accion: 'suspender-'+ j.id, ico: 'user-x',         label: 'Suspender / expulsar' }
+            : null,
+          j.rol !== 'admin'
+            ? { accion: 'eliminar-' + j.id, ico: 'trash-2', label: 'Eliminar jugador' }
             : null
         ].filter(Boolean);
 
@@ -589,6 +1231,7 @@
       if (accion === 'asignar')   modalGrupo(j, root, true);
       if (accion === 'sancion')   modalSancion(j, root);
       if (accion === 'suspender') modalSuspender(j, root);
+      if (accion === 'eliminar')  modalEliminarJugador(j, root);
     }));
     const agregar = cont.querySelector('[data-agregar]');
     if (agregar) agregar.addEventListener('click', () => modalAgregar(root));
@@ -689,23 +1332,62 @@
       cont.querySelectorAll('[data-fila-sancion]').forEach(f => f.classList.toggle('oculto', !f.dataset.filaSancion.includes(q)));
     });
     const guardarCfg = cont.querySelector('#guardar-cfg');
-    if (guardarCfg) guardarCfg.addEventListener('click', async () => {
-      const update = {
-        nombre: cont.querySelector('#cfg-nombre').value.trim(),
-        temporada: cont.querySelector('#cfg-temporada').value.trim(),
-        total_jornadas: Number(cont.querySelector('#cfg-jornadas').value) || CONFIG.JORNADAS_FASE_REGULAR,
-        estado: cont.querySelector('#cfg-estado').value,
-        reglamento: cont.querySelector('#cfg-reglamento').value.trim()
-      };
-      if (update.total_jornadas !== CONFIG.JORNADAS_FASE_REGULAR) {
-        GL.notificar('La fase regular debe tener exactamente ' + CONFIG.JORNADAS_FASE_REGULAR + ' jornadas.', 'advertencia'); return;
-      }
-      const { error } = await sb.from('torneos').update(update).eq('id', GL.torneo().id);
-      if (error) GL.notificar(error.message, 'error');
-      else { GL.invalidar(); await GL.cargarContexto(true); pintarTemporada(); GL.notificar('Configuración guardada.', 'exito'); Mod.render(root); }
+    if (guardarCfg) guardarCfg.addEventListener('click', () => guardarDatosTorneo(cont, root, 'cfg'));
+
+    /* ── Botones de torneo (Resumen, Configuración y estado sin torneo) ── */
+    const crearTorneo = cont.querySelector('#tor-crear');
+    if (crearTorneo) crearTorneo.addEventListener('click', () => abrirCrearTorneo(root));
+    const eliminarTorneo = cont.querySelector('#tor-eliminar');
+    if (eliminarTorneo) eliminarTorneo.addEventListener('click', () => abrirEliminarTorneo(root));
+
+    /* ── Nueva Temporada: paso 1 ── */
+    const guardarDatosNT = cont.querySelector('#nt-guardar-datos');
+    if (guardarDatosNT) guardarDatosNT.addEventListener('click', () => guardarDatosTorneo(cont, root, 'nt'));
+
+    /* ── Nueva Temporada: paso 2 ── */
+    const crearJugadorNT = cont.querySelector('#nt-jug-crear');
+    if (crearJugadorNT) crearJugadorNT.addEventListener('click', () => crearJugadorRapido(cont, root));
+    cont.querySelectorAll('[data-nt-eliminar]').forEach(b => b.addEventListener('click', () => {
+      modalEliminarJugador(GL.jugador(b.dataset.ntEliminar), root);
+    }));
+    cont.querySelectorAll('[data-nt-quitar]').forEach(b => b.addEventListener('click', () => {
+      cambiarGrupoRapido(GL.jugador(b.dataset.ntQuitar), root, true);
+    }));
+    cont.querySelectorAll('[data-nt-asignar]').forEach(b => b.addEventListener('click', () => {
+      cambiarGrupoRapido(GL.jugador(b.dataset.ntAsignar), root, false);
+    }));
+
+    /* ── Nueva Temporada: paso 3 ── */
+    cont.querySelectorAll('[name="nt-modo"]').forEach(r => r.addEventListener('change', () => {
+      actualizarPanelModo(cont, r.value);
+    }));
+    const generarFixture = cont.querySelector('#nt-generar-fixture');
+    if (generarFixture) generarFixture.addEventListener('click', () => generarFixtureAleatorio(root));
+
+    const selGrupoManual = cont.querySelector('#nt-manual-grupo');
+    if (selGrupoManual) selGrupoManual.addEventListener('change', () => {
+      const actuales = Array.from(cont.querySelectorAll('[data-fila-partido]')).map(f => ({
+        local: f.querySelector('[data-local]').value,
+        visitante: f.querySelector('[data-visita]').value
+      }));
+      renderFilasPartido(cont, selGrupoManual.value, actuales);
+      GL.notificar('Los desplegables ahora muestran solo los jugadores del grupo elegido.', 'info');
     });
-    const nuevo = cont.querySelector('#nuevo-torneo');
-    if (nuevo) nuevo.addEventListener('click', () => nuevoTorneo(cont.querySelector('#nueva-temp').value.trim(), root));
+    const agregarPartido = cont.querySelector('#nt-agregar-partido');
+    if (agregarPartido) agregarPartido.addEventListener('click', () => {
+      const actuales = Array.from(cont.querySelectorAll('[data-fila-partido]')).map(f => ({
+        local: f.querySelector('[data-local]').value,
+        visitante: f.querySelector('[data-visita]').value
+      }));
+      actuales.push({});
+      renderFilasPartido(cont, selGrupoManual ? selGrupoManual.value : '', actuales);
+    });
+    enlazarFilasPartido(cont);
+    const guardarJornada = cont.querySelector('#nt-guardar-jornada');
+    if (guardarJornada) guardarJornada.addEventListener('click', () => guardarJornadaManual(cont, root));
+    cont.querySelectorAll('[data-nt-borrar-jornada]').forEach(b => b.addEventListener('click', () => {
+      borrarJornadaManual(b.dataset.ntBorrarJornada, b.dataset.grupo, root);
+    }));
   }
   /* ── Helper: errores inline junto al campo ──────────────────────────
      Resalta el campo y muestra/oculta un mensaje de error debajo de él.
@@ -2000,42 +2682,6 @@
       }
     } catch (e) { console.warn(e); }
     location.hash = 'mensajes';
-  }
-
-  async function nuevoTorneo(temporada, root) {
-    if (!temporada) { GL.notificar('Escribí el nombre de la nueva temporada.', 'advertencia'); return; }
-    const torneoActual = GL.torneo();
-    if (!torneoActual) { GL.notificar('No hay torneo activo para archivar.', 'error'); return; }
-    const si = await GL.confirmar(
-      'Se archivará "' + (torneoActual.nombre || CONFIG.NOMBRE_LIGA) + '" y se creará "' + temporada + '". ¿Continuar?',
-      'Nuevo torneo', 'Archivar y crear'
-    );
-    if (!si) return;
-
-    const user = (await sb.auth.getUser()).data.user;
-    if (!user) { GL.notificar('Sesión expirada. Recargá la página.', 'error'); return; }
-
-    const { data, error } = await sb.rpc('gl_crear_temporada', {
-      p_torneo_anterior_id:  torneoActual.id,
-      p_nombre_liga:         CONFIG.NOMBRE_LIGA,
-      p_temporada:           temporada,
-      p_total_jornadas:      CONFIG.JORNADAS_FASE_REGULAR,
-      p_creado_por:          user.id
-    });
-
-    if (error) { GL.notificar('Error al crear temporada: ' + error.message, 'error'); return; }
-    if (data && !data.ok) { GL.notificar('No se pudo crear: ' + data.error, 'error'); return; }
-
-    GL.auditoria && GL.auditoria.registrar('torneo_creado', 'torneo', data.torneo_id, {
-      nombre:    CONFIG.NOMBRE_LIGA,
-      temporada: temporada
-    });
-    GL.invalidar();
-    await GL.cargarContexto(true);
-    pintarTemporada();
-    GL.notificar('Nueva temporada "' + temporada + '" creada correctamente.', 'exito');
-    location.hash = 'administracion';
-    Mod.render(root);
   }
 
   Modulos.admin = Mod;

@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey  = Deno.env.get('SERVICE_ROLE_KEY');
+    const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY');
     if (!serviceKey) throw new Error('Configuración del servidor incompleta.');
 
     // ── 1. Verificar JWT del solicitante ──────────────────────────────
