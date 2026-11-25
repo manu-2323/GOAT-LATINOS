@@ -65,7 +65,13 @@ const PantallaAuth = {
             PantallaAuth.indicador('rg-nombre-estado') +
             '<div class="campo-row">' +
               '<label>País<select class="input" id="rg-pais">' + GL.opcionesPais('', false) + '</select></label>' +
-              '<label>Teléfono (opcional)<input class="input" type="tel" id="rg-tel" placeholder="9999-9999"></label>' +
+                '<label>Teléfono (opcional)' +
+                '<div class="tel-wrap">' +
+                  '<button type="button" class="tel-prefijo" id="rg-tel-prefijo" aria-label="Código de país">+505</button>' +
+                  '<input class="input" type="tel" id="rg-tel" placeholder="8108-5555" inputmode="numeric" autocomplete="tel-national">' +
+                '</div>' +
+                '<div class="campo-estado" id="rg-tel-estado" aria-live="polite"></div>' +
+              '</label>' +
             '</div>' +
             '<label>Correo electrónico<input class="input" type="email" id="rg-correo" autocomplete="email" placeholder="tu@gmail.com" required></label>' +
             PantallaAuth.indicador('rg-correo-estado') +
@@ -196,6 +202,118 @@ const PantallaAuth = {
       nombre.addEventListener('input', verificarNombre);
       correo.addEventListener('input', verificarCorreo);
       clave.addEventListener('input', verificarClave);
+
+      /* ---- Sistema de teléfono internacional ---- */
+      const telInput      = o.querySelector('#rg-tel');
+      const telPrefijo    = o.querySelector('#rg-tel-prefijo');
+      const telEstado     = o.querySelector('#rg-tel-estado');
+      const paisSelect    = o.querySelector('#rg-pais');
+      let   _telE164      = '';   // valor final a guardar
+      let   _paisTelISO   = '';   // ISO del país del teléfono
+
+      const PREFIJOS = {
+        CR:'+506', NI:'+505', MX:'+52',  GT:'+502', HN:'+504',
+        SV:'+503', CO:'+57',  EC:'+593', PA:'+507', PE:'+51',
+        VE:'+58',  BO:'+591', AR:'+54',  CL:'+56',  PY:'+595',
+        BR:'+55'
+      };
+
+      function actualizarPrefijo(iso) {
+        const codigo = String(iso || '').toUpperCase();
+        _paisTelISO  = codigo;
+        telPrefijo.textContent = PREFIJOS[codigo] || '+?';
+        telPrefijo.dataset.iso = codigo;
+        if (telInput.value) validarTelefono();
+      }
+
+      function formatearLocal(valor, iso) {
+        // Deja solo dígitos y aplica máscara simple según país
+        const digits = valor.replace(/\D/g, '');
+        // Nicaragua / Costa Rica / Honduras / El Salvador / Guatemala: XXXX-XXXX
+        if (['NI','CR','HN','SV','GT'].includes(iso)) {
+          if (digits.length <= 4) return digits;
+          return digits.slice(0,4) + '-' + digits.slice(4,8);
+        }
+        // México: XX XXXX-XXXX
+        if (iso === 'MX') {
+          if (digits.length <= 2)  return digits;
+          if (digits.length <= 6)  return digits.slice(0,2) + ' ' + digits.slice(2);
+          return digits.slice(0,2) + ' ' + digits.slice(2,6) + '-' + digits.slice(6,10);
+        }
+        // Colombia / Ecuador / Perú / Bolivia / Paraguay: XXX XXX-XXXX
+        if (['CO','EC','PE','BO','PY'].includes(iso)) {
+          if (digits.length <= 3)  return digits;
+          if (digits.length <= 6)  return digits.slice(0,3) + ' ' + digits.slice(3);
+          return digits.slice(0,3) + ' ' + digits.slice(3,6) + '-' + digits.slice(6,10);
+        }
+        // Argentina / Chile / Brasil / Venezuela / Panamá: formato libre con guión central
+        if (digits.length <= 4) return digits;
+        if (digits.length <= 8) return digits.slice(0,4) + '-' + digits.slice(4);
+        return digits.slice(0,4) + '-' + digits.slice(4,8) + '-' + digits.slice(8,12);
+      }
+
+      function validarTelefono() {
+        _telE164 = '';
+        const digits  = telInput.value.replace(/\D/g, '');
+        const iso     = _paisTelISO || paisSelect.value.toUpperCase();
+        const prefijo = PREFIJOS[iso] || '';
+
+        if (!digits) {
+          PantallaAuth.estado(telEstado, '', '', '');
+          return;
+        }
+
+        // Intentar parsear con libphonenumber-js
+        try {
+          const lib = window.libphonenumber;
+          if (lib && lib.parsePhoneNumber) {
+            const parsed = lib.parsePhoneNumber(prefijo + digits, iso);
+            if (parsed && parsed.isValid()) {
+              _telE164   = parsed.format('E.164');
+              _paisTelISO = parsed.country || iso;
+              PantallaAuth.estado(telEstado,
+                'Número válido: ' + parsed.formatInternational(),
+                'bien', 'circle-check-big');
+              return;
+            }
+            // isPossible pero no isValid
+            const posible = lib.isPossiblePhoneNumber(prefijo + digits, iso);
+            if (posible) {
+              PantallaAuth.estado(telEstado,
+                'El número parece incompleto o no existe en ' + (PAISES[iso] && PAISES[iso].nombre || iso) + '.',
+                'mal', 'circle-x');
+            } else {
+              PantallaAuth.estado(telEstado,
+                'Número inválido para ' + (PAISES[iso] && PAISES[iso].nombre || iso) + '.',
+                'mal', 'circle-x');
+            }
+            return;
+          }
+        } catch (e) { console.warn('libphonenumber:', e); }
+
+        // Fallback sin librería: solo longitud mínima
+        if (digits.length >= 7) {
+          _telE164 = prefijo + digits;
+          PantallaAuth.estado(telEstado, 'Número ingresado (sin validación completa).', 'neutral', 'info');
+        } else {
+          PantallaAuth.estado(telEstado, 'El número es muy corto.', 'mal', 'circle-x');
+        }
+      }
+
+      telInput.addEventListener('input', () => {
+        const iso = _paisTelISO || paisSelect.value.toUpperCase();
+        const formatted = formatearLocal(telInput.value, iso);
+        // Solo actualizar si cambió para no mover el cursor innecesariamente
+        if (telInput.value !== formatted) telInput.value = formatted;
+        validarTelefono();
+      });
+
+      paisSelect.addEventListener('change', () => {
+        actualizarPrefijo(paisSelect.value);
+      });
+
+      // Inicializar con el país por defecto si ya hay uno seleccionado
+      if (paisSelect.value) actualizarPrefijo(paisSelect.value);
       clave2.addEventListener('input', () => {
         if (!clave2.value) return;
         const ok = clave2.value === clave.value;
@@ -213,8 +331,17 @@ const PantallaAuth = {
         if (clave.value !== clave2.value) { err.textContent = 'Las contraseñas no coinciden.'; return; }
         ocupado(form, true);
         try {
-          await Auth.registrar(nombre.value.trim(), correo.value.trim(), clave.value,
-            o.querySelector('#rg-pais').value, o.querySelector('#rg-tel').value.trim());
+          await Auth.registrar(
+            nombre.value.trim(),
+            correo.value.trim(),
+            clave.value,
+            o.querySelector('#rg-pais').value,
+            {
+              visual:  telInput.value.trim(),
+              e164:    _telE164,
+              paisTel: _paisTelISO || o.querySelector('#rg-pais').value
+            }
+          );
           // Con acceso obligatorio, solo se cierra si Supabase devolvió sesión.
           // Si el correo requiere confirmación, Auth.registrar lanza y el overlay permanece.
           exito('Cuenta creada. ¡Bienvenido a la liga!', 'check-circle-2');

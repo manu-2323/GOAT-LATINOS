@@ -59,7 +59,7 @@
           Mod.render(el);
         }));
         el.querySelector('[data-export]').addEventListener('click', () =>
-          GL.exportarPNG('tabla-export', 'GOATS_Tabla_Grupo' + GL.letraGrupo(GL.grupo(Mod.grupoId))));
+          GL.exportarTabla(Mod.grupoId, 'GOATS_Tabla_Grupo' + GL.letraGrupo(GL.grupo(Mod.grupoId))));
       } catch (e) {
         console.error(e);
         el.innerHTML = GL.error(e.message);

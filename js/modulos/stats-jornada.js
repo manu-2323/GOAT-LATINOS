@@ -47,31 +47,32 @@
   };
 
   function calcular(partidos) {
-    const stats = {};
-    const asegurar = id => stats[id] || (stats[id] = {
-      id, pj: 0, gf: 0, gc: 0, dif: 0, vallas: 0, tiros: 0, tirosPuerta: 0, posesion: 0, pase: 0
+    const gr = EST.calcularGolesReales(partidos);
+    const prom = EST.calcularPromedios(partidos);
+    const vallas = EST.calcularVallasInvictas(partidos);
+
+    // Unificar en un mapa por jugador
+    const ids = new Set([
+      ...gr.map(s => s.id),
+      ...prom.map(s => s.id),
+      ...vallas.map(s => s.id)
+    ]);
+    return Array.from(ids).map(id => {
+      const g = gr.find(s => s.id === id) || { gf: 0, gc: 0, dif: 0, pj: 0 };
+      const po = prom.find(s => s.id === id) || { promPos: 0, promPase: 0, pj: 0 };
+      const v = vallas.find(s => s.id === id) || { vallas: 0 };
+      const pj = Math.max(g.pj, po.pj);
+      return {
+        id,
+        pj,
+        gf: g.gf, gc: g.gc, dif: g.dif,
+        vallas: v.vallas,
+        promPos: po.promPos,
+        promPase: po.promPase,
+        promedio: pj ? g.gf / pj : 0,
+        score: g.gf + v.vallas
+      };
     });
-    partidos.forEach(p => {
-      const r = GL.resultado(p);
-      const l = asegurar(p.local_id), v = asegurar(p.visitante_id);
-      l.pj++; v.pj++;
-      l.gf += r.gf; l.gc += r.gc; l.dif += r.gf - r.gc;
-      v.gf += r.gc; v.gc += r.gf; v.dif += r.gc - r.gf;
-      l.tiros += Number(p.tiros_local) || 0; v.tiros += Number(p.tiros_visitante) || 0;
-      l.tirosPuerta += Number(p.tiros_puerta_local) || 0; v.tirosPuerta += Number(p.tiros_puerta_visitante) || 0;
-      l.posesion += Number(p.posesion_local) || 0; v.posesion += Number(p.posesion_visitante) || 0;
-      l.pase += Number(p.pase_local) || 0; v.pase += Number(p.pase_visitante) || 0;
-      // No se contabiliza la valla invicta en partidos resueltos por expulsión (regla 10).
-      if (p.estado === 'jugado' && r.gc === 0 && !GL.esResolucionExpulsion(p)) l.vallas++;
-      if (p.estado === 'jugado' && r.gf === 0 && !GL.esResolucionExpulsion(p)) v.vallas++;
-    });
-    Object.values(stats).forEach(s => {
-      s.promedio = s.pj ? (s.gf / s.pj) : 0;
-      s.promPos = s.pj ? Math.round(s.posesion / s.pj) : 0;
-      s.promPase = s.pj ? Math.round(s.pase / s.pj) : 0;
-      s.score = s.gf + s.vallas;
-    });
-    return Object.values(stats);
   }
 
   function top(lista, clave, n) {
@@ -101,10 +102,13 @@
   function htmlStats(partidos) {
     if (!partidos.length) return GL.vacio('Todavía no hay resultados en esta jornada.', 'chart-no-axes-column', null);
     const s = calcular(partidos);
-    const mejorPartido = partidos.slice().sort((a, b) =>
-      ((Number(a.goles_local) || 0) + (Number(a.goles_visitante) || 0)) <
-      ((Number(b.goles_local) || 0) + (Number(b.goles_visitante) || 0)) ? 1 : -1)[0];
-    const r = GL.resultado(mejorPartido);
+    // Mejor partido: solo partidos realmente jugados en FC Mobile
+    const soloJugados = partidos.filter(p => p.estado === 'jugado');
+    const mejorPartido = soloJugados.slice().sort((a, b) => {
+      const ra = GL.golesReales(a), rb = GL.golesReales(b);
+      return (rb.gf + rb.gc) - (ra.gf + ra.gc);
+    })[0];
+    const r = mejorPartido ? GL.golesReales(mejorPartido) : { gf: 0, gc: 0 };
     return '<div class="grid tres">' +
       metrica('Más porterías rasgadas', 'zap', top(s, 'gf'), 'gf', '', x => 'prom. ' + x.promedio.toFixed(1)) +
       metrica('Más porterías en 0', 'shield', top(s, 'vallas'), 'vallas', '') +
@@ -115,7 +119,7 @@
           '<div style="font-family:Rajdhani;font-size:17px">' + esc(GL.nombreJugador(mejorPartido.local_id)) +
           ' <span class="dorado">' + r.texto + '</span> ' + esc(GL.nombreJugador(mejorPartido.visitante_id)) + '</div>' +
           '<div class="num dorado" style="font-size:38px;font-family:Rajdhani;font-weight:700;margin-top:6px">' +
-            ((Number(mejorPartido.goles_local) || 0) + (Number(mejorPartido.goles_visitante) || 0)) + ' goles</div>' +
+            (r.gf + r.gc) + ' goles</div>' +
         '</div></div>' +
       metrica('Mejor jugador de la jornada', 'award', top(s, 'score'), 'score', ' pts', x => x.gf + ' goles · ' + x.vallas + ' vallas') +
       '</div>' +

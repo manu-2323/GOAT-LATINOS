@@ -24,10 +24,10 @@
         const partidos = todos.filter(p => p.grupo_id === Mod.grupoId && Number(p.jornada) === Mod.jornada);
 
         el.innerHTML =
-          '<div class="seccion-head"><div class="seccion-titulo"><h2>Fixture de la liga</h2>' +
+          '<div class="seccion-head"><div class="seccion-titulo"><h2>Calendario de la liga</h2>' +
             '<p>Ida y vuelta · 12 jugadores por grupo · El local crea el partido en FC Mobile</p></div>' +
             '<div class="seccion-acciones">' + (GL.esAdmin() ?
-              '<button type="button" class="btn sm" data-generar>' + icono('sparkles', 16) + 'Generar fixture</button>' : '') +
+              '<button type="button" class="btn sm" data-generar>' + icono('sparkles', 16) + 'Generar calendario</button>' : '') +
             '</div></div>' +
           '<div class="tabs tabs-grupos">' + grupos.map(g =>
             '<button type="button" class="tab' + (g.id === Mod.grupoId ? ' activo' : '') + '" data-grupo="' + g.id + '">' +
@@ -60,76 +60,158 @@
 
     async generar(el) {
       if (!(await GL.asegurarAdmin(el))) return;
-      const grupos = GL.grupos(), ctx = GL.ctx;
-      const conteos = grupos.map(g => ({
-        g, n: ctx.jugadores.filter(j => (ctx.miembros || []).some(m => m.grupo_id === g.id && m.jugador_id === j.id)).length
-      }));
+      const torneo = GL.torneo();
+      if (!torneo) { GL.notificar('No hay torneo activo.', 'error'); return; }
+
+      // ── Pre-validación en cliente ──────────────────────────────────────────
+      const grupos = GL.grupos();
+      const ctx    = GL.ctx;
+
+      const conteos = grupos.map(g => {
+        const ids = new Set((ctx.miembros || [])
+          .filter(m => m.grupo_id === g.id)
+          .map(m => m.jugador_id));
+        const activos = ctx.jugadores.filter(j => j.activo !== false && ids.has(j.id));
+        return { g, n: activos.length, jugadores: activos };
+      });
       const mal = conteos.filter(c => c.n !== 12);
       if (mal.length) {
-        GL.notificar('Cada grupo debe tener exactamente 12 jugadores asignados (' +
-          mal.map(c => 'Grupo ' + GL.letraGrupo(c.g) + ': ' + c.n).join(', ') + ').', 'error');
+        GL.notificar(
+          'Cada grupo necesita exactamente 12 jugadores activos. ' +
+          mal.map(c => 'Grupo ' + GL.letraGrupo(c.g) + ': tiene ' + c.n).join(' · ') + '.',
+          'error'
+        );
         return;
-      }
-      const total = (GL.torneo() && Number(GL.torneo().total_jornadas)) || 22;
-      if (total !== CONFIG.JORNADAS_FASE_REGULAR) {
-        GL.notificar('El fixture de ida y vuelta requiere exactamente ' + CONFIG.JORNADAS_FASE_REGULAR + ' jornadas.', 'error');
-        return;
-      }
-      const existentes = await GL.partidos({ torneo_id: GL.torneo().id });
-      if (existentes.some(p => p.estado !== 'pendiente')) {
-        GL.notificar('Ya hay resultados cargados. No se puede regenerar el fixture: eso duplicaría los partidos. Creá una nueva temporada para empezar de cero.', 'error');
-        return;
-      }
-      if (existentes.length) {
-        const si = await GL.confirmar('Ya existen ' + existentes.length + ' partidos pendientes. Se borrarán todos y se generará el fixture completo. ¿Continuar?',
-          'Regenerar fixture', 'Regenerar');
-        if (!si) return;
-        const { error } = await sb.from('partidos').delete().eq('torneo_id', GL.torneo().id);
-        if (error) { GL.notificar(error.message, 'error'); return; }
       }
 
-      const jornadasRows = [], partidosRows = [];
-      grupos.forEach(g => {
-        const ids = ctx.jugadores.filter(j => (ctx.miembros || []).some(m => m.grupo_id === g.id && m.jugador_id === j.id)).map(j => j.id);
-        const rondas = roundRobin(ids);
-        for (let n = 1; n <= total; n++) {
-          jornadasRows.push({ torneo_id: GL.torneo().id, grupo_id: g.id, numero: n,
-            estado: 'abierta', fecha: null });
-        }
-        rondas.forEach((ronda, idx) => {
-          ronda.forEach(([local, visita]) => {
-            if (!local || !visita) return;
-            partidosRows.push({
-              torneo_id: GL.torneo().id, grupo_id: g.id, jornada: idx + 1,
-              local_id: local, visitante_id: visita, goles_local: 0, goles_visitante: 0,
-              estado: 'pendiente', ingresado_por: Auth.jugador ? Auth.jugador.id : null
-            });
-            partidosRows.push({
-              torneo_id: GL.torneo().id, grupo_id: g.id, jornada: idx + 1 + rondas.length,
-              local_id: visita, visitante_id: local, goles_local: 0, goles_visitante: 0,
-              estado: 'pendiente', ingresado_por: Auth.jugador ? Auth.jugador.id : null
-            });
-          });
-        });
-      });
+      // Bloquear si ya hay resultados cargados
+      const existentes = await GL.partidos({ torneo_id: torneo.id });
+      const conResultado = existentes.filter(p =>
+        Number(p.jornada) <= 22 && p.estado !== 'pendiente');
+      if (conResultado.length) {
+        GL.notificar(
+          'Ya hay ' + conResultado.length + ' resultado(s) cargado(s). ' +
+          'No se puede regenerar el calendario. Creá una nueva temporada para empezar de cero.',
+          'error'
+        );
+        return;
+      }
 
-      try {
-        for (const row of jornadasRows) {
-          const { error } = await sb.from('jornadas').upsert(row, { onConflict: 'torneo_id,grupo_id,numero' });
-          if (error && !/duplicate|unique/i.test(error.message)) console.warn('jornada:', error.message);
-        }
-        for (let i = 0; i < partidosRows.length; i += 60) {
-          const { error } = await sb.from('partidos').insert(partidosRows.slice(i, i + 60));
-          if (error) throw error;
-        }
-        GL.invalidar();
-        await GL.cargarContexto(true);
-        GL.notificar('Fixture generado: ' + partidosRows.length + ' partidos.', 'exito');
-        Mod.jornada = 1;
-        Mod.render(el);
-      } catch (e) { GL.notificar('No se pudo generar el fixture: ' + e.message, 'error'); }
+      // ── Previsualización antes de confirmar ───────────────────────────────
+      await mostrarPrevisualizacion(conteos, existentes.length, torneo, el);
     }
   };
+  /* ── Pantalla de previsualización antes de generar ──────────────────────── */
+  function mostrarPrevisualizacion(conteos, pendientesExistentes, torneo, el) {
+    return new Promise(resolve => {
+      // Simular el fixture en memoria para mostrarlo antes de confirmar
+      const previews = conteos.map(({ g, jugadores }) => {
+        const ids = jugadores.map(j => j.id);
+        const rondas = roundRobin(ids); // 11 rondas de ida
+        // Jornada 1 (ida) y jornada 12 (vuelta) como muestra
+        const j1 = rondas[0] || [];
+        const j12 = j1.map(([a, b]) => [b, a]); // vuelta invertida
+        return { g, jugadores, j1, j12, totalPartidos: rondas.length * j1.length * 2 };
+      });
+
+      const htmlGrupo = ({ g, jugadores, j1, j12, totalPartidos }) => {
+        const letra = GL.letraGrupo(g);
+        const htmlJornada = (partidos, nJornada) =>
+          '<div style="margin-bottom:8px">' +
+          '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px">Jornada ' + nJornada + ' (muestra)</div>' +
+          partidos.map(([a, b]) =>
+            '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 6px;background:var(--bg-secondary);border-radius:4px;margin-bottom:2px">' +
+            '<span style="color:var(--text-primary)">' + esc(GL.nombreJugador(a)) + '</span>' +
+            '<span style="color:var(--text-muted)">vs</span>' +
+            '<span style="color:var(--text-primary)">' + esc(GL.nombreJugador(b)) + '</span></div>'
+          ).join('') + '</div>';
+
+        return '<div style="margin-bottom:16px">' +
+          '<div style="font-weight:600;font-family:Rajdhani;font-size:15px;margin-bottom:8px;color:var(--accent-gold)">' +
+            icono('users', 14) + ' Grupo ' + letra + ' — ' + jugadores.length + ' jugadores · ' + totalPartidos + ' partidos · 22 jornadas</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+            htmlJornada(j1, 1) +
+            htmlJornada(j12, 12) +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">' +
+            icono('info', 12) + ' Jornadas 1–11: ida · Jornadas 12–22: vuelta con equipos invertidos' +
+          '</div></div>';
+      };
+
+      const advertencia = pendientesExistentes > 0
+        ? '<div style="background:rgba(245,197,24,.12);border:1px solid var(--accent-gold);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px">' +
+            icono('triangle-alert', 14) +
+            ' <strong>Advertencia:</strong> ya existen <strong>' + pendientesExistentes +
+            ' partidos pendientes</strong>. Se eliminarán y se reemplazarán por el nuevo calendario.' +
+          '</div>'
+        : '';
+
+      const infoReglas =
+        '<div style="background:var(--bg-hover);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text-secondary)">' +
+          '<strong style="color:var(--text-primary)">El sistema garantiza:</strong><br>' +
+          '· Exactamente 12 jugadores por grupo<br>' +
+          '· 6 partidos por jornada · 22 jornadas · 132 partidos por grupo · 264 en total<br>' +
+          '· Cada par se enfrenta exactamente 2 veces (ida y vuelta)<br>' +
+          '· La vuelta invierte local y visitante<br>' +
+          '· La operación es atómica: si algo falla, no queda nada a medias' +
+        '</div>';
+
+      GL.abrirModal({
+        titulo: 'Previsualización del calendario',
+        ancho: 'lg',
+        cuerpo:
+          infoReglas +
+          advertencia +
+          previews.map(htmlGrupo).join('') +
+          '<p style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:8px">' +
+            'Se muestran las jornadas 1 y 12 como muestra. La generación completa la realiza PostgreSQL de forma validada.' +
+          '</p>',
+        acciones:
+          '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
+          '<button type="button" class="btn" id="prev-confirmar">' +
+            icono('sparkles', 16) + 'Confirmar y generar</button>',
+        onAbrir(fondo, cerrar) {
+          fondo.querySelector('#prev-confirmar').addEventListener('click', async () => {
+            const btn = fondo.querySelector('#prev-confirmar');
+            btn.disabled = true;
+            btn.innerHTML = icono('loader-circle', 16, 'girando') + 'Generando…';
+            cerrar();
+            await ejecutarGeneracion(torneo, el);
+            resolve();
+          });
+          fondo.querySelector('[data-cerrar]').addEventListener('click', () => { cerrar(); resolve(); });
+        }
+      });
+      iniciarIconos();
+    });
+  }
+
+  async function ejecutarGeneracion(torneo, el) {
+    GL.notificar('Generando calendario…', 'info', 'loader-circle');
+    try {
+      const { data, error } = await sb.rpc('gl_generar_fixture', {
+        p_torneo_id: torneo.id
+      });
+      if (error) throw new Error(error.message);
+      const resultado = data || {};
+      if (resultado.ok === false) {
+        GL.notificar(resultado.mensaje || 'No se pudo generar el calendario.', 'error');
+        return;
+      }
+      // Mostrar detalle de grupos si está disponible
+      const detalle = Array.isArray(resultado.detalle_grupos)
+        ? ' (' + resultado.detalle_grupos.map(d => d.grupo + ': ' + d.partidos + ' partidos').join(' · ') + ')'
+        : '';
+      GL.invalidar();
+      await GL.cargarContexto(true);
+      GL.notificar((resultado.mensaje || 'Calendario generado correctamente.') + detalle, 'exito', 'calendar-check');
+      Mod.jornada = 1;
+      Mod.render(el);
+    } catch (e) {
+      console.error('gl_generar_fixture:', e);
+      GL.notificar('No se pudo generar el calendario: ' + e.message, 'error');
+    }
+  }
 
   /* Circle method: devuelve 11 rondas de 6 cruces (BYE incluido si hace falta). */
   function roundRobin(ids) {
@@ -150,7 +232,7 @@
   }
 
   function htmlPartidos(partidos) {
-    if (!partidos.length) return GL.vacio('No hay partidos en esta jornada. Generá el fixture desde el botón superior.',
+    if (!partidos.length) return GL.vacio('No hay partidos en esta jornada. Generá el calendario desde el botón superior.',
       'calendar-x', null);
     const yo = Auth.jugador && Auth.jugador.id;
     const visibles = partidos.filter(p => !Mod.soloMios || p.local_id === yo || p.visitante_id === yo);

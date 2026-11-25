@@ -113,17 +113,94 @@ const GL = {
     return '<span class="' + esc(clase || 'avatar') + '" style="' + size + '">' + esc(GL.iniciales(nombre)) + '</span>';
   },
 
-  telefonoValido(telefono) {
-    return String(telefono || '').replace(/[^\d]/g, '');
+  // ── Servicio común de teléfonos ──────────────────────────────────────
+  // Punto de entrada único para normalizar, validar y formatear teléfonos.
+  // Todos los módulos (perfil, admin, mensajes, tabla) lo usan.
+  tel: {
+    // Devuelve el prefijo E.164 del país, o '' si el país no está en PAISES.
+    prefijo(codigoPais) {
+      const p = PAISES[String(codigoPais || '').toUpperCase()];
+      return p ? p.prefijo : '';
+    },
+
+    // Normaliza un número escrito por el usuario al formato E.164 (solo dígitos, sin +).
+    // Usa el país del jugador como referencia para agregar el prefijo cuando falta.
+    // Devuelve '' si no puede producir un número válido.
+    normalizar(telefono, codigoPais) {
+      const raw   = String(telefono || '').replace(/\D/g, '');
+      if (!raw) return '';
+      const pais  = PAISES[String(codigoPais || '').toUpperCase()];
+      const pref  = pais ? pais.prefijo : '';
+      const digs  = pais ? pais.digitos : 0;
+
+      // Ya trae prefijo completo (empieza con el prefijo del país)
+      if (pref && raw.startsWith(pref) && raw.length === pref.length + digs) return raw;
+
+      // Trae un 0 adelante (formato local con cero)
+      if (pref && digs && raw.startsWith('0') && raw.length === digs + 1) return pref + raw.slice(1);
+
+      // Número local sin prefijo, longitud correcta según el país
+      if (pref && digs && raw.length === digs) return pref + raw;
+
+      // Número que ya tiene algún prefijo pero no es el del país
+      // (ej: alguien puso +1 siendo de Nicaragua) — lo dejamos como está
+      if (raw.length >= 10 && raw.length <= 15) return raw;
+
+      return ''; // demasiado corto o imposible de interpretar
+    },
+
+    // Valida que el número ingresado sea coherente con el país seleccionado.
+    // Devuelve { ok: true } o { ok: false, mensaje: '...' }
+    validar(telefono, codigoPais) {
+      if (!telefono) return { ok: true }; // teléfono es opcional
+      const normalizado = GL.tel.normalizar(telefono, codigoPais);
+      if (!normalizado) return { ok: false, mensaje: 'El número no parece válido para ese país.' };
+      const pais = PAISES[String(codigoPais || '').toUpperCase()];
+      if (pais) {
+        const local = normalizado.startsWith(pais.prefijo)
+          ? normalizado.slice(pais.prefijo.length)
+          : normalizado;
+        if (local.length !== pais.digitos) {
+          return {
+            ok: false,
+            mensaje: 'Para ' + pais.nombre + ' el número debe tener ' + pais.digitos + ' dígitos locales.'
+          };
+        }
+      }
+      return { ok: true };
+    },
+
+    // Formatea para mostrar: agrega el + y un espacio después del prefijo.
+    // Ej: "50588112233" → "+505 88112233"
+    formatear(e164, codigoPais) {
+      const n = String(e164 || '').replace(/\D/g, '');
+      if (!n) return '';
+      const pais = PAISES[String(codigoPais || '').toUpperCase()];
+      if (pais && n.startsWith(pais.prefijo)) {
+        return '+' + pais.prefijo + ' ' + n.slice(pais.prefijo.length);
+      }
+      return '+' + n;
+    }
   },
 
-  linkWhatsapp(telefono, nombre) {
-    const d = GL.telefonoValido(telefono);
-    if (d.length < 7) return '';
-    const numero = d.length === 8 ? '505' + d : d;
-    return '<a class="wa-link" href="https://wa.me/' + esc(numero) + '" target="_blank" rel="noopener noreferrer" ' +
-      'title="Escribir a ' + esc(nombre || 'este jugador') + ' por WhatsApp">' +
-      icono('message-circle', 13) + esc(String(telefono)) + '</a>';
+  // Genera el enlace wa.me a partir del objeto jugador (con j.pais para normalizar).
+  // Retrocompatible: también acepta (string, nombre) como antes.
+  linkWhatsapp(jugador, nombreFallback) {
+    let telefono = '', codigoPais = '', nombre = nombreFallback || '';
+    if (jugador && typeof jugador === 'object') {
+      telefono   = String(jugador.telefono || '');
+      codigoPais = String(jugador.pais     || '');
+      nombre     = nombreFallback || jugador.nombre_usuario || '';
+    } else {
+      telefono = String(jugador || '');
+    }
+    const numero = GL.tel.normalizar(telefono, codigoPais);
+    if (!numero) return '';
+    const display = GL.tel.formatear(numero, codigoPais) || ('+' + numero);
+    return '<a class="wa-link" href="https://wa.me/' + esc(numero) +
+      '" target="_blank" rel="noopener noreferrer" ' +
+      'title="Escribir a ' + esc(nombre) + ' por WhatsApp">' +
+      icono('message-circle', 13) + esc(display) + '</a>';
   },
 
   /* ---------- Notificaciones ---------- */
@@ -255,9 +332,19 @@ const GL = {
   },
 
   /* ---------- Consultas a Supabase ---------- */
+  // Columnas seguras para leer según la tabla.
+  // 'jugadores' solo lo lee el admin (por RLS); no necesita filtrar aquí.
+  // 'jugadores_publicos' es la vista ya filtrada en la base de datos.
+  _columnas: {
+    jugadores:         'id,nombre_usuario,pais,avatar_url,activo,suspendido,rol,torneo_id,numero,telefono,email,user_id,super_admin,created_at',
+    jugadores_publicos:'id,nombre_usuario,pais,avatar_url,activo,suspendido,rol,torneo_id,numero',
+    sanciones:         'id,jugador_id,torneo_id,tipo,puntos_descuento,partidos_suspension,motivo,created_at'
+  },
+
   async consultar(tabla, fn) {
     if (typeof sb === 'undefined' || !sb) return { data: [], error: new Error('Supabase no configurado') };
-    let q = sb.from(tabla).select('*');
+    const cols = GL._columnas[tabla] || '*';
+    let q = sb.from(tabla).select(cols);
     try { if (fn) q = fn(q); } catch (e) { return { data: [], error: e }; }
     return q;
   },
@@ -271,7 +358,9 @@ const GL = {
       const [torneos, grupos, jugadores, miembros, jornadas, clasificacion, sanciones] = await Promise.all([
         GL.consultar('torneos', q => q.eq('estado', 'activo').order('created_at', { ascending: false }).limit(1)),
         GL.consultar('grupos', q => q.order('nombre')),
-        GL.consultar('jugadores', q => q.order('nombre_usuario')),
+        GL.esAdmin()
+          ? GL.consultar('jugadores', q => q.order('nombre_usuario'))
+          : GL.consultar('jugadores_publicos', q => q.order('nombre_usuario')),
         GL.consultar('grupo_jugadores'),
         GL.consultar('jornadas', q => q.order('numero', { ascending: true })),
         GL.consultar('clasificacion', q => q.order('pts', { ascending: false })),
@@ -294,6 +383,21 @@ const GL = {
         clasificacion: filtrar(clasificacion.data || []),
         sanciones: filtrar(sanciones.data || [])
       };
+      // Filtrar miembros al torneo activo usando los grupos ya filtrados
+      const gruposDelTorneo = new Set(GL.ctx.grupos.map(g => g.id));
+      GL.ctx.miembros = (miembros.data || []).filter(m => gruposDelTorneo.has(m.grupo_id));
+
+      // Detectar jugadores en dos grupos del mismo torneo (no debería pasar, pero lo bloqueamos)
+      const jugadorEnGrupo = {};
+      GL.ctx.miembros = GL.ctx.miembros.filter(m => {
+        if (jugadorEnGrupo[m.jugador_id]) {
+          console.warn('[GL] Jugador ' + m.jugador_id + ' aparece en más de un grupo del torneo activo. Se ignora la relación duplicada.');
+          return false;
+        }
+        jugadorEnGrupo[m.jugador_id] = m.grupo_id;
+        return true;
+      });
+
       GL._miembrosCache = {};
       GL.ctx.miembros.forEach(m => {
         if (!GL._miembrosCache[m.grupo_id]) GL._miembrosCache[m.grupo_id] = [];
@@ -336,10 +440,17 @@ const GL = {
   jugadores(grupoId) {
     let arr = GL.ctx.jugadores.filter(j => j.activo !== false);
     if (grupoId) {
+      // Siempre filtrar: si el grupo existe pero está vacío → array vacío
       const ids = new Set(GL._miembrosCache && GL._miembrosCache[grupoId] ? GL._miembrosCache[grupoId] : []);
-      if (ids.size) arr = arr.filter(j => ids.has(j.id));
+      arr = arr.filter(j => ids.has(j.id));
     }
     return arr;
+  },
+
+  // Jugadores activos sin grupo asignado en el torneo actual
+  jugadoresSinGrupo() {
+    const conGrupo = new Set(GL.ctx.miembros.map(m => m.jugador_id));
+    return GL.ctx.jugadores.filter(j => j.activo !== false && !conGrupo.has(j.id));
   },
   jugador(id) { return GL.ctx.jugadores.find(j => j.id === id) || null; },
   nombreJugador(id) {
@@ -349,8 +460,26 @@ const GL = {
   paisJugador(id) { const j = GL.jugador(id); return j ? j.pais : ''; },
 
   grupoDeJugador(id) {
+    // ctx.miembros ya está filtrado al torneo activo desde cargarContexto
     const m = (GL.ctx.miembros || []).find(x => x.jugador_id === id);
     return m ? GL.grupo(m.grupo_id) : null;
+  },
+
+  // Historial de grupos de un jugador en temporadas anteriores
+  async historialGruposJugador(jugadorId) {
+    if (!sb) return [];
+    const { data, error } = await sb
+      .from('grupo_jugadores')
+      .select('grupo_id, grupos(nombre, torneo_id, torneos(temporada, nombre))')
+      .eq('jugador_id', jugadorId);
+    if (error) { console.warn('[GL] historialGrupos:', error.message); return []; }
+    return (data || []).map(r => ({
+      grupo_id:   r.grupo_id,
+      grupo:      r.grupos ? r.grupos.nombre : '—',
+      torneo_id:  r.grupos ? r.grupos.torneo_id : null,
+      temporada:  r.grupos && r.grupos.torneos ? r.grupos.torneos.temporada : '—',
+      liga:       r.grupos && r.grupos.torneos ? r.grupos.torneos.nombre : '—'
+    }));
   },
 
   faltas(jugadorId) { return GL.ctx.sanciones.filter(s => s.jugador_id === jugadorId).length; },
@@ -456,6 +585,29 @@ const GL = {
 
   /* Los partidos resueltos por expulsión se guardan como 1-0 y no suman valla invicta. */
   esResolucionExpulsion(p) { return /^expulsion_/.test(String((p && p.estado) || '')); },
+
+  /* Devuelve true si el partido fue resuelto de forma administrativa,
+     es decir, que el marcador no refleja goles reales marcados en FC Mobile. */
+  esAdministrativo(p) {
+    const e = String((p && p.estado) || '');
+    return e === 'walkover_local' || e === 'walkover_visitante' ||
+           e === 'doble_ausencia' || /^expulsion_/.test(e);
+  },
+
+  /* Goles efectivamente marcados dentro del juego en FC Mobile.
+     Para partidos administrativos devuelve {gf:0, gc:0} porque
+     nunca se jugaron — el marcador es una resolución reglamentaria.
+     Usar para estadísticas de goleadores y rendimiento deportivo.
+     Usar GL.resultado() para clasificación y puntos. */
+  golesReales(p) {
+    if (!p || GL.esAdministrativo(p) || p.estado === 'pendiente') {
+      return { gf: 0, gc: 0 };
+    }
+    return {
+      gf: Number(p.goles_local)    || 0,
+      gc: Number(p.goles_visitante) || 0
+    };
+  },
 
   /* ---------- Formato ---------- */
   fecha(v) {

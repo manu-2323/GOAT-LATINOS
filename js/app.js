@@ -131,6 +131,10 @@ window.addEventListener('gl:auth', async () => {
   }
   if (Auth.usuario && PantallaAuth.overlay) PantallaAuth.ocultar(false);
   await mostrar(_rutaActual);
+  // Mostrar tour de bienvenida al nuevo jugador (solo una vez)
+  if (Auth.usuario && !GL.esAdmin() && window.OnboardingTour) {
+    setTimeout(() => OnboardingTour.iniciar(false), 600);
+  }
 });
 window.addEventListener('load', arrancar);
 

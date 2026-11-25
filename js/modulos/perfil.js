@@ -15,8 +15,10 @@
         if (!GL.torneo()) { el.innerHTML = GL.vacio('No hay torneo activo todavía.', 'trophy', null); iniciarIconos(); return; }
         if (!Auth.jugador || (!GL.esAdmin() && !GL.grupoDeJugador(Auth.jugador.id))) {
           el.innerHTML = pendiente();
-          const btn = el.querySelector('[data-actualizar-nombre]');
-          if (btn) btn.addEventListener('click', () => editarPerfil(el, Auth.jugador || {}));
+        const btn = el.querySelector('[data-actualizar-nombre]');
+        if (btn) btn.addEventListener('click', () => editarPerfil(el, Auth.jugador || {}));
+        const btnTour = el.querySelector('[data-ver-tour]');
+        if (btnTour && window.OnboardingTour) btnTour.addEventListener('click', () => OnboardingTour.iniciar(true));
           iniciarIconos(); return;
         }
         if (!Mod.jugadorId || !(Auth.jugador.rol === 'admin' && Mod.jugadorId !== Auth.jugador.id)) {
@@ -25,6 +27,7 @@
         const j = GL.jugador(Mod.jugadorId) || Auth.jugador;
         const todos = await GL.partidos({ torneo_id: GL.torneo().id });
         const mios = todos.filter(p => p.local_id === j.id || p.visitante_id === j.id);
+        const rend = EST.calcularRendimiento(mios, j.id);
         const fila = GL.clasificacion().find(c => c.jugador_id === j.id) || {};
         const pos = GL.posicion(j.id);
         const grupo = GL.grupoDeJugador(j.id);
@@ -38,9 +41,13 @@
                   esc(x.nombre_usuario) + '</option>').join('') + '</select></label>' : '') +
               (Mod.jugadorId === Auth.jugador.id ? '<button type="button" class="btn sec" data-editar>' +
                 icono('pencil', 15) + 'Editar perfil</button>' : '') +
+              (Mod.jugadorId === Auth.jugador.id && window.OnboardingTour ? '<button type="button" class="btn sec" data-ver-tour>' +
+                icono('help-circle', 15) + 'Ver tour</button>' : '') +
               (Mod.jugadorId === Auth.jugador.id ? '<button type="button" class="btn peligro" data-eliminar-cuenta>' +
                 icono('trash-2', 15) + 'Eliminar mi cuenta</button>' : '') +
             '</div></div>' +
+            (Mod.jugadorId === Auth.jugador.id && window.OnboardingTour
+              ? OnboardingTour.htmlBarraPerfil(j) : '') +
           '<div class="card"><div class="header-perfil">' +
             GL.avatarHTML(j, 'avatar') +
             '<div><h2>' + esc(j.nombre_usuario) + '</h2>' +
@@ -48,28 +55,29 @@
                 '<span class="pais-celda">' + GL.banderaHTML(j.pais, 18) +
                   '<span class="codigo-pais">' + esc(j.pais || '—') + '</span></span>' +
                 '<span class="muted" style="font-size:12px">' + esc(GL.horarioPais(j.pais)) + '</span>' +
-                (j.telefono ? GL.linkWhatsapp(j.telefono, j.nombre_usuario) : '') +
+                 ((j.telefono && (GL.esAdmin() || (Auth.usuario && j.user_id === Auth.usuario.id)))
+                  ? GL.linkWhatsapp(j, j.nombre_usuario) : '') +
                 (pos ? GL.badge('Posición ' + pos + ' · Grupo ' + GL.letraGrupo(grupo), 'gold', 'trophy') : '') +
                 (j.suspendido || j.activo === false ? GL.badge('Suspendido', 'red', 'triangle-alert') : GL.badge('Activo', 'green', 'circle-check')) +
               '</div></div></div></div>' +
           '<div class="grid cuatro">' +
-            statCard('Partidos jugados', 'calendar-days', fila.pj || 0) +
-            statCard('Victorias', 'circle-check-big', fila.pg || 0, 'verde-txt') +
-            statCard('Empates', 'equal', fila.pe || 0) +
-            statCard('Derrotas', 'circle-x', fila.pp || 0, 'rojo-txt') +
+            statCard('Partidos jugados', 'calendar-days', rend.pj) +
+            statCard('Victorias', 'circle-check-big', rend.pg, 'verde-txt') +
+            statCard('Empates', 'equal', rend.pe) +
+            statCard('Derrotas', 'circle-x', rend.pp, 'rojo-txt') +
           '</div>' +
           '<div class="grid tres">' +
-            statCard('Goles a favor', 'goal', fila.gf || 0) +
-            statCard('Goles en contra', 'shield-alert', fila.gc || 0) +
-            statCard('Diferencia de gol', 'trending-up', GL.signo(fila.dif)) +
-            statCard('Vallas en 0', 'shield', vallas(mios, j.id)) +
-            statCard('Tiros totales', 'crosshair', suma(mios, j.id, 'tiros_local', 'tiros_visitante')) +
-            statCard('Tiros a puerta', 'crosshair', suma(mios, j.id, 'tiros_puerta_local', 'tiros_puerta_visitante')) +
-            statCard('Promedio posesión', 'pie-chart', promedio(mios, j.id, 'posesion_local', 'posesion_visitante') + '%') +
-            statCard('Promedio precisión pase', 'route', promedio(mios, j.id, 'pase_local', 'pase_visitante') + '%') +
-            statCard('Racha actual', racha(mios, j.id).icono, racha(mios, j.id).texto) +
-            statCard('Mejor victoria', 'trophy', mejor(mios, j.id, true)) +
-            statCard('Peor derrota', 'trending-down', mejor(mios, j.id, false)) +
+            statCard('Goles a favor (reales)', 'goal', rend.gf) +
+            statCard('Goles en contra (reales)', 'shield-alert', rend.gc) +
+            statCard('Diferencia de gol', 'trending-up', GL.signo(rend.dif)) +
+            statCard('Vallas en 0', 'shield', rend.vallas) +
+            statCard('Tiros totales', 'crosshair', rend.tiros) +
+            statCard('Tiros a puerta', 'crosshair', rend.tirosPuerta) +
+            statCard('Promedio posesión', 'pie-chart', rend.promPos + '%') +
+            statCard('Promedio precisión pase', 'route', rend.promPase + '%') +
+            statCard('Racha actual', rend.racha.tipo === 'V' ? 'trending-up' : 'trending-down', rend.racha.texto) +
+            statCard('Mejor victoria', 'trophy', rend.mejorVictoria) +
+            statCard('Peor derrota', 'trending-down', rend.peorDerrota) +
             statCard('Puntos', 'award', fila.pts || 0, 'dorado') +
           '</div>' +
           '<div class="grid dos">' +
@@ -96,8 +104,10 @@
           el.querySelector('#h2h-resultado').innerHTML = riv.value ? h2h(mios, j.id, riv.value) : '<p class="vacio-mensaje">Elegí un rival para ver el historial.</p>';
           iniciarIconos();
         });
-        const nb = el.querySelector('[data-editar]');
-        if (nb) nb.addEventListener('click', () => editarPerfil(el, j));
+        const nb = el.querySelector('[data-editar]')?.addEventListener('click', () => editarPerfil(el, j));
+      el.querySelector('[data-ver-tour]')?.addEventListener('click', () => window.OnboardingTour && OnboardingTour.iniciar(true));
+        const dt = el.querySelector('[data-ver-tour]');
+        if (dt) dt.addEventListener('click', () => OnboardingTour.iniciar(false));
         const dc = el.querySelector('[data-eliminar-cuenta]');
         if (dc) dc.addEventListener('click', () => eliminarCuenta(el));
         enlazar(el);
@@ -178,12 +188,21 @@
         });
         fondo.querySelector('#perfil-guardar').addEventListener('click', async () => {
           const boton = fondo.querySelector('#perfil-guardar');
+          const telRaw = fondo.querySelector('#perfil-tel').value.trim();
+          const paisVal = pais.value;
+
+          // Validar teléfono contra el país seleccionado
+          const v = GL.tel.validar(telRaw, paisVal);
+          if (!v.ok) {
+            GL.notificar(v.mensaje, 'advertencia'); return;
+          }
+
           boton.disabled = true;
           try {
             const cambios = {
               nombre_usuario: fondo.querySelector('#perfil-nombre').value,
-              pais: pais.value,
-              telefono: fondo.querySelector('#perfil-tel').value
+              pais: paisVal,
+              telefono: telRaw ? GL.tel.normalizar(telRaw, paisVal) : ''
             };
             if (!Auth.jugador) {
               await Auth.actualizarNombreJuego(cambios.nombre_usuario);
@@ -248,7 +267,10 @@
     return partidos.reduce((a, p) => a + (Number(esLocal(p, id) ? p[kLocal] : p[kVisita]) || 0), 0);
   }
   function promedio(partidos, id, kLocal, kVisita) {
-    const jugados = partidos.filter(p => p.estado !== 'pendiente');
+    // Solo partidos realmente disputados en FC Mobile.
+    // Walkovers y resoluciones administrativas no generan datos de posesión ni pase,
+    // incluirlos inflaría o distorsionaría los promedios del jugador.
+    const jugados = partidos.filter(p => p.estado === 'jugado' && !GL.esAdministrativo(p));
     return jugados.length ? Math.round(suma(jugados, id, kLocal, kVisita) / jugados.length) : 0;
   }
   function racha(partidos, id) {

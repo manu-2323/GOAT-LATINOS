@@ -131,27 +131,53 @@
     tabla.push('════════════════════════════════════════');
     const partidos = (await GL.partidos({ torneo_id: GL.torneo().id, jornada, grupo_id: grupoId }))
       .filter(p => p.estado !== 'pendiente');
-    const goles = partidos.reduce((a, p) => a + (Number(p.goles_local) || 0) + (Number(p.goles_visitante) || 0), 0);
-    const mejores = partidos.slice().sort((a, b) =>
-      ((Number(b.goles_local) || 0) + (Number(b.goles_visitante) || 0)) -
-      ((Number(a.goles_local) || 0) + (Number(a.goles_visitante) || 0)))[0];
+    // Separar partidos reales de administrativos para estadísticas correctas
+    const jugados     = partidos.filter(p => p.estado === 'jugado');
+    const admin       = partidos.filter(p => GL.esAdministrativo(p));
+
+    const golesReales = jugados.reduce((a, p) => {
+      const r = GL.golesReales(p);
+      return a + r.gf + r.gc;
+    }, 0);
+
+    // Mejor partido: solo entre partidos realmente jugados (más goles en FC Mobile)
+    const mejores = jugados.slice().sort((a, b) => {
+      const ra = GL.golesReales(a), rb = GL.golesReales(b);
+      return (rb.gf + rb.gc) - (ra.gf + ra.gc);
+    })[0];
+
     tabla.push('', 'ESTADÍSTICAS DE LA JORNADA',
-      '· Goles totales: ' + goles,
-      '· Partidos jugados: ' + partidos.length);
+      '· Partidos jugados en FC Mobile: ' + jugados.length +
+        (admin.length ? ' (' + admin.length + ' resueltos por reglamento)' : ''),
+      '· Goles marcados en FC Mobile: ' + golesReales);
+
     if (mejores) {
-      tabla.push('· Mejor partido: ' + GL.nombreJugador(mejores.local_id) + ' ' + GL.resultado(mejores).texto +
+      const rm = GL.golesReales(mejores);
+      tabla.push('· Mejor partido: ' +
+        GL.nombreJugador(mejores.local_id) + ' ' + rm.gf + ' - ' + rm.gc +
         ' ' + GL.nombreJugador(mejores.visitante_id));
     }
+
+    // Goleadores: solo goles reales marcados en FC Mobile, nunca administrativos
     const porGoles = {};
-    partidos.forEach(p => {
-      const r = GL.resultado(p);
-      porGoles[p.local_id] = (porGoles[p.local_id] || 0) + r.gf;
+    jugados.forEach(p => {
+      const r = GL.golesReales(p);
+      porGoles[p.local_id]     = (porGoles[p.local_id]     || 0) + r.gf;
       porGoles[p.visitante_id] = (porGoles[p.visitante_id] || 0) + r.gc;
     });
-    const topGoles = Object.entries(porGoles).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const topGoles = Object.entries(porGoles)
+      .filter(([, g]) => g > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
     if (topGoles.length) {
-      tabla.push('· Más goles: ' + topGoles.map(([id, g]) =>
+      tabla.push('· Más goles en FC Mobile: ' + topGoles.map(([id, g]) =>
         bandera(GL.paisJugador(id)) + ' ' + GL.nombreJugador(id) + ' (' + g + ')').join(', '));
+    }
+    if (admin.length) {
+      tabla.push('· Resultados por reglamento: ' + admin.map(p =>
+        GL.nombreJugador(p.local_id) + ' vs ' + GL.nombreJugador(p.visitante_id) +
+        ' (' + (ESTADOS_PARTIDO[p.estado] && ESTADOS_PARTIDO[p.estado].label || p.estado) + ')'
+      ).join(', '));
     }
     tabla.push('', 'Resultados oficiales publicados. ¡Nos vemos en la próxima jornada!');
     return tabla.join('\n');

@@ -60,60 +60,31 @@
   };
 
   function calcular(partidos) {
-    const stats = {};
-    const asegurar = id => stats[id] || (stats[id] = {
-      id, pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, dif: 0,
-      vallas: 0, tiros: 0, tirosPuerta: 0, posesion: 0, pase: 0,
-      puntos: 0, resultados: []
+    const cl = EST.calcularClasificacion(partidos);
+    const gr = EST.calcularGolesReales(partidos);
+    const prom = EST.calcularPromedios(partidos);
+    const vallas = EST.calcularVallasInvictas(partidos);
+
+    const ids = new Set([...cl.map(s => s.id), ...gr.map(s => s.id)]);
+    return Array.from(ids).map(id => {
+      const c = cl.find(s => s.id === id) || { pj: 0, pg: 0, pe: 0, pp: 0, pts: 0, gf: 0, gc: 0, dif: 0, resultados: [] };
+      const g = gr.find(s => s.id === id) || { gf: 0, gc: 0, dif: 0 };
+      const po = prom.find(s => s.id === id) || { promPos: 0, promPase: 0 };
+      const va = vallas.find(s => s.id === id) || { vallas: 0 };
+      const rachaData = EST.calcularRachas(c.resultados);
+      return {
+        id,
+        pj: c.pj, g: c.pg, e: c.pe, p: c.pp, puntos: c.pts,
+        // gf/gc para ranking deportivo = goles reales (FC Mobile)
+        gf: g.gf, gc: g.gc, dif: g.dif,
+        vallas: va.vallas,
+        promPos: po.promPos, promPase: po.promPase,
+        resultados: c.resultados,
+        racha: rachaData.actual,
+        mejorRacha: rachaData.mejorVictorias,
+        n: rachaData.actual.n
+      };
     });
-    const ordenados = partidos.slice().sort((a, b) =>
-      (Number(a.jornada) || 0) - (Number(b.jornada) || 0) ||
-      String(a.created_at || '').localeCompare(String(b.created_at || '')));
-
-    ordenados.forEach(p => {
-      const r = GL.resultado(p);
-      const l = asegurar(p.local_id), v = asegurar(p.visitante_id);
-      const puntosLocal = r.gf > r.gc ? 3 : r.gf === r.gc ? 1 : 0;
-      const puntosVisita = r.gc > r.gf ? 3 : r.gf === r.gc ? 1 : 0;
-      l.pj++; v.pj++;
-      l.gf += r.gf; l.gc += r.gc; l.dif += r.gf - r.gc; l.puntos += puntosLocal;
-      v.gf += r.gc; v.gc += r.gf; v.dif += r.gc - r.gf; v.puntos += puntosVisita;
-      if (puntosLocal === 3) l.g++; else if (puntosLocal === 1) l.e++; else l.p++;
-      if (puntosVisita === 3) v.g++; else if (puntosVisita === 1) v.e++; else v.p++;
-      l.tiros += Number(p.tiros_local) || 0; v.tiros += Number(p.tiros_visitante) || 0;
-      l.tirosPuerta += Number(p.tiros_puerta_local) || 0; v.tirosPuerta += Number(p.tiros_puerta_visitante) || 0;
-      l.posesion += Number(p.posesion_local) || 0; v.posesion += Number(p.posesion_visitante) || 0;
-      l.pase += Number(p.pase_local) || 0; v.pase += Number(p.pase_visitante) || 0;
-      // Los partidos resueltos por expulsión no suman valla invicta.
-      if (p.estado === 'jugado' && !GL.esResolucionExpulsion(p)) {
-        if (r.gc === 0) l.vallas++;
-        if (r.gf === 0) v.vallas++;
-      }
-      l.resultados.push(puntosLocal === 3 ? 'V' : puntosLocal === 1 ? 'E' : 'D');
-      v.resultados.push(puntosVisita === 3 ? 'V' : puntosVisita === 1 ? 'E' : 'D');
-    });
-
-    Object.values(stats).forEach(s => {
-      s.promPos = s.pj ? Math.round(s.posesion / s.pj) : 0;
-      s.promPase = s.pj ? Math.round(s.pase / s.pj) : 0;
-      s.racha = rachaActual(s.resultados);
-      s.mejorRacha = mejorRacha(s.resultados);
-    });
-    return Object.values(stats);
-  }
-
-  function rachaActual(resultados) {
-    if (!resultados.length) return { tipo: '—', texto: '—', n: 0 };
-    const ultimo = resultados[resultados.length - 1];
-    let n = 0;
-    for (let i = resultados.length - 1; i >= 0 && resultados[i] === ultimo; i--) n++;
-    return { tipo: ultimo, texto: ultimo + n, n };
-  }
-
-  function mejorRacha(resultados) {
-    let mejor = 0, actual = 0;
-    resultados.forEach(r => { actual = r === 'V' ? actual + 1 : 0; mejor = Math.max(mejor, actual); });
-    return mejor;
   }
 
   function top(lista, clave, n, ascendente) {

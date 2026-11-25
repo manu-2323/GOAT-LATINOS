@@ -20,24 +20,24 @@ const CONFIG = {
 /* Horario base de referencia: Nicaragua / Costa Rica (UTC-6), 11:00 AM – 9:00 PM.
    La bandera emoji se usa SOLO en textos generados para WhatsApp. */
 const PAISES = {
-  CR: { nombre: 'Costa Rica',  horario: '11:00 AM – 9:00 PM'    },
-  NI: { nombre: 'Nicaragua',   horario: '11:00 AM – 9:00 PM'    },
-  MX: { nombre: 'México',      horario: '11:00 AM – 9:00 PM'    },
-  GT: { nombre: 'Guatemala',   horario: '11:00 AM – 9:00 PM'    },
-  HN: { nombre: 'Honduras',    horario: '11:00 AM – 9:00 PM'    },
-  SV: { nombre: 'El Salvador', horario: '11:00 AM – 9:00 PM'    },
-  CO: { nombre: 'Colombia',    horario: '12:00 PM – 10:00 PM'   },
-  EC: { nombre: 'Ecuador',     horario: '12:00 PM – 10:00 PM'   },
-  PA: { nombre: 'Panamá',      horario: '12:00 PM – 10:00 PM'   },
-  PE: { nombre: 'Perú',        horario: '12:00 PM – 10:00 PM'   },
-  VE: { nombre: 'Venezuela',   horario: '12:30 PM – 10:30 PM'   },
-  BO: { nombre: 'Bolivia',     horario: '1:00 PM – 11:00 PM'    },
-  AR: { nombre: 'Argentina',   horario: '2:00 PM – 12:00 AM'    },
-  CL: { nombre: 'Chile',       horario: '2:00 PM – 12:00 AM'    },
-  PY: { nombre: 'Paraguay',    horario: '2:00 PM – 12:00 AM'    },
-  BR: { nombre: 'Brasil',      horario: '2:00 PM – 12:00 AM'    }
+  // prefijo: código de país E.164 (sin +), digitos: longitud esperada del número local
+  CR: { nombre: 'Costa Rica',  horario: '11:00 AM – 9:00 PM',  prefijo: '506', digitos: 8  },
+  NI: { nombre: 'Nicaragua',   horario: '11:00 AM – 9:00 PM',  prefijo: '505', digitos: 8  },
+  MX: { nombre: 'México',      horario: '11:00 AM – 9:00 PM',  prefijo: '52',  digitos: 10 },
+  GT: { nombre: 'Guatemala',   horario: '11:00 AM – 9:00 PM',  prefijo: '502', digitos: 8  },
+  HN: { nombre: 'Honduras',    horario: '11:00 AM – 9:00 PM',  prefijo: '504', digitos: 8  },
+  SV: { nombre: 'El Salvador', horario: '11:00 AM – 9:00 PM',  prefijo: '503', digitos: 8  },
+  CO: { nombre: 'Colombia',    horario: '12:00 PM – 10:00 PM', prefijo: '57',  digitos: 10 },
+  EC: { nombre: 'Ecuador',     horario: '12:00 PM – 10:00 PM', prefijo: '593', digitos: 9  },
+  PA: { nombre: 'Panamá',      horario: '12:00 PM – 10:00 PM', prefijo: '507', digitos: 8  },
+  PE: { nombre: 'Perú',        horario: '12:00 PM – 10:00 PM', prefijo: '51',  digitos: 9  },
+  VE: { nombre: 'Venezuela',   horario: '12:30 PM – 10:30 PM', prefijo: '58',  digitos: 10 },
+  BO: { nombre: 'Bolivia',     horario: '1:00 PM – 11:00 PM',  prefijo: '591', digitos: 8  },
+  AR: { nombre: 'Argentina',   horario: '2:00 PM – 12:00 AM',  prefijo: '54',  digitos: 10 },
+  CL: { nombre: 'Chile',       horario: '2:00 PM – 12:00 AM',  prefijo: '56',  digitos: 9  },
+  PY: { nombre: 'Paraguay',    horario: '2:00 PM – 12:00 AM',  prefijo: '595', digitos: 9  },
+  BR: { nombre: 'Brasil',      horario: '2:00 PM – 12:00 AM',  prefijo: '55',  digitos: 11 }
 };
-
 const ZONAS_HORARIAS = {
   temprano:  '11:00 AM – 9:00 PM',
   medio:     '12:00 PM – 10:00 PM',

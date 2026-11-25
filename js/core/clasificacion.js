@@ -1,92 +1,72 @@
 /* =====================================================================
    GOATS LEAGUE MANAGER — Cálculo de clasificación (helper compartido)
    Se llama siempre que se guarda un partido, una sanción o se cierra jornada.
+   El recálculo real ocurre en PostgreSQL vía RPC (recalcular_clasificacion).
    ===================================================================== */
 async function recalcularClasificacion(torneo_id, grupo_id) {
   if (!sb) throw new Error('Supabase no configurado');
+
   await GL.cargarContexto(true);
   const ctx = GL.ctx;
+
+  // ── 1. Resolver torneo_id ────────────────────────────────────────────
   const tid = torneo_id || (ctx.torneo && ctx.torneo.id);
   if (!tid) throw new Error('No hay torneo activo');
 
-  const jugadoresGrupo = grupo_id
-    ? ctx.jugadores.filter(j => (ctx.miembros || []).some(m => m.grupo_id === grupo_id && m.jugador_id === j.id))
-    : ctx.jugadores.slice();
+  // ── 2. Resolver grupo_id → siempre un UUID o null ───────────────────
+  let gid = null;
+  if (grupo_id) {
+    // Ya viene el UUID directo
+    gid = grupo_id;
+  } else {
+    // Inferir desde los miembros del contexto
+    const miembros = ctx.miembros || [];
+    if (miembros.length > 0 && ctx.jugadores && ctx.jugadores.length > 0) {
+      const primerJugador = ctx.jugadores[0];
+      const miembro = miembros.find(m => m.jugador_id === primerJugador.id);
+      // miembro.grupo_id es el UUID del grupo
+      gid = (miembro && typeof miembro.grupo_id === 'string') ? miembro.grupo_id : null;
+    }
+  }
 
-  const idsGrupo = new Set(jugadoresGrupo.map(j => j.id));
-  const gid = grupo_id || (jugadoresGrupo[0] && (ctx.miembros || []).find(m => m.jugador_id === jugadoresGrupo[0].id));
-
-  const [partidosTodos, sancionesTodas] = await Promise.all([
-    sb.from('partidos').select('*').eq('torneo_id', tid),
-    sb.from('sanciones').select('*').eq('torneo_id', tid)
-  ]);
-  if (partidosTodos.error) throw new Error(partidosTodos.error.message);
-
-  const jornadasMax = (ctx.torneo && Number(ctx.torneo.total_jornadas)) || CONFIG.JORNADAS_FASE_REGULAR;
-  const partidos = (partidosTodos.data || []).filter(p =>
-    p.estado !== 'pendiente' &&
-    Number(p.jornada) <= jornadasMax &&
-    idsGrupo.has(p.local_id) && idsGrupo.has(p.visitante_id) &&
-    (!grupo_id || p.grupo_id === grupo_id)
-  );
-  const sanciones = sancionesTodas.data || [];
-
-  const filas = jugadoresGrupo.map(j => {
-    const propios = partidos.filter(p => p.local_id === j.id || p.visitante_id === j.id);
-    let pj = 0, pg = 0, pe = 0, pp = 0, gf = 0, gc = 0;
-    propios.forEach(p => {
-      const r = GL.resultado(p);
-      if (r.pendiente) return;
-      pj++;
-      const aFavor = p.local_id === j.id ? r.gf : r.gc;
-      const enContra = p.local_id === j.id ? r.gc : r.gf;
-      gf += aFavor; gc += enContra;
-      if (aFavor > enContra) pg++; else if (aFavor === enContra) pe++; else pp++;
-    });
-    const dif = gf - gc;
-    const ptsPenalizacion = sanciones
-      .filter(s => s.jugador_id === j.id)
-      .reduce((a, s) => a + (Number(s.puntos_descuento) || 0), 0);
-    const brutos = pg * 3 + pe;
-    return {
-      torneo_id: tid,
-      grupo_id: (grupo_id || (ctx.miembros || []).find(m => m.jugador_id === j.id && ctx.grupos.some(g => g.id === m.grupo_id))?.grupo_id) || gid || null,
-      jugador_id: j.id,
-      pj, pg, pe, pp, gf, gc, dif,
-      pts: Math.max(0, brutos - ptsPenalizacion),
-      pts_penalizacion: ptsPenalizacion,
-      updated_at: new Date().toISOString()
-    };
+  // ── 3. Delegar el recálculo a PostgreSQL vía RPC ─────────────────────
+  //    La función SQL recalcular_clasificacion(p_torneo_id, p_grupo_id)
+  //    opera dentro de una transacción: si algo falla, conserva los datos
+  //    anteriores y devuelve un objeto { ok, error }.
+  const { data, error } = await sb.rpc('recalcular_clasificacion', {
+    p_torneo_id: tid,
+    p_grupo_id:  gid   // null = todos los grupos del torneo
   });
 
-  filas.sort((a, b) => b.pts - a.pts || b.dif - a.dif || b.gf - a.gf);
+  if (error) {
+    console.error('[Clasificación] RPC falló, clasificación anterior conservada:', error.message);
+    throw new Error('No se pudo actualizar la clasificación: ' + error.message);
+  }
 
-  const conflictos = ['jugador_id', 'torneo_id,jugador_id'];
-  let ultimo = null;
-  for (const on of conflictos) {
-    const { error } = await sb.from('clasificacion').upsert(filas, { onConflict: on });
-    if (!error) { ultimo = null; break; }
-    ultimo = error;
+  if (data && data.error) {
+    console.error('[Clasificación] Error interno del RPC:', data.error);
+    throw new Error('No se pudo actualizar la clasificación: ' + data.error);
   }
-  if (ultimo) {
-    // Último recurso: borrar las filas del grupo y volver a insertar.
-    if (gid) await sb.from('clasificacion').delete().eq('torneo_id', tid).eq('grupo_id', gid);
-    const { error } = await sb.from('clasificacion').insert(filas);
-    if (error) throw new Error(error.message);
-  }
+
   GL.invalidar();
   await GL.cargarContexto(true);
-  return filas;
+
+  // Devolver las filas actualizadas desde el contexto ya refrescado
+  const clasificacion = (ctx.clasificacion || []).filter(
+    c => c.torneo_id === tid && (!gid || c.grupo_id === gid)
+  );
+  return clasificacion;
 }
 
 async function recalcularTodosLosGrupos(torneo_id) {
   await GL.cargarContexto(true);
   const tid = torneo_id || (GL.torneo() && GL.torneo().id);
-  const grupos = GL.grupos();
-  for (const g of grupos) await recalcularClasificacion(tid, g.id);
-  return true;
+  if (!tid) throw new Error('No hay torneo activo');
+
+  // Pasar grupo_id = null para que el RPC procese todos los grupos del torneo
+  return recalcularClasificacion(tid, null);
 }
 
 GL.recalcularClasificacion = recalcularClasificacion;
-GL.recalcularTodo = recalcularTodosLosGrupos;
+GL.recalcularTodo          = recalcularTodosLosGrupos;
 window.recalcularClasificacion = recalcularClasificacion;

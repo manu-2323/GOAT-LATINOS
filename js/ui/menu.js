@@ -8,25 +8,27 @@ window.Modulos = Modulos;
 const SECCIONES = [
   { titulo: 'Competencia', items: [
     { id: 'tabla',        nombre: 'Tabla',          icono: 'layout-list',  nivel: 'publico' },
-    { id: 'fixture',      nombre: 'Fixture',        icono: 'calendar',     nivel: 'publico' },
+    { id: 'fixture',      nombre: 'Calendario',     icono: 'calendar',     nivel: 'publico' },
     { id: 'estadisticas', nombre: 'Estadísticas',   icono: 'bar-chart-2',  nivel: 'publico', modulo: 'stats-jornada' },
     { id: 'estadisticas-globales', nombre: 'Estadísticas globales', icono: 'chart-no-axes-column-increasing', nivel: 'publico', modulo: 'stats-globales' }
   ]},
   { titulo: 'Mi liga', items: [
-    { id: 'perfil',       nombre: 'Mi Perfil',      icono: 'user',         nivel: 'jugador' }
+    { id: 'perfil',          nombre: 'Mi Perfil',       icono: 'user',   nivel: 'jugador' },
+    { id: 'notificaciones',  nombre: 'Notificaciones',  icono: 'bell',   nivel: 'jugador' }
   ]},
   { titulo: 'Dirección del torneo', items: [
     { id: 'resultados',   nombre: 'Resultados',     icono: 'clipboard-check', nivel: 'admin' },
     { id: 'jornadas',     nombre: 'Jornadas',       icono: 'flag',         nivel: 'admin', modulo: 'admin', tab: 'jornadas' },
     { id: 'administracion', nombre: 'Administración', icono: 'shield',     nivel: 'admin', modulo: 'admin', tab: 'jugadores' },
     { id: 'eliminatorias', nombre: 'Eliminatorias', icono: 'git-merge',    nivel: 'publico' },
-    { id: 'mensajes',     nombre: 'Mensajes',       icono: 'message-square', nivel: 'admin' }
+    { id: 'mensajes',     nombre: 'Mensajes',       icono: 'message-square', nivel: 'admin' },
+    { id: 'auditoria',    nombre: 'Auditoría',      icono: 'shield-check',   nivel: 'admin', modulo: 'auditoria' }
   ]}
 ];
 
 const NAV_MOVIL = [
   { id: 'tabla', corto: 'Tabla' },
-  { id: 'fixture', corto: 'Fixture' },
+  { id: 'fixture', corto: 'Calendario' },
   { id: 'estadisticas', corto: 'Stats' },
   { id: 'estadisticas-globales', corto: 'Global' },
   { id: 'perfil', corto: 'Perfil' },
@@ -76,6 +78,23 @@ function dibujarNavMovil() {
   iniciarIconos();
 }
 
+function pintarCampana() {
+  const btn = document.getElementById('btn-notif');
+  if (!btn) return;
+  if (Auth.usuario && !GL.esAdmin()) {
+    btn.style.display = '';
+    btn.onclick = () => {
+      GL.modulo('notificaciones').then(m => m && m.abrirPanel()).catch(console.warn);
+    };
+    // Cargar conteo inicial
+    GL.modulo('notificaciones').then(m => {
+      if (m) { m._cargar().then(() => m._actualizarBadge()); }
+    }).catch(() => {});
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
 function pintarSesion() {
   const caja = document.getElementById('usuario-caja');
   const chip = document.getElementById('estado-sesion');
@@ -110,6 +129,7 @@ function pintarSesion() {
     });
   }
   iniciarIconos();
+  pintarCampana();
 }
 
 function pintarTemporada() {

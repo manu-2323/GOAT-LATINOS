@@ -94,10 +94,24 @@
         Object.entries(ESTADOS_PARTIDO).filter(([k]) => k !== 'pendiente').map(([k, v]) =>
           '<option value="' + k + '"' + (p.estado === k ? ' selected' : '') + '>' + v.label + '</option>').join('') +
       '</select></label>' +
-      '<details class="mt"><summary style="cursor:pointer;color:var(--text-secondary);font-size:12px">' + icono('chart-no-axes-column', 14) + ' Estadísticas avanzadas (opcional)</summary>' +
-        '<div class="campo-stats-grid mt">' + camposStats(p, cerrada) + '</div></details>' +
-      '<div class="barra-acciones mt" style="display:flex;gap:9px;justify-content:flex-end">' +
-        '<button type="button" class="btn" id="guardar"' + (cerrada ? ' disabled' : '') + '>' + icono('save', 17) + 'Confirmar y Guardar</button>' +
+      '<details class=\"mt\"><summary style=\"cursor:pointer;color:var(--text-secondary);font-size:12px\">' + icono('chart-no-axes-column', 14) + ' Estadísticas avanzadas (opcional)</summary>' +
+        '<div class=\"campo-stats-grid mt\">' + camposStats(p, cerrada) + '</div></details>' +
+      // Captura obligatoria en ingreso manual
+      (!cerrada ? (
+        '<div class=\"campo mt\">' +
+          '<span style=\"font-size:12px;color:var(--text-secondary)\">' + icono('image', 14) + ' Captura del partido' +
+            (p.captura_url ? ' <span class=\"badge green\" style=\"font-size:11px\">Ya tiene captura</span>' : ' <span class=\"badge red\" style=\"font-size:11px\">Obligatoria</span>') +
+          '</span>' +
+          '<div class=\"dropzone mini\" id=\"dropzone-manual\" style=\"margin-top:6px;padding:12px;border:1px dashed var(--border);border-radius:var(--radius);text-align:center;cursor:pointer\">' +
+            (Mod.archivo
+              ? icono('image-check', 20) + ' <span style=\"font-size:12px\">' + esc(Mod.archivo.name) + '</span>'
+              : icono('upload', 20) + ' <span style=\"font-size:12px\">Clic para adjuntar JPG/PNG (máx. 5 MB)</span>') +
+          '</div>' +
+          '<input type=\"file\" id=\"archivo-manual\" accept=\"image/jpeg,image/png\" class=\"oculto\">' +
+        '</div>'
+      ) : '') +
+      '<div class=\"barra-acciones mt\" style=\"display:flex;gap:9px;justify-content:flex-end\">' +
+        '<button type=\"button\" class=\"btn\" id=\"guardar\"' + (cerrada ? ' disabled' : '') + '>' + icono('save', 17) + 'Confirmar y Guardar</button>' +
       '</div></div>';
   }
 
@@ -159,6 +173,27 @@
 
   function enlazarPanel(panel, p) {
     const g = s => panel.querySelector(s);
+
+    // Dropzone de captura en modo manual
+    const dropzoneManual = g('#dropzone-manual');
+    const archivoManual  = g('#archivo-manual');
+    if (dropzoneManual && archivoManual) {
+      dropzoneManual.addEventListener('click', () => archivoManual.click());
+      dropzoneManual.addEventListener('dragover', e => { e.preventDefault(); dropzoneManual.style.borderColor = 'var(--accent-gold)'; });
+      dropzoneManual.addEventListener('dragleave', () => { dropzoneManual.style.borderColor = 'var(--border)'; });
+      dropzoneManual.addEventListener('drop', e => {
+        e.preventDefault();
+        dropzoneManual.style.borderColor = 'var(--border)';
+        const f = e.dataTransfer.files[0];
+        if (f && ['image/jpeg', 'image/png'].includes(f.type)) { Mod.archivo = f; pintarPanel(); }
+        else GL.notificar('Solo se aceptan JPG o PNG.', 'advertencia');
+      });
+      archivoManual.addEventListener('change', () => {
+        const f = archivoManual.files[0];
+        if (f) { Mod.archivo = f; pintarPanel(); }
+      });
+    }
+
     const selEstado = g('#estado');
     if (selEstado) selEstado.addEventListener('change', () => {
       const v = selEstado.value, gl = g('#g-local'), gv = g('#g-visita');
@@ -237,59 +272,125 @@
     }
   }
 
+  // ── Validación de estadísticas en frontend ──────────────────
+  function validarStats(panel, estado) {
+    // En walkover/doble ausencia no hay stats que validar
+    if (estado && estado !== 'jugado') return null;
+
+    const n = id => { const el = panel.querySelector('#' + id); return el && el.value !== '' ? Number(el.value) : null; };
+
+    const tL  = n('tiros_local'),        tpL = n('tiros_puerta_local');
+    const tV  = n('tiros_visitante'),    tpV = n('tiros_puerta_visitante');
+    const posL = n('posesion_local'),    posV = n('posesion_visitante');
+    const paL  = n('pase_local'),        paV  = n('pase_visitante');
+
+    if (tL  !== null && tL  < 0) return 'Tiros local no puede ser negativo.';
+    if (tV  !== null && tV  < 0) return 'Tiros visitante no puede ser negativo.';
+    if (tpL !== null && tpL < 0) return 'Tiros a puerta local no puede ser negativo.';
+    if (tpV !== null && tpV < 0) return 'Tiros a puerta visitante no puede ser negativo.';
+    if (tL  !== null && tpL !== null && tpL > tL)  return 'Tiros a puerta local no puede superar los tiros totales.';
+    if (tV  !== null && tpV !== null && tpV > tV)  return 'Tiros a puerta visitante no puede superar los tiros totales.';
+    if (posL !== null && (posL < 0 || posL > 100)) return 'Posesión local debe estar entre 0 y 100.';
+    if (posV !== null && (posV < 0 || posV > 100)) return 'Posesión visitante debe estar entre 0 y 100.';
+    if (posL !== null && posV !== null && posL + posV !== 100) return 'La posesión de ambos equipos debe sumar 100.';
+    if (paL  !== null && (paL  < 0 || paL  > 100)) return 'Precisión de pase local debe estar entre 0 y 100.';
+    if (paV  !== null && (paV  < 0 || paV  > 100)) return 'Precisión de pase visitante debe estar entre 0 y 100.';
+
+    return null; // sin errores
+  }
+
   async function guardarResultado(p, panel) {
     const val = id => panel.querySelector(id) ? Number(panel.querySelector(id).value) || 0 : 0;
-    const campos = ['goles_local', 'goles_visitante', 'tiros_local', 'tiros_puerta_local', 'posesion_local', 'pase_local',
+    const camposStats = ['tiros_local', 'tiros_puerta_local', 'posesion_local', 'pase_local',
       'tiros_visitante', 'tiros_puerta_visitante', 'posesion_visitante', 'pase_visitante'];
+
     let golesLocal = val('#g-local'), golesVisita = val('#g-visita');
     const estado = panel.querySelector('#estado') ? panel.querySelector('#estado').value : 'jugado';
+
     if (GL.esResolucionExpulsion({ estado })) {
       const r = GL.resultado({ estado });
       golesLocal = r.gf; golesVisita = r.gc;
     }
-    if (golesLocal < 0 || golesVisita < 0 || golesLocal > 99 || golesVisita > 99) {
-      GL.notificar('Los goles deben estar entre 0 y 99.', 'advertencia'); return;
+
+    // ── Validaciones frontend ────────────────────────────────
+    if (!Number.isInteger(golesLocal) || !Number.isInteger(golesVisita) ||
+        golesLocal < 0 || golesVisita < 0 || golesLocal > 99 || golesVisita > 99) {
+      GL.notificar('Los goles deben ser enteros entre 0 y 99.', 'advertencia'); return;
+    }
+
+    const errStats = validarStats(panel, estado);
+    if (errStats) { GL.notificar(errStats, 'advertencia'); return; }
+
+    // Captura obligatoria en partidos normales (modo manual sin datos de IA)
+    if (estado === 'jugado' && !Mod.archivo && !p.captura_url && !Mod.datosIA) {
+      GL.notificar('La captura es obligatoria para validar el resultado. Subí la imagen del partido.', 'advertencia');
+      return;
     }
 
     const btn = panel.querySelector('#guardar');
-    if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
-    try {
-      // Revalidar contra la BD justo antes de escribir: evita guardar en jornadas cerradas
-      // o sobrescribir un resultado que otro administrador ya cargó.
-      await GL.cargarContexto(true);
-      if (esCerrada(p)) throw new Error('La jornada está cerrada. No se pueden cargar resultados.');
-      const { data: fresco, error: errFresco } = await sb.from('partidos')
-        .select('id,estado,jornada,grupo_id').eq('id', p.id).maybeSingle();
-      if (errFresco) throw errFresco;
-      if (!fresco || fresco.estado !== 'pendiente') throw new Error('Este partido ya tiene resultado. Actualizá la vista.');
-      const { data: fj, error: errJ } = await sb.from('jornadas').select('estado')
-        .eq('torneo_id', GL.torneoId()).eq('numero', fresco.jornada).eq('grupo_id', fresco.grupo_id).maybeSingle();
-      if (errJ) throw errJ;
-      if (fj && fj.estado === 'cerrada') throw new Error('La jornada está cerrada. No se pueden cargar resultados.');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Guardando…'; }
 
-      const update = {
-        goles_local: golesLocal, goles_visitante: golesVisita, estado,
-        ingresado_por: Auth.jugador ? Auth.jugador.id : null,
-        updated_at: new Date().toISOString()
-      };
-      campos.forEach(c => { const el = panel.querySelector('#' + c); if (el && c.indexOf('goles_') !== 0) update[c] = Number(el.value) || 0; });
+    try {
+      // ── Subir captura primero si hay archivo ─────────────
+      let capturaUrl = p.captura_url || null;
       if (Mod.archivo) {
-        const ext = Mod.archivo.type === 'image/png' ? 'png' : 'jpg';
+        if (!['image/jpeg', 'image/png'].includes(Mod.archivo.type))
+          throw new Error('Solo se aceptan imágenes JPG o PNG.');
+        if (Mod.archivo.size > 5 * 1024 * 1024)
+          throw new Error('La captura no puede superar 5 MB.');
+        const ext  = Mod.archivo.type === 'image/png' ? 'png' : 'jpg';
         const ruta = GL.torneo().id + '/' + p.id + '-' + Date.now() + '.' + ext;
-        const up = await sb.storage.from(CONFIG.BUCKET_CAPTURAS).upload(ruta, Mod.archivo,
+        const up   = await sb.storage.from(CONFIG.BUCKET_CAPTURAS).upload(ruta, Mod.archivo,
           { upsert: true, contentType: Mod.archivo.type });
         if (up.error) throw new Error('No se pudo subir la captura: ' + up.error.message);
-        const pub = sb.storage.from(CONFIG.BUCKET_CAPTURAS).getPublicUrl(ruta);
-        update.captura_url = pub.data.publicUrl;
+        capturaUrl = sb.storage.from(CONFIG.BUCKET_CAPTURAS).getPublicUrl(ruta).data.publicUrl;
       }
-      const { data: guardado, error } = await sb.from('partidos').update(update)
-        .eq('id', p.id).eq('estado', 'pendiente').select('id');
-      if (error) throw error;
-      if (!guardado || !guardado.length) throw new Error('Otro administrador actualizó este partido. Actualizá la vista.');
-      await recalcularClasificacion(GL.torneo().id, p.grupo_id);
+
+      // ── Construir objeto de stats ────────────────────────
+      const stats = {};
+      camposStats.forEach(c => {
+        const el = panel.querySelector('#' + c);
+        stats[c] = (el && el.value !== '') ? Number(el.value) : null;
+      });
+
+      // ── Llamar al RPC transaccional ──────────────────────
+      const user = (await sb.auth.getUser()).data.user;
+      const { data, error } = await sb.rpc('gl_guardar_resultado', {
+        p_partido_id:      p.id,
+        p_torneo_id:       GL.torneoId(),
+        p_goles_local:     golesLocal,
+        p_goles_visitante: golesVisita,
+        p_estado:          estado,
+        p_captura_url:     capturaUrl,
+        p_ingresado_por:   user ? user.id : null,
+        p_motivo:          null,   // null = ingreso inicial; string = corrección con motivo
+        p_stats:           stats
+      });
+
+      if (error) throw new Error(error.message);
+      if (data && !data.ok) throw new Error(data.error);
+
+      // ── Auditoría ────────────────────────────────────────
+      GL.auditoria && GL.auditoria.registrar(
+        data.es_correccion ? 'resultado_corregido' : 'resultado_ingresado',
+        'partido', p.id,
+        {
+          local:            GL.nombreJugador(p.local_id),
+          visitante:        GL.nombreJugador(p.visitante_id),
+          goles_local:      golesLocal,
+          goles_visitante:  golesVisita,
+          estado,
+          jornada:          p.jornada,
+          anterior:         data.anterior || null,
+          nuevo:            golesLocal + '-' + golesVisita,
+          captura:          !!capturaUrl
+        }
+      );
+
       GL.notificar('Resultado guardado y tabla actualizada.', 'exito');
       Mod.partidoId = null; Mod.archivo = null; Mod.datosIA = null;
       await Mod.render(document.getElementById('vista'));
+
     } catch (e) {
       console.error(e);
       GL.notificar('No se pudo guardar: ' + e.message, 'error');

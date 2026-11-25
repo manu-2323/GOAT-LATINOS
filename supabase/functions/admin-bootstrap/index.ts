@@ -1,32 +1,31 @@
 // Supabase Edge Function: admin-bootstrap
-// Acceso de administrador: valida la CLAVE DE ADMINISTRADOR en el servidor.
-// Cualquier correo puede usarla; la función crea/promueve ese usuario a admin
-// usando la SERVICE ROLE. La clave NUNCA se envía al frontend ni se guarda allí.
+// Propósito: crear el PRIMER y ÚNICO superadministrador del sistema.
+// Una vez ejecutado con éxito, esta función queda permanentemente bloqueada.
+// Para promover admins adicionales usar: admin-promover (solo superadmin).
+// @ts-ignore
+/// <reference types="https://esm.sh/@supabase/supabase-js@2/dist/module/index.d.ts" />
+// deno-lint-ignore-file no-explicit-any
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-version, x-supabase-client-info',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
-const intentos = new Map<string, { cuenta: number; reinicio: number }>();
-const LIMITE = 5;
-const VENTANA_MS = 60_000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LIMITE_INTENTOS = 5;
+const VENTANA_MINUTOS = 15;
+// Contraseña bootstrap fija — solo se usa UNA vez en la vida del sistema.
+// Después el bootstrap queda bloqueado para siempre.
+const BOOTSTRAP_PASSWORD = 'GOATSLATINOS678';
 
-function claveIgual(a: string, b: string): boolean {
+function timing_safe_equal(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
-}
-
-async function hash(texto: string): Promise<string> {
-  const bytes = new TextEncoder().encode(texto);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest)).map(x => x.toString(16).padStart(2, '0')).join('');
 }
 
 function nombreValido(valor: unknown, correo: string): string {
@@ -34,7 +33,7 @@ function nombreValido(valor: unknown, correo: string): string {
   return (base || correo.split('@')[0].toUpperCase()).slice(0, 24);
 }
 
-async function buscarUsuario(admin: any, correo: string) {
+async function buscarUsuario(admin: ReturnType<typeof createClient>, correo: string) {
   let pagina = 1;
   while (pagina <= 20) {
     const { data, error } = await admin.auth.admin.listUsers({ page: pagina, perPage: 200 });
@@ -48,95 +47,219 @@ async function buscarUsuario(admin: any, correo: string) {
   return null;
 }
 
-async function promover(admin: any, user: any, body: any, correo: string, nombre: string, torneoId: string | null) {
-  const { data: filas, error: errFilas } = await admin.from('jugadores')
-    .select('id').eq('user_id', user.id).limit(1);
-  if (errFilas) throw errFilas;
+async function checkRateLimit(admin: ReturnType<typeof createClient>, clave: string): Promise<void> {
+  const ahora = new Date().toISOString();
 
-  const { data: superRows, error: errSuper } = await admin.from('jugadores')
-    .select('id').eq('super_admin', true).limit(1);
-  if (errSuper) throw errSuper;
+  // Leer registro actual
+  const { data } = await admin
+    .from('admin_rate_limit')
+    .select('intentos, reinicio_at, bloqueado_hasta')
+    .eq('clave', clave)
+    .single();
 
-  const fila: Record<string, unknown> = {
-    nombre_usuario: nombre,
-    email: correo,
-    rol: 'admin',
-    activo: true,
-    suspendido: false,
-    torneo_id: torneoId || null
-  };
-  // El primer administrador del sistema pasa a ser el administrador principal.
-  if (!superRows || !superRows.length) fila.super_admin = true;
-  if (filas && filas.length) {
-    const { error } = await admin.from('jugadores').update(fila).eq('id', filas[0].id);
-    if (error) throw error;
-  } else {
-    const { error } = await admin.from('jugadores').insert({ user_id: user.id, ...fila });
-    if (error) throw error;
+  if (data) {
+    // ¿Está bloqueado permanentemente o por tiempo?
+    if (data.bloqueado_hasta && new Date(data.bloqueado_hasta) > new Date()) {
+      throw new Error('Demasiados intentos fallidos. Intentá de nuevo más tarde.');
+    }
+    // ¿Ventana expirada? Reiniciar contador
+    if (new Date(data.reinicio_at) < new Date()) {
+      await admin.from('admin_rate_limit').update({
+        intentos: 0,
+        reinicio_at: new Date(Date.now() + VENTANA_MINUTOS * 60_000).toISOString(),
+        bloqueado_hasta: null
+      }).eq('clave', clave);
+    } else if (data.intentos >= LIMITE_INTENTOS) {
+      // Bloquear por 1 hora al superar el límite
+      await admin.from('admin_rate_limit').update({
+        bloqueado_hasta: new Date(Date.now() + 60 * 60_000).toISOString()
+      }).eq('clave', clave);
+      throw new Error('Demasiados intentos fallidos. Cuenta bloqueada 1 hora.');
+    }
   }
+}
+
+async function registrarIntento(admin: ReturnType<typeof createClient>, clave: string, exito: boolean): Promise<void> {
+  if (exito) {
+    await admin.from('admin_rate_limit').delete().eq('clave', clave);
+    return;
+  }
+  const { data } = await admin
+    .from('admin_rate_limit')
+    .select('intentos')
+    .eq('clave', clave)
+    .single();
+
+  if (data) {
+    await admin.from('admin_rate_limit').update({
+      intentos: (data.intentos || 0) + 1
+    }).eq('clave', clave);
+  } else {
+    await admin.from('admin_rate_limit').insert({
+      clave,
+      intentos: 1,
+      reinicio_at: new Date(Date.now() + VENTANA_MINUTOS * 60_000).toISOString()
+    });
+  }
+}
+
+async function registrarAuditoria(
+  admin: ReturnType<typeof createClient>,
+  accion: string,
+  usuarioId: string,
+  email: string,
+  ip: string,
+  detalle: object
+): Promise<void> {
+  await admin.from('admin_audit_log').insert({
+    accion,
+    usuario_id: usuarioId,
+    email,
+    realizado_por: usuarioId,
+    ip,
+    detalle
+  });
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+
+  const ip = String(req.headers.get('x-forwarded-for') || 'local').split(',')[0].trim();
+  const clave_rl = 'bootstrap|' + ip;
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey = Deno.env.get('SERVICE_ROLE_KEY');
-    const adminPassword = Deno.env.get('ADMIN_PASSWORD');
-    if (!serviceKey) throw new Error('Falta configurar SERVICE_ROLE_KEY');
-    if (!adminPassword) throw new Error('Falta configurar el secret ADMIN_PASSWORD');
+    const serviceKey  = Deno.env.get('SERVICE_ROLE_KEY');
+    if (!serviceKey) throw new Error('Configuración del servidor incompleta.');
 
-    const body = await req.json().catch(() => ({}));
-    const correo = String(body.email || '').trim().toLowerCase();
-    const password = String(body.password || '');
-    if (!EMAIL_RE.test(correo)) throw new Error('Ingresá un correo electrónico válido.');
-    if (password.length < 8) throw new Error('La clave de administrador es incorrecta.');
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
 
-    const ip = String(req.headers.get('x-forwarded-for') || 'local').split(',')[0].trim();
-    const claveLimit = correo + '|' + ip;
-    const ahora = Date.now();
-    const registro = intentos.get(claveLimit) || { cuenta: 0, reinicio: ahora + VENTANA_MS };
-    if (ahora > registro.reinicio) { registro.cuenta = 0; registro.reinicio = ahora + VENTANA_MS; }
-    if (registro.cuenta >= LIMITE) throw new Error('Demasiados intentos. Esperá un minuto y volvé a probar.');
+    // ── 1. Verificar que el bootstrap no fue ejecutado antes ──────────
+    const { data: cfg } = await admin
+      .from('sistema_config')
+      .select('valor')
+      .eq('clave', 'bootstrap_completado')
+      .single();
 
-    const esperada = await hash(adminPassword);
-    const recibida = await hash(password);
-    if (!claveIgual(esperada, recibida)) {
-      registro.cuenta++;
-      intentos.set(claveLimit, registro);
-      throw new Error('La clave de administrador es incorrecta.');
+    if (cfg && cfg.valor === 'true') {
+      return new Response(
+        JSON.stringify({ error: 'El sistema ya fue inicializado. Para crear administradores adicionales, el superadministrador debe usar el panel de administración.' }),
+        { status: 403, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      );
     }
-    intentos.delete(claveLimit);
 
-    const admin = createClient(supabaseUrl, serviceKey);
-    const nombre = nombreValido(body.nombre_usuario, correo);
-    const torneoId = body.torneo_id ? String(body.torneo_id) : null;
+    // ── 2. Rate limiting persistente ──────────────────────────────────
+    await checkRateLimit(admin, clave_rl);
+
+    // ── 3. Validar body ───────────────────────────────────────────────
+    const body = await req.json().catch(() => ({}));
+    const correo   = String(body.email    || '').trim().toLowerCase();
+    const password = String(body.password || '');
+    const nombre   = nombreValido(body.nombre_usuario, correo);
+
+    if (!EMAIL_RE.test(correo)) {
+      await registrarIntento(admin, clave_rl, false);
+      throw new Error('Ingresá un correo electrónico válido.');
+    }
+    if (!password) {
+      await registrarIntento(admin, clave_rl, false);
+      throw new Error('La clave de bootstrap es obligatoria.');
+    }
+
+    // ── 4. Verificar clave bootstrap (timing-safe, hardcodeada) ───────
+    if (!timing_safe_equal(password, BOOTSTRAP_PASSWORD)) {
+      await registrarIntento(admin, clave_rl, false);
+      throw new Error('Clave de bootstrap incorrecta.');
+    }
+
+    // ── 5. Crear o recuperar cuenta en auth.users ─────────────────────
     let user = await buscarUsuario(admin, correo);
     if (!user) {
       const { data, error } = await admin.auth.admin.createUser({
         email: correo,
-        password,
         email_confirm: true,
         user_metadata: { nombre_usuario: nombre, nombre }
       });
       if (error) throw error;
       user = data.user;
     } else {
-      const { error } = await admin.auth.admin.updateUserById(user.id, {
-        password,
+      await admin.auth.admin.updateUserById(user.id, {
         user_metadata: { ...(user.user_metadata || {}), nombre_usuario: nombre, nombre }
       });
+    }
+    if (!user) throw new Error('No se pudo crear la cuenta.');
+
+    // ── 6. Verificar que no hay superadmin ya ─────────────────────────
+    const { data: superRows } = await admin
+      .from('jugadores')
+      .select('id')
+      .eq('super_admin', true)
+      .limit(1);
+
+    if (superRows && superRows.length > 0) {
+      await registrarIntento(admin, clave_rl, false);
+      return new Response(
+        JSON.stringify({ error: 'Ya existe un superadministrador. Usá el panel de administración.' }),
+        { status: 409, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ── 7. Promover a superadmin ──────────────────────────────────────
+    const torneoId = body.torneo_id ? String(body.torneo_id) : null;
+    const fila = {
+      nombre_usuario: nombre,
+      email: correo,
+      rol: 'admin',
+      super_admin: true,
+      activo: true,
+      suspendido: false,
+      torneo_id: torneoId
+    };
+
+    const { data: filaExistente } = await admin
+      .from('jugadores')
+      .select('id')
+      .eq('user_id', user.id)
+      .limit(1);
+
+    if (filaExistente && filaExistente.length > 0) {
+      const { error } = await admin.from('jugadores').update(fila).eq('id', filaExistente[0].id);
+      if (error) throw error;
+    } else {
+      const { error } = await admin.from('jugadores').insert({ user_id: user.id, ...fila });
       if (error) throw error;
     }
-    if (!user) throw new Error('No se pudo crear la cuenta de administrador.');
 
-    await promover(admin, user, body, correo, nombre, torneoId);
+    // ── 8. Marcar bootstrap como completado (bloqueo permanente) ──────
+    await admin.from('sistema_config').update({
+      valor: 'true',
+      updated_at: new Date().toISOString()
+    }).eq('clave', 'bootstrap_completado');
 
-    return new Response(JSON.stringify({ ok: true, email: correo }), {
-      headers: { ...CORS, 'Content-Type': 'application/json' }
+    // ── 9. Registrar en auditoría ─────────────────────────────────────
+    await registrarAuditoria(admin, 'bootstrap', user.id, correo, ip, {
+      nombre_usuario: nombre,
+      torneo_id: torneoId
     });
+
+    // ── 10. Limpiar rate limit del IP (éxito) ─────────────────────────
+    await registrarIntento(admin, clave_rl, true);
+
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        email: correo,
+        mensaje: 'Superadministrador creado. El bootstrap está ahora permanentemente bloqueado.'
+      }),
+      { headers: { ...CORS, 'Content-Type': 'application/json' } }
+    );
+
   } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      status: 400, headers: { ...CORS, 'Content-Type': 'application/json' }
-    });
+    return new Response(
+      JSON.stringify({ error: (error as Error).message }),
+      { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } }
+    );
   }
 });
