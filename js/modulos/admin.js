@@ -5,11 +5,11 @@
 (function () {
   const Mod = {
     titulo: 'Administración',
-    tab: 'jugadores',
+    tab: 'resumen',
     grupoJornadas: null,
     partidosCache: [],
 
-    setTab(tab) { Mod.tab = tab || 'jugadores'; },
+    setTab(tab) { Mod.tab = tab || 'resumen'; },
 
     async render(el) {
       el.innerHTML = GL.skeleton(8);
@@ -44,18 +44,23 @@
             '<p>' + esc((GL.torneo() && GL.torneo().nombre) || CONFIG.NOMBRE_LIGA) + ' · Control total del torneo</p></div>' +
             '<div class="seccion-acciones">' + GL.badge('ADMIN', 'gold', 'shield') +
               (superAdmin ? GL.badge('ADMINISTRADOR PRINCIPAL', 'gold', 'crown') : '') + '</div></div>' +
-          '<div class="tabs">' +
-            tabBtn('jugadores', 'users', 'Jugadores') + tabBtn('jornadas', 'flag', 'Jornadas') +
-            tabBtn('disciplina', 'gavel', 'Disciplina') +
-            (superAdmin ? tabBtn('admins', 'shield-check', 'Administradores') : '') +
-            tabBtn('config', 'settings-2', 'Configuración') +
+          '<div class="tabs tabs-admin">' +
+            tabBtn('resumen',    'layout-dashboard', 'Resumen') +
+            tabBtn('jugadores',  'users',            'Jugadores') +
+            tabBtn('jornadas',   'flag',             'Jornadas') +
+            tabBtn('disciplina', 'gavel',            'Disciplina') +
+            (superAdmin ? tabBtn('admins', 'shield-check', 'Admins') : '') +
+            tabBtn('config', 'settings-2', 'Config') +
           '</div><div id="contenido-admin"></div>';
         const cont = el.querySelector('#contenido-admin');
         const pintar = () => {
-          cont.innerHTML = Mod.tab === 'jugadores' ? htmlJugadores() :
-            Mod.tab === 'jornadas' ? htmlJornadas() :
+          cont.innerHTML =
+            Mod.tab === 'resumen'    ? htmlResumen(superAdmin) :
+            Mod.tab === 'jugadores'  ? htmlJugadores() :
+            Mod.tab === 'jornadas'   ? htmlJornadas() :
             Mod.tab === 'disciplina' ? htmlDisciplina() :
-            Mod.tab === 'admins' ? (superAdmin ? htmlAdmins() : GL.accesoDenegado('admin')) : htmlConfig();
+            Mod.tab === 'admins'     ? (superAdmin ? htmlAdmins() : GL.accesoDenegado('admin')) :
+            htmlConfig();
           enlazar(cont, el);
           iniciarIconos();
         };
@@ -65,7 +70,7 @@
           el.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('activo', x === b));
           pintar();
         }));
-      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message); }
+      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message, null, 'la administración'); }
       iniciarIconos();
     }
   };
@@ -73,6 +78,160 @@
   function tabBtn(id, ico, label) {
     return '<button type="button" class="tab' + (Mod.tab === id ? ' activo' : '') + '" data-tab="' + id + '">' +
       icono(ico, 16) + label + '</button>';
+  }
+
+  /* ---------------- RESUMEN (pantalla de inicio del admin) ---------------- */
+  function htmlResumen(superAdmin) {
+    const torneo      = GL.torneo() || {};
+    const jugadores   = GL.jugadores();
+    const grupos      = GL.grupos();
+    const jornada     = GL.jornadaActual();
+    const partidos    = Mod.partidosCache;
+    const sanciones   = GL.ctx.sanciones || [];
+    const total       = Number(torneo.total_jornadas) || 22;
+
+    // ── Métricas generales ──
+    const totalJugadores  = jugadores.length;
+    const sinGrupo        = jugadores.filter(j => !GL.grupoDeJugador(j.id)).length;
+    const suspendidos     = jugadores.filter(j => j.suspendido || j.activo === false).length;
+    const conFaltas3      = jugadores.filter(j => GL.faltas(j.id) >= 3).length;
+    const jornadasCerradas = (GL.ctx.jornadas || []).filter(j => j.estado === 'cerrada').length;
+    const pct             = Math.round((jornada.numero / total) * 100);
+
+    // Partidos de la jornada actual
+    const partidosJornada   = partidos.filter(p => p.jornada === jornada.numero);
+    const jugados           = partidosJornada.filter(p => p.estado !== 'pendiente').length;
+    const pendientes        = partidosJornada.length - jugados;
+    const pctJornada        = partidosJornada.length ? Math.round(jugados / partidosJornada.length * 100) : 0;
+
+    // Jornadas abiertas (no la actual sola, todas)
+    const jornadasAbiertas = (GL.ctx.jornadas || []).filter(j => j.estado === 'abierta');
+
+    // ── Alertas dinámicas ──
+    const alertas = [];
+    if (sinGrupo > 0)
+      alertas.push({ tipo: 'warn', ico: 'users', msg: sinGrupo + ' jugador' + (sinGrupo > 1 ? 'es sin grupo asignado' : ' sin grupo asignado'), tab: 'jugadores' });
+    if (conFaltas3 > 0)
+      alertas.push({ tipo: 'warn', ico: 'octagon-alert', msg: conFaltas3 + ' jugador' + (conFaltas3 > 1 ? 'es con 3 o más faltas' : ' con 3 o más faltas') + ' (veto automático próximo torneo)', tab: 'disciplina' });
+    if (suspendidos > 0)
+      alertas.push({ tipo: 'info', ico: 'user-x', msg: suspendidos + ' jugador' + (suspendidos > 1 ? 'es suspendidos' : ' suspendido') + ' actualmente', tab: 'jugadores' });
+    if (pendientes > 0)
+      alertas.push({ tipo: 'info', ico: 'clock', msg: pendientes + ' partido' + (pendientes > 1 ? 's pendientes' : ' pendiente') + ' en la jornada ' + jornada.numero, tab: 'jornadas' });
+    if (jornadasAbiertas.length > 1)
+      alertas.push({ tipo: 'warn', ico: 'flag', msg: jornadasAbiertas.length + ' jornadas abiertas al mismo tiempo — revisá si alguna debería cerrarse', tab: 'jornadas' });
+    if (!torneo.id)
+      alertas.push({ tipo: 'error', ico: 'trophy', msg: 'No hay torneo activo. Creá uno desde Configuración.', tab: 'config' });
+
+    // ── Actividad reciente: últimos 5 partidos cargados ──
+    const recientes = partidos
+      .filter(p => p.estado !== 'pendiente')
+      .sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''))
+      .slice(0, 5);
+
+    // ── HTML ──
+    const tarjetaKpi = (valor, label, ico, color) =>
+      '<div class="kpi-card">' +
+        '<div class="kpi-ico" style="color:' + color + '">' + icono(ico, 22) + '</div>' +
+        '<div class="kpi-valor">' + valor + '</div>' +
+        '<div class="kpi-label">' + label + '</div>' +
+      '</div>';
+
+    const htmlAlertas = alertas.length
+      ? '<div class="card mt">' +
+          '<div class="card-titulo">' + icono('bell-ring', 19) + 'Atención requerida' +
+            '<span class="badge red">' + alertas.length + '</span>' +
+          '</div>' +
+          alertas.map(a =>
+            '<div class="alerta-item alerta-' + a.tipo + '">' +
+              icono(a.ico, 15) +
+              '<span>' + a.msg + '</span>' +
+              '<button type="button" class="btn sm sec alerta-ir" data-tab-ir="' + a.tab + '">' +
+                icono('arrow-right', 13) + 'Ver' +
+              '</button>' +
+            '</div>'
+          ).join('') +
+        '</div>'
+      : '<div class="card mt"><div class="alerta-item alerta-ok">' +
+          icono('circle-check', 15) + '<span>Todo en orden. No hay alertas pendientes.</span>' +
+        '</div></div>';
+
+    const htmlJornada =
+      '<div class="card">' +
+        '<div class="card-titulo">' + icono('flag', 19) + 'Estado de la temporada</div>' +
+        '<div class="temporada-progreso">' +
+          '<div class="temporada-barra"><span style="width:' + pct + '%"></span></div>' +
+          '<div class="temporada-labels">' +
+            '<span>Jornada ' + jornada.numero + ' / ' + total + '</span>' +
+            '<span>' + pct + '% completado</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="temporada-detalle">' +
+          '<div class="temporada-stat">' + icono('check-circle', 13) + jornadasCerradas + ' jornadas cerradas</div>' +
+          '<div class="temporada-stat">' + icono('unlock', 13) + jornadasAbiertas.length + ' abierta' + (jornadasAbiertas.length !== 1 ? 's' : '') + '</div>' +
+          '<div class="temporada-stat">' + icono('calendar-days', 13) + (total - jornada.numero) + ' por jugar</div>' +
+        '</div>' +
+        '<div class="jornada-progreso-wrap">' +
+          '<div class="jornada-progreso-titulo">' + icono('activity', 13) + 'Jornada ' + jornada.numero + ' — ' + jugados + '/' + partidosJornada.length + ' partidos</div>' +
+          '<div class="temporada-barra"><span style="width:' + pctJornada + '%"></span></div>' +
+        '</div>' +
+      '</div>';
+
+    const htmlRecientes = recientes.length
+      ? '<div class="card mt">' +
+          '<div class="card-titulo">' + icono('activity', 19) + 'Actividad reciente</div>' +
+          '<ul class="actividad-lista">' +
+          recientes.map(p => {
+            const r = GL.resultado(p);
+            return '<li class="actividad-item">' +
+              '<span class="actividad-nombres">' +
+                esc(GL.nombreJugador(p.local_id)) +
+                ' <strong>' + r.texto + '</strong> ' +
+                esc(GL.nombreJugador(p.visitante_id)) +
+              '</span>' +
+              '<span class="actividad-meta">J' + p.jornada + ' · ' + esc(GL.fecha(p.updated_at || p.created_at)) + '</span>' +
+            '</li>';
+          }).join('') +
+          '</ul>' +
+        '</div>'
+      : '';
+
+    const htmlAccionesRapidas =
+      '<div class="card mt">' +
+        '<div class="card-titulo">' + icono('zap', 19) + 'Acciones rápidas</div>' +
+        '<div class="acciones-rapidas-grid">' +
+          accionRapida('jugadores', 'user-plus',   'Agregar jugador',  'Registrá un nuevo participante') +
+          accionRapida('jornadas',  'flag',         'Gestionar jornadas','Abrí, cerrá y revisá partidos') +
+          accionRapida('disciplina','gavel',         'Disciplina',       'Revisá sanciones y faltas') +
+          (superAdmin ? accionRapida('admins', 'shield-check', 'Administradores', 'Gestioná quién puede administrar') : '') +
+        '</div>' +
+      '</div>';
+
+    return '<div class="grid dos mt">' +
+        htmlJornada +
+        '<div class="card">' +
+          '<div class="card-titulo">' + icono('bar-chart-2', 19) + 'Resumen del torneo</div>' +
+          '<div class="kpi-grid">' +
+            tarjetaKpi(totalJugadores, 'Jugadores',   'users',         'var(--accent-primary)') +
+            tarjetaKpi(grupos.length,  'Grupos',       'layout-grid',   'var(--accent-secondary,#8e44ad)') +
+            tarjetaKpi(sanciones.length,'Sanciones',  'gavel',         'var(--accent-orange,#e67e22)') +
+            tarjetaKpi(suspendidos,    'Suspendidos',  'user-x',        'var(--accent-red,#e74c3c)') +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      htmlAlertas +
+      htmlAccionesRapidas +
+      htmlRecientes;
+  }
+
+  function accionRapida(tab, ico, titulo, desc) {
+    return '<button type="button" class="accion-rapida-btn" data-tab-ir="' + tab + '">' +
+      '<div class="accion-rapida-ico">' + icono(ico, 20) + '</div>' +
+      '<div class="accion-rapida-texto">' +
+        '<strong>' + titulo + '</strong>' +
+        '<span>' + desc + '</span>' +
+      '</div>' +
+      icono('chevron-right', 14) +
+    '</button>';
   }
 
   /* ---------------- A. Jugadores ---------------- */
@@ -142,11 +301,18 @@
       if (tipo === 'suspender') modalSuspender(j, root);
     };
 
-    const botonesHTML = items.map(item =>
-      '<button type="button" class="btn sec" data-accion-menu="' + esc(item.accion) + '">' +
-        icono(item.ico, 16) + esc(item.label) +
-      '</button>'
-    ).join('');
+    const ACCIONES_PELIGROSAS = ['suspender', 'eliminar', 'expulsar'];
+    const esPeligrosa = accion => ACCIONES_PELIGROSAS.some(p => accion.startsWith(p));
+    const botonesHTML = items.map(item => {
+      const peligrosa = esPeligrosa(item.accion);
+      return '<button type="button" class="btn sec menu-accion-btn' +
+        (peligrosa ? ' menu-accion-peligrosa' : '') +
+        '" data-accion-menu="' + esc(item.accion) + '" aria-label="' + esc(item.label) + '">' +
+        icono(item.ico, 16) +
+        '<span class="menu-accion-label">' + esc(item.label) + '</span>' +
+        (peligrosa ? '<span class="menu-accion-aviso" aria-hidden="true">⚠</span>' : '') +
+      '</button>';
+    }).join('');
 
     if (esMobile) {
       // Bottom sheet
@@ -364,6 +530,22 @@
 
   /* ---------------- Enlaces de eventos ---------------- */
   function enlazar(cont, root) {
+    // Botones de acceso rápido desde el resumen
+    cont.querySelectorAll('[data-tab-ir]').forEach(b => {
+      b.addEventListener('click', () => {
+        Mod.tab = b.dataset.tabIr;
+        root.querySelectorAll('[data-tab]').forEach(x =>
+          x.classList.toggle('activo', x.dataset.tab === Mod.tab));
+        root.querySelector('#contenido-admin').innerHTML =
+          Mod.tab === 'jugadores'  ? htmlJugadores() :
+          Mod.tab === 'jornadas'   ? htmlJornadas() :
+          Mod.tab === 'disciplina' ? htmlDisciplina() :
+          Mod.tab === 'admins'     ? htmlAdmins() :
+          htmlConfig();
+        enlazar(root.querySelector('#contenido-admin'), root);
+        iniciarIconos();
+      });
+    });
     /* ── Menú flotante / bottom sheet para móvil ── */
     cont.querySelectorAll('.btn-menu-acciones').forEach(btn => {
       btn.addEventListener('click', e => {
@@ -525,44 +707,190 @@
     const nuevo = cont.querySelector('#nuevo-torneo');
     if (nuevo) nuevo.addEventListener('click', () => nuevoTorneo(cont.querySelector('#nueva-temp').value.trim(), root));
   }
+  /* ── Helper: errores inline junto al campo ──────────────────────────
+     Resalta el campo y muestra/oculta un mensaje de error debajo de él.
+     id:  selector CSS del input o select (ej: '#ed-nombre').
+     msg: texto del error; null o '' para limpiar el estado.
+  -------------------------------------------------------------------- */
+  function errorCampo(fondo, id, msg) {
+    const el = fondo.querySelector(id);
+    if (!el) return;
+    el.style.borderColor = msg ? 'var(--accent-orange)' : '';
+    const key = id.replace(/^#/, '');
+    // Buscar o crear el <small> de error ligado a este campo
+    let err = fondo.querySelector('[data-err-for="' + key + '"]');
+    if (!err) {
+      const wrap = el.closest('.campo') || el.parentElement;
+      if (!wrap) return;
+      err = document.createElement('small');
+      err.setAttribute('data-err-for', key);
+      err.style.cssText =
+        'color:var(--accent-orange);font-size:11px;margin-top:3px;' +
+        'display:none;line-height:1.3;grid-column:1/-1';
+      wrap.appendChild(err);
+    }
+    if (msg) { err.textContent = msg; err.style.display = 'block'; }
+    else      { err.textContent = '';  err.style.display = 'none';  }
+  }
 
   /* ---------------- Modales de jugadores ---------------- */
   function modalEditar(j, root) {
+    // Calcular hint de teléfono según el país actual
+    const hintTel = paisVal => {
+      if (!GL.tel || !CONFIG.PAISES || !CONFIG.PAISES[paisVal]) return '';
+      const cfg = CONFIG.PAISES[paisVal];
+      return '+' + cfg.prefijo + ' · ' + cfg.digitos + ' dígitos';
+    };
+
     const m = GL.abrirModal({
-      titulo: 'Editar jugador',
-      cuerpo: '<label class="campo"><span>Nombre en el juego</span><input class="input" id="ed-nombre" value="' + esc(j.nombre_usuario) + '"></label>' +
-        '<label class="campo"><span>País</span><select class="input" id="ed-pais">' +
-        GL.opcionesPais(j.pais, true) +
-        '</select></label>' +
-        '<label class="campo"><span>Ciudad o zona horaria</span><select class="input" id="ed-zona" required>' +
-        GL.opcionesZonaHoraria(j.zona_horaria, j.pais) +
-        '</select></label>' +
+      titulo: 'Editar jugador — ' + esc(j.nombre_usuario),
+      cuerpo:
+        // Nombre de usuario
+        '<label class="campo"><span>Nombre en el juego</span>' +
+          '<input class="input" id="ed-nombre" maxlength="24" ' +
+            'value="' + esc(j.nombre_usuario) + '" ' +
+            'placeholder="Ej: GOAT_PEREZ" ' +
+            'autocomplete="off">' +
+          '<small style="color:var(--text-secondary);font-size:11px;margin-top:2px;display:block">' +
+            'Solo letras, números y guión bajo (_). Máximo 24 caracteres.' +
+          '</small>' +
+        '</label>' +
+
+        // País
+        '<label class="campo"><span>País</span>' +
+          '<select class="input" id="ed-pais">' +
+            GL.opcionesPais(j.pais, true) +
+          '</select>' +
+        '</label>' +
+
+        // Zona horaria
+        '<label class="campo"><span>Ciudad o zona horaria</span>' +
+          '<select class="input" id="ed-zona">' +
+            GL.opcionesZonaHoraria(j.zona_horaria, j.pais) +
+          '</select>' +
+        '</label>' +
         '<p class="nota-pie" id="ed-horario"></p>' +
-        '<label class="campo"><span>Teléfono</span><input class="input" id="ed-tel" value="' + esc(j.telefono || '') + '"></label>' +
-        ('numero' in j ? '<label class="campo"><span>Número del jugador</span><input class="input" type="number" min="0" max="99" id="ed-numero" value="' + esc(j.numero || '') + '"></label>' : ''),
-      acciones: '<button type="button" class="btn sec" data-cerrar>Cancelar</button><button type="button" class="btn" id="ed-guardar">Guardar</button>',
+
+        // Teléfono
+        '<label class="campo">' +
+          '<span>Teléfono <small id="ed-tel-hint" style="color:var(--text-secondary)">' +
+            esc(hintTel(j.pais)) +
+          '</small></span>' +
+          '<input class="input" id="ed-tel" ' +
+            'value="' + esc(j.telefono || '') + '" ' +
+            'placeholder="Solo dígitos, sin espacios ni guiones" ' +
+            'inputmode="numeric">' +
+        '</label>' +
+
+        // Número del jugador (opcional)
+        ('numero' in j
+          ? '<label class="campo"><span>Número del jugador</span>' +
+              '<input class="input" type="number" min="0" max="99" step="1" id="ed-numero" ' +
+                'value="' + esc(j.numero ?? '') + '"></label>'
+          : ''),
+
+      acciones:
+        '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
+        '<button type="button" class="btn" id="ed-guardar">' + icono('save', 15) + 'Guardar cambios</button>',
+
       onAbrir(fondo, cerrar) {
         const pais = fondo.querySelector('#ed-pais');
         const zona = fondo.querySelector('#ed-zona');
         const nota = fondo.querySelector('#ed-horario');
-        pais.addEventListener('change', () => GL.actualizarZona(zona, pais.value, nota));
+        const hint = fondo.querySelector('#ed-tel-hint');
+
+        // Al cambiar país: actualizar zona y hint de teléfono
+        pais.addEventListener('change', () => {
+          GL.actualizarZona(zona, pais.value, nota);
+          if (hint) hint.textContent = hintTel(pais.value);
+          errorCampo(fondo, '#ed-tel', null); // limpiar error de tel al cambiar país
+        });
         zona.addEventListener('change', () => GL.actualizarZona(zona, pais.value, nota, true));
         GL.actualizarZona(zona, pais.value, nota, true);
+
         fondo.querySelector('#ed-guardar').addEventListener('click', async () => {
-          if (!zona.value) { GL.notificar('Elegí la ciudad o zona horaria del jugador.', 'advertencia'); return; }
+          // Limpiar todos los errores inline
+          ['#ed-nombre', '#ed-pais', '#ed-zona', '#ed-tel'].forEach(id => errorCampo(fondo, id, null));
+          let hayError = false;
+
+          // ── Validar nombre ──────────────────────────────────────────
+          const nombreRaw  = fondo.querySelector('#ed-nombre').value;
+          const nombreNorm = GL.seguroTexto(nombreRaw).toUpperCase().replace(/\s+/g, '_');
+          if (!nombreNorm || nombreNorm.length < 2) {
+            errorCampo(fondo, '#ed-nombre', 'El nombre debe tener al menos 2 caracteres.');
+            hayError = true;
+          } else if (nombreNorm.length > 24) {
+            errorCampo(fondo, '#ed-nombre', 'Máximo 24 caracteres (actual: ' + nombreNorm.length + ').');
+            hayError = true;
+          } else {
+            // Verificar duplicado en el contexto actual (excluyendo al propio jugador)
+            const dupl = (GL.ctx.jugadores || []).find(x =>
+              x.nombre_usuario === nombreNorm && x.id !== j.id);
+            if (dupl) {
+              errorCampo(fondo, '#ed-nombre', 'Ese nombre ya está en uso por otro jugador.');
+              hayError = true;
+            }
+          }
+
+          // ── Validar país ───────────────────────────────────────────
+          if (!pais.value) {
+            errorCampo(fondo, '#ed-pais', 'Seleccioná el país del jugador.');
+            hayError = true;
+          }
+
+          // ── Validar zona horaria ───────────────────────────────────
+          if (!zona.value) {
+            errorCampo(fondo, '#ed-zona', 'Elegí la ciudad o zona horaria.');
+            hayError = true;
+          }
+
+          // ── Validar teléfono (opcional) ────────────────────────────
+          const telRaw = fondo.querySelector('#ed-tel').value.trim();
+          let   telFinal = telRaw || null;
+          if (telRaw && pais.value && GL.tel) {
+            const v = GL.tel.validar(telRaw, pais.value);
+            if (!v.ok) {
+              errorCampo(fondo, '#ed-tel',
+                v.mensaje || 'Número inválido para el país seleccionado.');
+              hayError = true;
+            } else {
+              // Normalizar a formato E.164 antes de guardar
+              telFinal = GL.tel.normalizar(telRaw, pais.value);
+            }
+          }
+
+          if (hayError) return; // Dejar el botón activo para corregir
+
+          const btn = fondo.querySelector('#ed-guardar');
+          btn.disabled = true; btn.textContent = 'Guardando…';
+
           const update = {
-            nombre_usuario: GL.seguroTexto(fondo.querySelector('#ed-nombre').value).toUpperCase().replace(/\s+/g, '_'),
-            pais: pais.value,
-            zona_horaria: zona.value,
-            telefono: fondo.querySelector('#ed-tel').value.trim()
+            nombre_usuario: nombreNorm,
+            pais:           pais.value,
+            zona_horaria:   zona.value,
+            telefono:       telFinal
           };
           if ('numero' in j) {
-            const n = fondo.querySelector('#ed-numero');
-            update.numero = n && n.value !== '' ? Number(n.value) : null;
+            const nEl = fondo.querySelector('#ed-numero');
+            update.numero = nEl && nEl.value !== '' ? Number(nEl.value) : null;
           }
+
           const { error } = await sb.from('jugadores').update(update).eq('id', j.id);
-          if (error) GL.notificar(error.message, 'error');
-          else { cerrar(); GL.invalidar(); GL.notificar('Jugador actualizado.', 'exito'); Mod.render(root); }
+          if (error) {
+            // Detectar error de unicidad del servidor (segundo nivel de protección)
+            if (error.message && /unique|duplicat/i.test(error.message)) {
+              errorCampo(fondo, '#ed-nombre',
+                'El servidor rechazó el nombre: ya existe en la base de datos.');
+            } else {
+              GL.notificar('Error al guardar: ' + error.message, 'error');
+            }
+            btn.disabled = false; btn.textContent = 'Guardar cambios';
+          } else {
+            cerrar();
+            GL.invalidar();
+            GL.notificar(esc(nombreNorm) + ' actualizado correctamente.', 'exito');
+            Mod.render(root);
+          }
         });
       }
     });
@@ -570,30 +898,111 @@
   }
 
   function modalGrupo(j, root, asignar) {
+    // ── Validaciones previas al abrir el modal ─────────────────────────
+
+    // 1. No se pueden asignar grupos si el torneo ya finalizó
+    const torneo = GL.torneo();
+    if (torneo && torneo.estado === 'finalizado') {
+      GL.notificar('No se pueden cambiar grupos: el torneo ya finalizó.', 'advertencia'); return;
+    }
+
+    // 2. No se puede mover a un jugador expulsado (puede existir en la tabla sin grupo)
+    const expulsado = j.activo === false || j.rol === 'expulsado';
+    if (expulsado) {
+      GL.abrirModal({
+        titulo: 'Acción no permitida',
+        cuerpo:
+          '<p class="modal-texto">' + esc(j.nombre_usuario) + ' está expulsado del torneo.</p>' +
+          '<p class="modal-texto">Para asignarle un grupo primero debés reincorporarlo desde la opción ' +
+            '"Suspender / Expulsar" → "Reincorporar jugador".</p>',
+        acciones: '<button type="button" class="btn sec" data-cerrar>Entendido</button>'
+      });
+      iniciarIconos(); return;
+    }
+
+    // 3. Cambio de grupo (no asignación inicial) solo en primera semana
     if (asignar !== true && !esPrimeraSemana()) {
       GL.notificar('El cambio de grupo solo está disponible durante la primera semana.', 'advertencia'); return;
     }
+
+    // 4. Verificar que haya grupos disponibles
+    const grupos = GL.grupos();
+    if (!grupos.length) {
+      GL.notificar('No hay grupos configurados en este torneo.', 'error'); return;
+    }
+
     const actualGrupo = GL.grupoDeJugador(j.id);
+
     const m = GL.abrirModal({
-      titulo: asignar === true ? 'Asignar grupo' : 'Cambiar de grupo',
-      cuerpo: '<p class="modal-texto">' + (asignar === true
-        ? 'Asigná el grupo de este jugador. La asignación inicial siempre está disponible.'
-        : 'Disponible solo durante la primera semana del torneo.') + '</p>' +
-        '<label class="campo"><span>Grupo destino</span><select class="input" id="gr-grupo">' +
-        GL.grupos().map(g => '<option value="' + g.id + '"' + (actualGrupo && g.id === actualGrupo.id ? ' selected' : '') + '>Grupo ' + GL.letraGrupo(g) + '</option>').join('') +
-        '</select></label>',
-      acciones: '<button type="button" class="btn sec" data-cerrar>Cancelar</button><button type="button" class="btn" id="gr-guardar">' +
-        (asignar === true ? 'Asignar' : 'Mover jugador') + '</button>',
+      titulo: asignar === true ? 'Asignar grupo — ' + esc(j.nombre_usuario)
+                               : 'Cambiar de grupo — ' + esc(j.nombre_usuario),
+      cuerpo:
+        // Aviso si ya tiene grupo asignado
+        (actualGrupo
+          ? '<div style="background:var(--bg-hover);border-radius:8px;padding:10px 14px;' +
+              'margin-bottom:12px;font-size:13px">' +
+              icono('info', 14) + ' Grupo actual: <strong>Grupo ' +
+              esc(GL.letraGrupo(actualGrupo)) + '</strong></div>'
+          : '<div style="background:rgba(245,197,24,.1);border:1px solid var(--accent-gold);' +
+              'border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px">' +
+              icono('alert-triangle', 14) + ' Este jugador no tiene grupo asignado todavía.</div>') +
+
+        '<p class="modal-texto">' +
+          (asignar === true
+            ? 'La asignación inicial siempre está disponible mientras el torneo esté activo.'
+            : 'El cambio de grupo solo está disponible durante la primera semana del torneo.') +
+        '</p>' +
+
+        '<label class="campo"><span>Grupo destino</span>' +
+          '<select class="input" id="gr-grupo">' +
+            grupos.map(g =>
+              '<option value="' + g.id + '"' +
+                (actualGrupo && g.id === actualGrupo.id ? ' selected' : '') + '>' +
+                'Grupo ' + GL.letraGrupo(g) + ' — ' + (GL.clasificacion(g.id).length) + ' jugador(es)' +
+              '</option>'
+            ).join('') +
+          '</select>' +
+        '</label>',
+
+      acciones:
+        '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
+        '<button type="button" class="btn" id="gr-guardar">' +
+          (asignar === true ? icono('user-plus', 15) + 'Asignar' : icono('shuffle', 15) + 'Mover jugador') +
+        '</button>',
+
       onAbrir(fondo, cerrar) {
         fondo.querySelector('#gr-guardar').addEventListener('click', async () => {
+          // Verificar que la ventana de cambio siga abierta
           if (asignar !== true && !esPrimeraSemana()) {
             GL.notificar('La ventana de cambio de grupo ya cerró.', 'advertencia'); return;
           }
+
           const gid = fondo.querySelector('#gr-grupo').value;
+
+          // Detectar asignación al mismo grupo actual
+          if (actualGrupo && gid === actualGrupo.id) {
+            GL.notificar(
+              esc(j.nombre_usuario) + ' ya pertenece a Grupo ' + GL.letraGrupo(actualGrupo) + '.',
+              'advertencia');
+            return;
+          }
+
+          const btn = fondo.querySelector('#gr-guardar');
+          btn.disabled = true; btn.textContent = 'Moviendo…';
+
           const { error: errDel } = await sb.from('grupo_jugadores').delete().eq('jugador_id', j.id);
-          if (errDel) { GL.notificar(errDel.message, 'error'); return; }
+          if (errDel) {
+            GL.notificar('Error al liberar grupo anterior: ' + errDel.message, 'error');
+            btn.disabled = false; btn.textContent = asignar === true ? 'Asignar' : 'Mover jugador';
+            return;
+          }
           const { error } = await sb.from('grupo_jugadores').insert({ grupo_id: gid, jugador_id: j.id });
-          if (error) { GL.notificar(error.message, 'error'); return; }
+          if (error) {
+            GL.notificar('Error al asignar grupo: ' + error.message, 'error');
+            btn.disabled = false; btn.textContent = asignar === true ? 'Asignar' : 'Mover jugador';
+            return;
+          }
+
           const grupoAnt = actualGrupo ? GL.ctx.grupos.find(g => g.id === actualGrupo.id) : null;
           const grupoNvo = GL.ctx.grupos.find(g => g.id === gid);
           GL.auditoria && GL.auditoria.registrar('jugador_grupo_cambio', 'jugador', j.id, {
@@ -601,8 +1010,15 @@
             grupo_anterior: grupoAnt ? grupoAnt.nombre : 'Sin asignar',
             grupo_nuevo:    grupoNvo ? grupoNvo.nombre : '?'
           });
-          cerrar(); GL.invalidar(); await GL.cargarContexto(true);
-          GL.notificar(asignar === true ? 'Jugador asignado al grupo.' : 'Jugador movido de grupo.', 'exito');
+
+          cerrar();
+          GL.invalidar();
+          await GL.cargarContexto(true);
+          GL.notificar(
+            esc(j.nombre_usuario) + (asignar === true
+              ? ' asignado a Grupo ' + (grupoNvo ? GL.letraGrupo(grupoNvo) : '?') + '.'
+              : ' movido a Grupo ' + (grupoNvo ? GL.letraGrupo(grupoNvo) : '?') + '.'),
+            'exito');
           Mod.render(root);
         });
       }
@@ -1126,59 +1542,224 @@
   }
 
   function modalAgregar(root) {
+    // Bloquear si el torneo ya finalizó
+    const torneoActual = GL.torneo();
+    if (torneoActual && torneoActual.estado === 'finalizado') {
+      GL.notificar('El torneo ya finalizó. No se pueden agregar nuevos jugadores.', 'advertencia'); return;
+    }
+    if (!torneoActual) {
+      GL.notificar('No hay un torneo activo. Creá uno desde Administración → Configuración.', 'advertencia'); return;
+    }
+
+    const grupos = GL.grupos();
+    const hintTel = paisVal => {
+      if (!GL.tel || !CONFIG.PAISES || !CONFIG.PAISES[paisVal]) return '';
+      const cfg = CONFIG.PAISES[paisVal];
+      return '+' + cfg.prefijo + ' · ' + cfg.digitos + ' dígitos';
+    };
+
     const m = GL.abrirModal({
-      titulo: 'Agregar jugador',
+      titulo: 'Agregar jugador al torneo',
       ancho: '',
-      cuerpo: '<div class="campo-row">' +
-          '<label class="campo"><span>Nombre en FC Mobile</span><input class="input" id="ag-nombre" maxlength="24" required></label>' +
-          '<label class="campo"><span>País</span><select class="input" id="ag-pais">' +
-            GL.opcionesPais('', false) +
-          '</select></label></div>' +
-        '<label class="campo"><span>Ciudad o zona horaria</span><select class="input" id="ag-zona" required>' +
-          GL.opcionesZonaHoraria('', '') +
-        '</select></label>' +
-        '<p class="nota-pie" id="ag-horario"></p>' +
+      cuerpo:
         '<div class="campo-row">' +
-          '<label class="campo"><span>Teléfono</span><input class="input" id="ag-tel"></label>' +
-          '<label class="campo"><span>Grupo</span><select class="input" id="ag-grupo">' +
-            GL.grupos().map(g => '<option value="' + g.id + '">Grupo ' + GL.letraGrupo(g) + '</option>').join('') +
-          '</select></label></div>' +
-        '<div class="campo-row">' +
-          '<label class="campo"><span>Correo electrónico</span><input class="input" type="email" id="ag-email" required></label>' +
-          '<label class="campo"><span>Contraseña temporal</span><input class="input" id="ag-clave" value="' + Math.random().toString(36).slice(2, 10) + '" required></label>' +
+          // Nombre
+          '<label class="campo"><span>Nombre en FC Mobile</span>' +
+            '<input class="input" id="ag-nombre" maxlength="24" ' +
+              'placeholder="Ej: GOAT_PEREZ" autocomplete="off">' +
+            '<small style="color:var(--text-secondary);font-size:11px;margin-top:2px;display:block">' +
+              'Solo letras, números y guión bajo. Máximo 24 caracteres.' +
+            '</small>' +
+          '</label>' +
+
+          // País
+          '<label class="campo"><span>País</span>' +
+            '<select class="input" id="ag-pais">' +
+              GL.opcionesPais('', false) +
+            '</select>' +
+          '</label>' +
         '</div>' +
-        '<p class="nota-pie">La cuenta se crea en Supabase Auth mediante una función segura del servidor. Entregale la contraseña al jugador por un canal privado.</p>',
-      acciones: '<button type="button" class="btn sec" data-cerrar>Cancelar</button><button type="button" class="btn" id="ag-crear">Crear jugador</button>',
+
+        // Zona horaria
+        '<label class="campo"><span>Ciudad o zona horaria</span>' +
+          '<select class="input" id="ag-zona">' +
+            GL.opcionesZonaHoraria('', '') +
+          '</select>' +
+        '</label>' +
+        '<p class="nota-pie" id="ag-horario"></p>' +
+
+        '<div class="campo-row">' +
+          // Teléfono
+          '<label class="campo">' +
+            '<span>Teléfono <small id="ag-tel-hint" style="color:var(--text-secondary)"></small></span>' +
+            '<input class="input" id="ag-tel" ' +
+              'placeholder="Solo dígitos, sin espacios" ' +
+              'inputmode="numeric">' +
+          '</label>' +
+
+          // Grupo
+          '<label class="campo"><span>Grupo</span>' +
+            '<select class="input" id="ag-grupo">' +
+              (grupos.length
+                ? grupos.map(g =>
+                    '<option value="' + g.id + '">Grupo ' + GL.letraGrupo(g) +
+                    ' — ' + GL.clasificacion(g.id).length + ' jugador(es)</option>'
+                  ).join('')
+                : '<option value="">Sin grupos disponibles</option>') +
+            '</select>' +
+          '</label>' +
+        '</div>' +
+
+        '<div class="campo-row">' +
+          // Email
+          '<label class="campo"><span>Correo electrónico</span>' +
+            '<input class="input" type="email" id="ag-email" ' +
+              'placeholder="jugador@correo.com" autocomplete="off">' +
+          '</label>' +
+
+          // Contraseña temporal
+          '<label class="campo"><span>Contraseña temporal</span>' +
+            '<input class="input" id="ag-clave" ' +
+              'value="' + Math.random().toString(36).slice(2, 10) + '" ' +
+              'autocomplete="new-password">' +
+            '<small style="color:var(--text-secondary);font-size:11px;margin-top:2px;display:block">' +
+              'Mínimo 8 caracteres. Entregala por un canal privado.' +
+            '</small>' +
+          '</label>' +
+        '</div>' +
+
+        '<div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);' +
+            'border-radius:8px;padding:10px 14px;font-size:12px;margin-top:4px">' +
+          icono('info', 13) +
+          ' La cuenta se crea en Supabase Auth mediante una función segura del servidor. ' +
+          'El jugador podrá cambiar su contraseña desde el perfil.' +
+        '</div>',
+
+      acciones:
+        '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
+        '<button type="button" class="btn" id="ag-crear">' + icono('user-plus', 15) + 'Crear jugador</button>',
+
       onAbrir(fondo, cerrar) {
         const pais = fondo.querySelector('#ag-pais');
         const zona = fondo.querySelector('#ag-zona');
         const nota = fondo.querySelector('#ag-horario');
-        pais.addEventListener('change', () => GL.actualizarZona(zona, pais.value, nota));
+        const hint = fondo.querySelector('#ag-tel-hint');
+
+        pais.addEventListener('change', () => {
+          GL.actualizarZona(zona, pais.value, nota);
+          if (hint) hint.textContent = hintTel(pais.value);
+          errorCampo(fondo, '#ag-tel', null);
+        });
         zona.addEventListener('change', () => GL.actualizarZona(zona, pais.value, nota, true));
         GL.actualizarZona(zona, pais.value, nota);
+
         fondo.querySelector('#ag-crear').addEventListener('click', async () => {
-          if (!zona.value) { GL.notificar('Elegí la ciudad o zona horaria del jugador.', 'advertencia'); return; }
-          const body = {
-            nombre_usuario: GL.seguroTexto(fondo.querySelector('#ag-nombre').value).toUpperCase().replace(/\s+/g, '_'),
-            pais: pais.value,
-            zona_horaria: zona.value,
-            telefono: fondo.querySelector('#ag-tel').value.trim(),
-            grupo_id: fondo.querySelector('#ag-grupo').value,
-            torneo_id: GL.torneo().id,
-            email: fondo.querySelector('#ag-email').value.trim(),
-            password: fondo.querySelector('#ag-clave').value
-          };
-          if (!body.nombre_usuario || !body.email || body.password.length < 8) {
-            GL.notificar('Completá nombre, correo y una contraseña de 8+ caracteres.', 'advertencia'); return;
+          // Limpiar errores anteriores
+          ['#ag-nombre', '#ag-pais', '#ag-zona', '#ag-tel', '#ag-email', '#ag-clave'].forEach(id =>
+            errorCampo(fondo, id, null));
+          let hayError = false;
+
+          // ── Validar nombre ──────────────────────────────────────────
+          const nombreRaw  = fondo.querySelector('#ag-nombre').value;
+          const nombreNorm = GL.seguroTexto(nombreRaw).toUpperCase().replace(/\s+/g, '_');
+          if (!nombreNorm || nombreNorm.length < 2) {
+            errorCampo(fondo, '#ag-nombre', 'El nombre debe tener al menos 2 caracteres.');
+            hayError = true;
+          } else if (nombreNorm.length > 24) {
+            errorCampo(fondo, '#ag-nombre', 'Máximo 24 caracteres (actual: ' + nombreNorm.length + ').');
+            hayError = true;
+          } else {
+            const dupl = (GL.ctx.jugadores || []).find(x => x.nombre_usuario === nombreNorm);
+            if (dupl) {
+              errorCampo(fondo, '#ag-nombre', 'Ese nombre ya está en uso por otro jugador.');
+              hayError = true;
+            }
           }
-          const btn = fondo.querySelector('#ag-crear'); btn.disabled = true; btn.textContent = 'Creando…';
+
+          // ── Validar país ───────────────────────────────────────────
+          if (!pais.value) {
+            errorCampo(fondo, '#ag-pais', 'Seleccioná el país del jugador.');
+            hayError = true;
+          }
+
+          // ── Validar zona horaria ───────────────────────────────────
+          if (!zona.value) {
+            errorCampo(fondo, '#ag-zona', 'Elegí la ciudad o zona horaria.');
+            hayError = true;
+          }
+
+          // ── Validar teléfono (opcional) ────────────────────────────
+          const telRaw = fondo.querySelector('#ag-tel').value.trim();
+          let   telFinal = telRaw || null;
+          if (telRaw && pais.value && GL.tel) {
+            const v = GL.tel.validar(telRaw, pais.value);
+            if (!v.ok) {
+              errorCampo(fondo, '#ag-tel',
+                v.mensaje || 'Número inválido para el país seleccionado.');
+              hayError = true;
+            } else {
+              telFinal = GL.tel.normalizar(telRaw, pais.value);
+            }
+          }
+
+          // ── Validar email ──────────────────────────────────────────
+          const emailVal = fondo.querySelector('#ag-email').value.trim();
+          if (!emailVal) {
+            errorCampo(fondo, '#ag-email', 'El correo electrónico es obligatorio.');
+            hayError = true;
+          } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+            errorCampo(fondo, '#ag-email', 'El formato del correo no es válido.');
+            hayError = true;
+          }
+
+          // ── Validar contraseña ─────────────────────────────────────
+          const claveVal = fondo.querySelector('#ag-clave').value;
+          if (!claveVal || claveVal.length < 8) {
+            errorCampo(fondo, '#ag-clave', 'La contraseña debe tener al menos 8 caracteres.');
+            hayError = true;
+          }
+
+          // ── Validar grupo ──────────────────────────────────────────
+          const grupoVal = fondo.querySelector('#ag-grupo').value;
+          if (!grupoVal) {
+            GL.notificar('No hay grupos disponibles. Creá los grupos desde Configuración.', 'error');
+            hayError = true;
+          }
+
+          if (hayError) return;
+
+          const btn = fondo.querySelector('#ag-crear');
+          btn.disabled = true; btn.textContent = 'Creando…';
+
+          const body = {
+            nombre_usuario: nombreNorm,
+            pais:           pais.value,
+            zona_horaria:   zona.value,
+            telefono:       telFinal,
+            grupo_id:       grupoVal,
+            torneo_id:      torneoActual.id,
+            email:          emailVal,
+            password:       claveVal
+          };
+
           try {
             const { data, error } = await sb.functions.invoke('admin-crear-jugador', { body });
             if (error) throw new Error(await mensajeInvoke(error));
-            cerrar(); GL.invalidar(); await GL.cargarContexto(true);
-            GL.notificar('Jugador creado y asignado al grupo.', 'exito'); Mod.render(root);
+            cerrar();
+            GL.invalidar();
+            await GL.cargarContexto(true);
+            GL.notificar(esc(nombreNorm) + ' creado y asignado al grupo.', 'exito');
+            Mod.render(root);
           } catch (e) {
-            GL.notificar('No se pudo crear: ' + e.message, 'error');
+            // Detectar errores específicos del servidor y mostrarlos junto al campo
+            const msg = e.message || '';
+            if (/email|correo|ya existe/i.test(msg)) {
+              errorCampo(fondo, '#ag-email', 'Ese correo ya está registrado en el sistema.');
+            } else if (/nombre|duplicate/i.test(msg)) {
+              errorCampo(fondo, '#ag-nombre', 'Ese nombre ya existe en la base de datos.');
+            } else {
+              GL.notificar('No se pudo crear el jugador: ' + msg, 'error');
+            }
             btn.disabled = false; btn.textContent = 'Crear jugador';
           }
         });

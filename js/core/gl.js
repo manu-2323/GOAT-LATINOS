@@ -420,31 +420,129 @@ const GL = {
   },
 
   /* ---------- Feedback visual ---------- */
-  skeleton(filas, alto) {
+  skeleton(filas, alto, titulo) {
     const n = filas || 5, h = alto || 18;
-    let out = '<div class="skeleton-lista" aria-label="Cargando">';
-    for (let i = 0; i < n; i++) {
-      out += '<div class="skeleton-fila" style="animation-delay:' + (i * 0.08) + 's">' +
-        '<span class="skeleton" style="width:12%"></span>' +
-        '<span class="skeleton" style="width:34%"></span>' +
-        '<span class="skeleton" style="width:10%"></span>' +
-        '<span class="skeleton" style="width:14%"></span>' +
-        '<span class="skeleton" style="width:10%"></span></div>';
+    // Anchos variados para que se vea más natural
+    const anchos = [
+      ['12%','38%','10%','14%','10%'],
+      ['14%','30%','12%','18%','8%'],
+      ['10%','42%','8%','12%','12%'],
+      ['16%','28%','14%','10%','14%'],
+      ['12%','36%','10%','16%','10%']
+    ];
+    let out = '<div class="skeleton-wrap" aria-busy="true" aria-label="Cargando contenido">';
+    if (titulo) {
+      out += '<div class="skeleton-header">' +
+        '<span class="skeleton" style="width:38%;height:22px;border-radius:6px;display:block;margin-bottom:8px"></span>' +
+        '<span class="skeleton" style="width:55%;height:13px;border-radius:4px;display:block"></span>' +
+        '</div>';
     }
-    return out + '</div>';
+    out += '<div class="skeleton-lista">';
+    for (let i = 0; i < n; i++) {
+      const aw = anchos[i % anchos.length];
+      out += '<div class="skeleton-fila" style="animation-delay:' + (i * 0.07) + 's">' +
+        aw.map(w => '<span class="skeleton" style="width:' + w + ';height:' + h + 'px"></span>').join('') +
+        '</div>';
+    }
+    return out + '</div>' +
+      '<p class="skeleton-leyenda" style="text-align:center;font-size:11px;color:var(--text-secondary);margin-top:10px">' +
+        icono('loader', 13) + ' Cargando información…</p>' +
+      '</div>';
   },
 
-  vacio(mensaje, ico, accion) {
-    return '<div class="estado-vacio">' + icono(ico || 'inbox', 34) +
+  vacio(mensaje, ico, accion, sugerencia) {
+    return '<div class="estado-vacio" role="status">' +
+      '<div class="estado-ico-wrap">' + icono(ico || 'inbox', 38) + '</div>' +
       '<h3>' + esc(mensaje || 'No hay datos para mostrar') + '</h3>' +
-      (accion || '') + '</div>';
+      (sugerencia
+        ? '<p class="estado-sugerencia">' + esc(sugerencia) + '</p>'
+        : '') +
+      (accion ? '<div class="estado-accion">' + accion + '</div>' : '') +
+    '</div>';
   },
 
-  error(mensaje, ico) {
-    return '<div class="estado-vacio error">' + icono(ico || 'triangle-alert', 34) +
-      '<h3>No se pudo cargar la información</h3><p>' + esc(mensaje || 'Revisa tu conexión e inténtalo de nuevo.') + '</p></div>';
+  error(mensajeTecnico, ico, contexto) {
+    // Traducir el error técnico a un mensaje amigable para el usuario
+    const amigable = GL.traducirError(mensajeTecnico, contexto);
+    // El error técnico siempre queda en consola para debug
+    if (mensajeTecnico && mensajeTecnico !== amigable) {
+      console.debug('[GL.error técnico]', mensajeTecnico);
+    }
+    return '<div class="estado-vacio error" role="alert">' +
+      '<div class="estado-ico-wrap">' + icono(ico || 'triangle-alert', 38) + '</div>' +
+      '<h3>Algo salió mal</h3>' +
+      '<p class="estado-desc">' + esc(amigable) + '</p>' +
+      '<div class="estado-accion">' +
+        '<button type="button" class="btn sec" onclick="location.reload()">' +
+          icono('refresh-cw', 15) + 'Reintentar' +
+        '</button>' +
+      '</div>' +
+      '<details class="error-tecnico-det" style="margin-top:14px">' +
+        '<summary style="font-size:11px;color:var(--text-secondary);cursor:pointer">Ver detalle técnico</summary>' +
+        '<pre style="font-size:10px;color:var(--text-secondary);white-space:pre-wrap;text-align:left;margin-top:6px;max-width:340px">' +
+          esc(mensajeTecnico || '—') +
+        '</pre>' +
+      '</details>' +
+    '</div>';
   },
 
+  /* Traduce mensajes de error técnicos a textos comprensibles para el usuario.
+     contexto: string opcional que identifica el módulo ('estadísticas', 'fixture', etc.) */
+  traducirError(msg, contexto) {
+    if (!msg) return 'Ocurrió un error inesperado. Intentá recargar la página.';
+    const m = String(msg).toLowerCase();
+    const ctx = contexto ? ' al cargar ' + contexto : '';
+
+    // Red / conectividad
+    if (m.includes('failed to fetch') || m.includes('networkerror') || m.includes('network request failed'))
+      return 'No pudimos conectarnos con el servidor' + ctx + '. Comprobá tu conexión a internet e intentá de nuevo.';
+    if (m.includes('timeout') || m.includes('timed out'))
+      return 'La respuesta tardó demasiado' + ctx + '. El servidor puede estar ocupado. Esperá un momento y reintentá.';
+    if (m.includes('abort'))
+      return 'La solicitud fue interrumpida' + ctx + '. Intentá recargar la página.';
+
+    // Autenticación / sesión
+    if (m.includes('jwt') || m.includes('token') || m.includes('session') || m.includes('unauthorized') || m.includes('401'))
+      return 'Tu sesión expiró. Cerrá sesión, volvé a ingresar e intentá de nuevo.';
+    if (m.includes('403') || m.includes('forbidden') || m.includes('row-level security'))
+      return 'No tenés permiso para realizar esta acción. Si creés que es un error, contactá al administrador.';
+
+    // Base de datos
+    if (m.includes('duplicate') || m.includes('unique') || m.includes('already exists'))
+      return 'Este registro ya existe. Revisá si ya fue ingresado previamente.';
+    if (m.includes('foreign key') || m.includes('violates'))
+      return 'No se puede completar la operación porque hay datos relacionados que lo impiden.';
+    if (m.includes('not found') || m.includes('no rows') || m.includes('404'))
+      return 'No encontramos la información solicitada. Es posible que haya sido eliminada o movida.';
+    if (m.includes('supabase no configurado') || m.includes('supabase'))
+      return 'Hay un problema de configuración con la base de datos. Contactá al administrador.';
+
+    // Almacenamiento
+    if (m.includes('storage') || m.includes('bucket') || m.includes('upload'))
+      return 'No se pudo subir el archivo. Verificá que sea JPG o PNG y que no supere los 5 MB.';
+
+    // Límites
+    if (m.includes('too large') || m.includes('payload'))
+      return 'El archivo o los datos enviados son demasiado grandes. Reducí el tamaño e intentá de nuevo.';
+    if (m.includes('rate limit') || m.includes('too many requests') || m.includes('429'))
+      return 'Estás haciendo demasiadas solicitudes en poco tiempo. Esperá unos segundos e intentá de nuevo.';
+
+    // Servidor
+    if (m.includes('500') || m.includes('internal server'))
+      return 'El servidor encontró un error interno. Intentá de nuevo en unos minutos.';
+    if (m.includes('503') || m.includes('service unavailable'))
+      return 'El servicio no está disponible en este momento. Intentá más tarde.';
+
+    // Sin conexión explícita (modo offline del navegador)
+    if (!navigator.onLine)
+      return 'No tenés conexión a internet. Conectate y recargá la página.';
+
+    // Genérico legible: si el mensaje es corto y en español, mostrarlo directo
+    if (msg.length < 120 && /[áéíóúñ¿¡]|[a-záéíóúñ ]{6,}/i.test(msg))
+      return msg;
+
+    return 'No pudimos cargar' + ctx + ' correctamente. Intentá de nuevo o contactá al administrador si el problema persiste.';
+  },
   encabezado(titulo, subtitulo, botones) {
     return '<div class="seccion-head"><div class="seccion-titulo">' +
       '<h2>' + esc(titulo) + '</h2>' + (subtitulo ? '<p>' + esc(subtitulo) + '</p>' : '') +
@@ -490,6 +588,173 @@ const GL = {
         }
       });
       m.addEventListener('click', e => { if (e.target === m) res(false); });
+    });
+  },
+
+  /* ─────────────────────────────────────────────────────────────────
+     GL.dialogo — sistema unificado de diálogos
+     ─────────────────────────────────────────────────────────────────
+     opciones: {
+       titulo        string         encabezado del diálogo
+       icono         string         nombre del icono Lucide (opcional)
+       cuerpo        string|fn      HTML estático o función(modal)→string
+       acciones      string         HTML de botones (opcional, se sobreescribe con tipo)
+       ancho         string         'sm'|'md'|'lg' (default: 'md')
+       tipo          string         'normal'|'peligro'|'info'|'carga'
+       confirmTexto  string         texto del botón confirmar
+       cancelTexto   string         texto del botón cancelar
+       onAbrir       fn(modal,cerrar) callback cuando abre
+       onConfirmar   fn(modal,cerrar,setBloqueado) callback al confirmar
+       consecuencias string         HTML explicativo en diálogos peligrosos
+     }
+     Devuelve el elemento del modal con:
+       modal.cerrar()
+       modal.setError(msg)
+       modal.setBloqueado(bool)
+  ─────────────────────────────────────────────────────────────────── */
+  dialogo(opciones) {
+    const o = opciones || {};
+    const tipo  = o.tipo || 'normal';
+    const ancho = o.ancho || 'md';
+    const esPeligro = tipo === 'peligro';
+
+    // Icono del encabezado
+    const icoHead = o.icono
+      ? '<span class="modal-head-ico modal-head-ico-' + tipo + '">' + icono(o.icono, 18) + '</span>'
+      : '';
+
+    // Bloque de consecuencias para acciones peligrosas
+    const bloqConsecuencias = esPeligro && o.consecuencias
+      ? '<div class="modal-consecuencias">' +
+          '<div class="modal-consecuencias-titulo">' + icono('triangle-alert', 14) + 'Consecuencias de esta acción</div>' +
+          o.consecuencias +
+        '</div>'
+      : '';
+
+    // Área de error inline (vacía al inicio)
+    const bloqError = '<div class="modal-error-inline" style="display:none" role="alert"></div>';
+
+    // Cuerpo completo
+    const cuerpoHTML = bloqConsecuencias +
+      (typeof o.cuerpo === 'string' ? o.cuerpo : '') +
+      bloqError;
+
+    // Botones
+    let accionesHTML = o.acciones || '';
+    if (!o.acciones) {
+      const cancelBtn = '<button type="button" class="btn sec" data-cerrar>' +
+        esc(o.cancelTexto || 'Cancelar') + '</button>';
+      const confirmBtn = esPeligro
+        ? '<button type="button" class="btn btn-peligro" data-confirmar>' +
+            icono('triangle-alert', 14) + esc(o.confirmTexto || 'Confirmar') + '</button>'
+        : '<button type="button" class="btn" data-confirmar>' +
+            esc(o.confirmTexto || 'Aceptar') + '</button>';
+      accionesHTML = cancelBtn + confirmBtn;
+    }
+
+    const fondo = document.createElement('div');
+    fondo.className = 'modal-fondo';
+    fondo.innerHTML =
+      '<div class="modal modal-' + ancho + (esPeligro ? ' modal-peligro' : '') + '" role="dialog" aria-modal="true" aria-labelledby="modal-titulo-id">' +
+        '<div class="modal-head">' +
+          icoHead +
+          '<h2 id="modal-titulo-id">' + esc(o.titulo || '') + '</h2>' +
+          '<button type="button" class="btn-icon" data-cerrar aria-label="Cerrar">' + icono('x', 20) + '</button>' +
+        '</div>' +
+        '<div class="modal-cuerpo">' + cuerpoHTML + '</div>' +
+        (accionesHTML ? '<div class="modal-acciones">' + accionesHTML + '</div>' : '') +
+      '</div>';
+
+    const root = document.getElementById('modal-root') || document.body;
+    root.appendChild(fondo);
+    iniciarIconos();
+
+    // Helpers expuestos en el elemento
+    const cerrar = () => {
+      fondo.classList.add('saliendo');
+      setTimeout(() => { if (fondo.parentNode) fondo.remove(); }, 180);
+    };
+    fondo.cerrar = cerrar;
+
+    fondo.setError = (msg) => {
+      const el = fondo.querySelector('.modal-error-inline');
+      if (!el) return;
+      if (msg) {
+        el.innerHTML = icono('circle-alert', 14) + ' ' + esc(msg);
+        el.style.display = 'flex';
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else {
+        el.style.display = 'none';
+        el.innerHTML = '';
+      }
+    };
+
+    fondo.setBloqueado = (bloq) => {
+      fondo.querySelectorAll('button, input, select, textarea').forEach(el => {
+        el.disabled = !!bloq;
+      });
+      const confirmBtn = fondo.querySelector('[data-confirmar]');
+      if (confirmBtn) {
+        confirmBtn.innerHTML = bloq
+          ? icono('loader', 14) + ' Guardando…'
+          : (esPeligro
+              ? icono('triangle-alert', 14) + esc(o.confirmTexto || 'Confirmar')
+              : esc(o.confirmTexto || 'Aceptar'));
+      }
+    };
+
+    // Cierre con Escape
+    const onKey = e => { if (e.key === 'Escape') cerrar(); };
+    document.addEventListener('keydown', onKey);
+    fondo.addEventListener('remove', () => document.removeEventListener('keydown', onKey), { once: true });
+
+    // Cierre por fondo
+    fondo.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', cerrar));
+    fondo.addEventListener('click', e => { if (e.target === fondo) cerrar(); });
+
+    // Botón confirmar
+    const confirmBtn = fondo.querySelector('[data-confirmar]');
+    if (confirmBtn && o.onConfirmar) {
+      confirmBtn.addEventListener('click', () => {
+        fondo.setError('');
+        o.onConfirmar(fondo, cerrar, fondo.setBloqueado);
+      });
+    }
+
+    // Callback de apertura (para cuerpo dinámico o event listeners adicionales)
+    if (typeof o.cuerpo === 'function') {
+      fondo.querySelector('.modal-cuerpo').insertAdjacentHTML('afterbegin', o.cuerpo(fondo));
+    }
+    if (o.onAbrir) o.onAbrir(fondo, cerrar);
+
+    // Foco inicial
+    setTimeout(() => {
+      const primer = fondo.querySelector('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled])');
+      if (primer) primer.focus();
+    }, 60);
+
+    return fondo;
+  },
+
+  /* Confirmación peligrosa con consecuencias explícitas — devuelve Promise<bool> */
+  confirmarPeligro(opciones) {
+    const o = opciones || {};
+    return new Promise(res => {
+      GL.dialogo({
+        titulo:        o.titulo        || '¿Estás seguro?',
+        icono:         o.icono         || 'triangle-alert',
+        tipo:          'peligro',
+        ancho:         'sm',
+        consecuencias: o.consecuencias || '',
+        cuerpo:        '<p class="modal-texto">' + esc(o.mensaje || '¿Querés continuar?') + '</p>',
+        confirmTexto:  o.confirmTexto  || 'Sí, continuar',
+        cancelTexto:   o.cancelTexto   || 'Cancelar',
+        onAbrir(fondo, cerrar) {
+          fondo.querySelector('[data-cerrar]').addEventListener('click', () => { cerrar(); res(false); });
+          fondo.addEventListener('click', e => { if (e.target === fondo) res(false); });
+        },
+        onConfirmar(fondo, cerrar) { cerrar(); res(true); }
+      });
     });
   },
 

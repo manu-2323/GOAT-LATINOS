@@ -41,7 +41,7 @@
         el.querySelectorAll('[data-jornada]').forEach(b => b.addEventListener('click', () => { Mod.jornada = Number(b.dataset.jornada); Mod.render(el); }));
         el.querySelector('[data-export]').addEventListener('click', () =>
           GL.exportarPNG('stats-export', 'GOATS_Stats_J' + Mod.jornada + '_G' + GL.letraGrupo(GL.grupo(Mod.grupoId))));
-      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message); }
+      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message, null, 'las estadísticas de jornada'); }
       iniciarIconos();
     }
   };

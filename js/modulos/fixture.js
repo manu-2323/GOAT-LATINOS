@@ -54,7 +54,7 @@
         if (chk) chk.addEventListener('change', () => { Mod.soloMios = chk.checked; Mod.render(el); });
         const gen = el.querySelector('[data-generar]');
         if (gen) gen.addEventListener('click', () => Mod.generar(el));
-      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message); }
+      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message, null, 'el fixture'); }
       iniciarIconos();
     },
 

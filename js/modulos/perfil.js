@@ -113,7 +113,7 @@
         const dc = el.querySelector('[data-eliminar-cuenta]');
         if (dc) dc.addEventListener('click', () => eliminarCuenta(el));
         enlazar(el);
-      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message); }
+      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message, null, 'el perfil'); }
       iniciarIconos();
     }
   };

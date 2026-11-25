@@ -95,7 +95,7 @@
         window.open('https://wa.me/?text=' + encodeURIComponent(txt.value), '_blank', 'noopener,noreferrer');
       });
       await actualizar();
-    } catch (e) { console.error(e); el.innerHTML = GL.error(e.message); }
+    } catch (e) { console.error(e); el.innerHTML = GL.error(e.message, null, 'los mensajes'); }
     iniciarIconos();
   }
   };

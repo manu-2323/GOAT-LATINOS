@@ -60,7 +60,7 @@
           el.querySelectorAll('[data-partido]').forEach(x => x.classList.toggle('activo', x === b));
           pintarPanel();
         }));
-      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message); }
+      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message, null, 'los resultados'); }
       iniciarIconos();
     }
   };

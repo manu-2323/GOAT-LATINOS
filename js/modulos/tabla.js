@@ -62,7 +62,7 @@
           GL.exportarTabla(Mod.grupoId, 'GOATS_Tabla_Grupo' + GL.letraGrupo(GL.grupo(Mod.grupoId))));
       } catch (e) {
         console.error(e);
-        el.innerHTML = GL.error(e.message);
+        el.innerHTML = GL.error(e.message, null, 'la tabla de posiciones');
       }
       iniciarIconos();
     }
@@ -73,45 +73,139 @@
     const jugadoresGrupo = new Set((GL.ctx.miembros || []).filter(m => m.grupo_id === grupoId).map(m => m.jugador_id));
     const datos = filas.filter(f => jugadoresGrupo.has(f.jugador_id));
     const yo = Auth.jugador && Auth.jugador.id;
+    const total = datos.length;
     if (!datos.length) {
       return GL.vacio('Aún no hay clasificación para este grupo. El administrador debe generar el fixture y cargar resultados.',
         'table-2', null) + '<div id="tabla-export" class="oculto"></div>';
     }
+
+    // Calcular indicador lateral de clasificación/descenso
+    // Clasifica top 6, zona media 7-10, descenso 11+
+    function indicadorZona(pos, total) {
+      if (pos <= 6) return { clase: 'zona-clasifica', titulo: 'Clasifica al siguiente torneo' };
+      if (pos > total - 3) return { clase: 'zona-descenso', titulo: 'Zona de descenso' };
+      return { clase: 'zona-media', titulo: '' };
+    }
+
     let filasHtml = '', separador = false;
     datos.forEach((f, i) => {
       const pos = i + 1;
       const j = GL.jugador(f.jugador_id) || {};
-      const clasePos = pos <= 6 ? 'clasifica' : pos <= 10 ? 'medio' : 'descenso';
-      if (pos === 11 && !separador) {
-        filasHtml += '<tr class="fila-separadora"><td colspan="10"><div class="linea-descenso">Zona de descenso</div></td></tr>';
+      const clasePos = pos <= 6 ? 'clasifica' : pos > total - 3 ? 'descenso' : 'medio';
+      const zona = indicadorZona(pos, total);
+      const esMio = yo === f.jugador_id;
+      const dif = f.dif || 0;
+      const difClase = dif > 0 ? 'verde-txt' : dif < 0 ? 'rojo-txt' : '';
+      const difTexto = dif > 0 ? '+' + dif : String(dif);
+
+      if (pos === total - 2 && !separador) {
+        filasHtml += '<tr class="fila-separadora"><td colspan="12"><div class="linea-descenso">' +
+          icono('arrow-down', 12) + ' Zona de descenso</div></td></tr>';
         separador = true;
       }
-      filasHtml += '<tr class="' + (yo === f.jugador_id ? 'fila-mia ' : '') + (pos > 10 ? 'fila-descenso' : '') + '" style="animation-delay:' + (i * .04) + 's">' +
-        '<td><span class="pos-badge ' + clasePos + '">' + pos + '</span></td>' +
-        '<td><div class="jugador-celda">' + GL.avatarHTML(j, 'avatar-sm') +
-          '<span class="bandera-movil">' + GL.banderaHTML(j.pais, 16) + '</span>' +
-          '<span>' + esc(j.nombre_usuario || 'Jugador') + (yo === f.jugador_id ? ' <span class="dorado" style="font-size:9px">TÚ</span>' : '') + '</span></div></td>' +
-        '<td class="col-pais"><span class="pais-celda" title="' + esc(GL.nombrePais(j.pais)) + '">' + GL.banderaHTML(j.pais, 16) +
-          '<span class="codigo-pais">' + esc(j.pais || '—') + '</span></span></td>' +
-        '<td class="num col-j">' + (f.pj || 0) + '</td>' +
-        '<td class="num col-g" style="color:var(--accent-green)">' + (f.pg || 0) + '</td>' +
-        '<td class="num col-e">' + (f.pe || 0) + '</td>' +
-        '<td class="num col-p" style="color:var(--accent-red)">' + (f.pp || 0) + '</td>' +
-        '<td class="num col-gf">' + (f.gf || 0) + ':' + (f.gc || 0) + '</td>' +
-        '<td class="num col-dif ' + ((f.dif || 0) > 0 ? 'verde-txt' : (f.dif || 0) < 0 ? 'rojo-txt' : '') + '">' + GL.signo(f.dif) + '</td>' +
-        '<td class="num col-pts dorado">' + (f.pts || 0) + '</td>' +
-        '<td class="col-expand"><button type="button" class="btn-expandir" data-expandir aria-expanded="false" aria-label="Ver G, E, P y goles">' + icono('chevron-down', 16) + '</button></td></tr>';
+
+      // Fila principal — siempre visible
+      filasHtml +=
+        '<tr class="tabla-fila' + (esMio ? ' fila-mia' : '') + (pos > total - 3 ? ' fila-descenso' : '') +
+          '" style="animation-delay:' + (i * .04) + 's" data-fila-id="' + esc(f.jugador_id) + '">' +
+
+          // Indicador lateral de zona
+          '<td class="col-zona"><span class="zona-indicador ' + zona.clase + '"' +
+            (zona.titulo ? ' title="' + zona.titulo + '"' : '') + '></span></td>' +
+
+          // Posición
+          '<td class="col-pos"><span class="pos-badge ' + clasePos + '">' + pos + '</span></td>' +
+
+          // Nombre + avatar + bandera (columna fija en móvil)
+          '<td class="col-nombre col-fija izq">' +
+            '<div class="jugador-celda">' +
+              GL.avatarHTML(j, 'avatar-sm') +
+              '<div class="jugador-celda-info">' +
+                '<span class="jugador-celda-nombre">' + esc(j.nombre_usuario || 'Jugador') +
+                  (esMio ? ' <span class="badge gold badge-yo">TÚ</span>' : '') + '</span>' +
+                '<span class="jugador-celda-pais">' + GL.banderaHTML(j.pais, 12) +
+                  ' <span class="codigo-pais">' + esc(j.pais || '—') + '</span></span>' +
+              '</div>' +
+            '</div>' +
+          '</td>' +
+
+          // Partidos jugados
+          '<td class="num col-j col-scroll" data-label="PJ">' + (f.pj || 0) + '</td>' +
+          // Victorias
+          '<td class="num col-g col-scroll verde-txt" data-label="G">' + (f.pg || 0) + '</td>' +
+          // Empates
+          '<td class="num col-e col-scroll" data-label="E">' + (f.pe || 0) + '</td>' +
+          // Derrotas
+          '<td class="num col-p col-scroll rojo-txt" data-label="P">' + (f.pp || 0) + '</td>' +
+          // Goles a favor
+          '<td class="num col-gf col-scroll" data-label="GF">' + (f.gf || 0) + '</td>' +
+          // Goles en contra
+          '<td class="num col-gc col-scroll" data-label="GC">' + (f.gc || 0) + '</td>' +
+          // Diferencia
+          '<td class="num col-dif col-scroll ' + difClase + '" data-label="Dif">' + difTexto + '</td>' +
+          // Puntos — siempre visibles, resaltados
+          '<td class="num col-pts dorado" data-label="Pts"><strong>' + (f.pts || 0) + '</strong></td>' +
+
+          // Botón expandir stats secundarias en móvil
+          '<td class="col-expand">' +
+            '<button type="button" class="btn-expandir" data-expandir ' +
+              'aria-expanded="false" aria-label="Ver detalle de ' + esc(j.nombre_usuario || 'jugador') + '">' +
+              icono('chevron-down', 15) +
+            '</button>' +
+          '</td>' +
+        '</tr>' +
+
+        // Fila expandible — estadísticas secundarias visibles al pulsar en móvil
+        '<tr class="fila-detalle" data-detalle-id="' + esc(f.jugador_id) + '">' +
+          '<td colspan="12">' +
+            '<div class="detalle-stats-grid">' +
+              '<div class="detalle-stat"><span class="detalle-stat-label">PJ</span><span class="detalle-stat-valor">' + (f.pj || 0) + '</span></div>' +
+              '<div class="detalle-stat verde-txt"><span class="detalle-stat-label">Victorias</span><span class="detalle-stat-valor">' + (f.pg || 0) + '</span></div>' +
+              '<div class="detalle-stat"><span class="detalle-stat-label">Empates</span><span class="detalle-stat-valor">' + (f.pe || 0) + '</span></div>' +
+              '<div class="detalle-stat rojo-txt"><span class="detalle-stat-label">Derrotas</span><span class="detalle-stat-valor">' + (f.pp || 0) + '</span></div>' +
+              '<div class="detalle-stat"><span class="detalle-stat-label">GF</span><span class="detalle-stat-valor">' + (f.gf || 0) + '</span></div>' +
+              '<div class="detalle-stat"><span class="detalle-stat-label">GC</span><span class="detalle-stat-valor">' + (f.gc || 0) + '</span></div>' +
+              '<div class="detalle-stat ' + difClase + '"><span class="detalle-stat-label">Diferencia</span><span class="detalle-stat-valor">' + difTexto + '</span></div>' +
+              '<div class="detalle-stat dorado"><span class="detalle-stat-label">Puntos</span><span class="detalle-stat-valor"><strong>' + (f.pts || 0) + '</strong></span></div>' +
+            '</div>' +
+          '</td>' +
+        '</tr>';
     });
 
+    // Leyenda de zonas
+    const leyenda =
+      '<div class="tabla-leyenda">' +
+        '<span class="leyenda-item"><span class="zona-indicador zona-clasifica"></span> Clasifica</span>' +
+        '<span class="leyenda-item"><span class="zona-indicador zona-media"></span> Zona media</span>' +
+        '<span class="leyenda-item"><span class="zona-indicador zona-descenso"></span> Descenso</span>' +
+        (yo ? '<span class="leyenda-item"><span class="badge gold badge-yo">TÚ</span> Tu posición</span>' : '') +
+      '</div>';
+
     return '<div id="tabla-export" style="padding:6px;background:var(--bg-primary);border-radius:var(--radius)">' +
-      '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
-      '<th>#</th><th class="izq">Jugador</th><th class="col-pais">País</th><th class="col-j">J</th>' +
-      '<th class="col-g">G</th><th class="col-e">E</th><th class="col-p">P</th><th class="col-gf">+/-</th>' +
-      '<th class="col-dif">Dif</th><th class="col-pts">Pts</th>' +
-      '<th class="col-expand"><span class="sr-only">Detalles</span></th>' +
-      '</tr></thead><tbody>' + filasHtml + '</tbody></table></div>' +
-      '<p class="nota-pie" style="text-align:right;margin-top:6px">Clasifican 6 por grupo · Jornada ' + jornada.numero +
-      ' · Generado el ' + GL.fechaLarga(new Date()) + '</p></div>';
+      '<div class="tabla-wrap tabla-wrap-scroll" tabindex="0" role="region" aria-label="Tabla de posiciones con desplazamiento horizontal">' +
+        '<div class="tabla-scroll-hint" aria-hidden="true">' + icono('arrow-right', 12) + ' Deslizá para ver más</div>' +
+        '<table class="tabla tabla-posiciones"><thead><tr>' +
+          '<th class="col-zona" aria-label="Zona"></th>' +
+          '<th class="col-pos">#</th>' +
+          '<th class="col-nombre col-fija izq">Jugador</th>' +
+          '<th class="num col-j col-scroll" title="Partidos jugados">PJ</th>' +
+          '<th class="num col-g col-scroll verde-txt" title="Victorias">G</th>' +
+          '<th class="num col-e col-scroll" title="Empates">E</th>' +
+          '<th class="num col-p col-scroll rojo-txt" title="Derrotas">P</th>' +
+          '<th class="num col-gf col-scroll" title="Goles a favor">GF</th>' +
+          '<th class="num col-gc col-scroll" title="Goles en contra">GC</th>' +
+          '<th class="num col-dif col-scroll" title="Diferencia de gol">Dif</th>' +
+          '<th class="num col-pts dorado" title="Puntos">Pts</th>' +
+          '<th class="col-expand"><span class="sr-only">Detalle</span></th>' +
+        '</tr></thead>' +
+        '<tbody>' + filasHtml + '</tbody></table>' +
+      '</div>' +
+      leyenda +
+      '<p class="nota-pie" style="text-align:right;margin-top:6px">' +
+        'Clasifican top 6 por grupo · Jornada ' + jornada.numero +
+        ' · Generado el ' + GL.fechaLarga(new Date()) +
+      '</p>' +
+    '</div>';
   }
 
   function htmlPartidosHoy(partidos, jornada) {

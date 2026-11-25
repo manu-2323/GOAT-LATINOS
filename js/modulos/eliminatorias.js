@@ -74,7 +74,7 @@
         if (gen) gen.addEventListener('click', () => generarSiguiente(el));
         el.querySelector('[data-export]').addEventListener('click', () =>
           GL.exportarPNG('bracket-export', 'GOATS_Eliminatorias'));
-      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message); }
+      } catch (e) { console.error(e); el.innerHTML = GL.error(e.message, null, 'las eliminatorias'); }
       iniciarIconos();
     }
   };
