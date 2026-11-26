@@ -1,6 +1,7 @@
 # FASE 3.20 — Informe de experiencia integral de competición
 
-**Estado:** cerrada para publicación en `main` (pendiente de commit/push en el momento de redacción).
+**Estado:** CERRADA Y PUBLICADA en `main`, verificada en GitHub Actions y GitHub Pages.
+**Commit de implementación:** `c491f009a3b49105043d2c52e8008102f5db2bb8`.
 **Base:** `a2d926c1768210a8675ac68c4fa58f4cb15b9510` (FASE 3.19 publicada y verificada).
 **Rama:** `main` (sin ramas adicionales).
 **Alcance:** recorrido completo administrador → jugador → integridad de datos de competición,
@@ -12,8 +13,8 @@ sin tocar Supabase, RLS, RPC, Edge Functions ni datos reales.
 
 La FASE 3.20 convierte los hallazgos de la auditoría 3.19 en mejoras verificables del
 recorrido de competición. Se mantuvieron todos los avances de fases anteriores y el tema
-oscuro, acentos rojos, Inter y `css/tokens-3.1.css`. No se crearon ramas ni se hizo
-commit/push antes de esta publicación.
+oscuro, acentos rojos, Inter y `css/tokens-3.1.css`. No se crearon ramas adicionales:
+la publicación se hizo directamente en `main`.
 
 Se corrigieron los fallos de frontend que podían resolverse sin decisiones reglamentarias
 ni cambios de infraestructura. Quedan documentados, sin ejecutar, los que requieren SQL,
@@ -187,10 +188,14 @@ Antes del commit/push se verificaron: Vitest, Playwright, `node --check`,
 `git diff --check`, rutas/módulos, diff completo, cache-busting, ausencia de datos
 ficticios y ausencia de cambios no autorizados de BD/permisos.
 
-Tras el commit y push a `main` se debe verificar:
+Verificación posterior al push (realizada):
 
-1. Actions: verde para el commit de FASE 3.20.
-2. Pages: `https://manu-2323.github.io/GOAT-LATINOS/`.
-3. `index.html` público con CSS `?v=3.20.0`, JS `?v=1.3.4` y onboarding `?v=1.2.2`.
+1. Actions: el workflow `pages build and deployment` terminó en `success` para el
+   commit de implementación `c491f00` (run `45895964464`). El commit que actualiza
+   este informe también fue publicado y verificado en Actions con el mismo flujo.
+2. Pages: `https://manu-2323.github.io/GOAT-LATINOS/` → HTTP 200.
+3. `index.html` público con CSS `?v=3.20.0`, JS `?v=1.3.4` y onboarding `?v=1.2.2`;
+   sin versiones anteriores sirviéndose por caché.
 4. Informe público en
-   `https://manu-2323.github.io/GOAT-LATINOS/docs/fase-3.20-informe-experiencia-integral.md`.
+   `https://manu-2323.github.io/GOAT-LATINOS/docs/fase-3.20-informe-experiencia-integral.md`
+   → HTTP 200 con el contenido definitivo de esta fase.
