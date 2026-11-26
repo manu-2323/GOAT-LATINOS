@@ -301,9 +301,17 @@
 
       el.querySelector('#notif-eliminar-todas')?.addEventListener('click', async () => {
         const leidas = Mod._cache.filter(n => n.leida && !String(n.id).startsWith('local_'));
-        for (const n of leidas) await sb.from('notificaciones').delete().eq('id', n.id);
-        Mod._cache = Mod._cache.filter(n => !n.leida);
-        GL.notificar('Notificaciones leídas eliminadas.', 'exito');
+        const borradas = [];
+        let error = null;
+        for (const n of leidas) {
+          const { error: err } = await sb.from('notificaciones').delete().eq('id', n.id);
+          if (err) error = error || err;
+          else borradas.push(n.id);
+        }
+        Mod._cache = Mod._cache.filter(n =>
+          !n.leida || (!String(n.id).startsWith('local_') && !borradas.includes(n.id)));
+        if (error) GL.notificar(GL.mensaje(error, 'guardar', 'las notificaciones'), 'error');
+        else if (borradas.length) GL.notificar('Notificaciones leídas eliminadas.', 'exito');
         Mod._pintarVista(el);
       });
 
@@ -311,7 +319,7 @@
         item.addEventListener('click', async () => {
           const id   = item.dataset.notifId;
           const hash = item.dataset.notifHash;
-          await Mod._marcarLeida(id);
+          if (!(await Mod._marcarLeida(id))) return;
           item.classList.remove('no-leida');
           item.querySelector('.notif-punto')?.remove();
           Mod._actualizarBadge();
@@ -331,20 +339,28 @@
 
     /* ── Marcar leídas ── */
     async _marcarLeida(id) {
-      if (!id || String(id).startsWith('local_')) return;
-      await sb.from('notificaciones').update({ leida: true }).eq('id', id);
+      if (!id || String(id).startsWith('local_')) return true;
+      const { error } = await sb.from('notificaciones').update({ leida: true }).eq('id', id);
+      if (error) {
+        GL.notificar(GL.mensaje(error, 'guardar', 'la notificación'), 'error');
+        return false;
+      }
       const n = Mod._cache.find(x => x.id === id);
       if (n && !n.leida) { n.leida = true; Mod._sinLeer = Math.max(0, Mod._sinLeer - 1); }
+      return true;
     },
 
     async _marcarTodas(el) {
       if (!Auth.jugador) return;
       const sinLeer = Mod._cache.filter(n => !n.leida && !String(n.id).startsWith('local_'));
+      let error = null;
       for (const n of sinLeer) {
-        await sb.from('notificaciones').update({ leida: true }).eq('id', n.id);
-        n.leida = true;
+        const { error: err } = await sb.from('notificaciones').update({ leida: true }).eq('id', n.id);
+        if (err) error = error || err;
+        else n.leida = true;
       }
-      Mod._sinLeer = 0;
+      Mod._sinLeer = Mod._cache.filter(n => !n.leida).length;
+      if (error) GL.notificar(GL.mensaje(error, 'guardar', 'las notificaciones'), 'error');
       Mod._actualizarBadge();
       Mod._pintarVista(el);
     },

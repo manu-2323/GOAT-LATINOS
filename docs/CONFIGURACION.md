@@ -61,8 +61,8 @@ select proname from pg_proc where proname like 'gl_%' order by proname;
 
 La lectura de tablas del torneo es pública; la escritura está restringida a administradores.
 `public.jugadores` es privada: `anon` no tiene `SELECT` y la app lee solo la vista
-`public.jugadores_publicos`, que expone `id`, `nombre_usuario`, `pais`, `zona_horaria`, `avatar_url`,
-`activo`, `suspendido`, `torneo_id` y `numero`. Nunca expone `email`, `telefono`, `user_id`, `rol` ni
+`public.jugadores_publicos`, que expone `id`, `nombre_usuario`, `pais`, `avatar_url`, `activo`,
+`suspendido`, `torneo_id` y `numero`. Nunca expone `email`, `telefono`, `user_id`, `rol`, `zona_horaria` ni
 `super_admin`. El trigger `gl_proteger_rol` impide que un jugador se autoasigne `rol`, `activo`,
 `suspendido`, `torneo_id`, `super_admin` o `email`. `service_role` y el `super_admin` pueden
 actualizar esos campos.
@@ -210,8 +210,10 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
   respetando cambios estacionales (Tijuana y Santiago cambian; Ciudad de México y Buenos Aires no).
 - **Vistas afectadas**: fixture y “Partidos de hoy” muestran la hora de local y visitante;
   administración muestra la zona junto al horario; mensajes de WhatsApp agrupan por zona real.
-- **Backend**: la columna existe en `public.jugadores` y en la vista pública; el alta desde
-  administración envía la zona y la Edge Function la valida con `Intl` antes de insertar.
+- **Backend**: la columna existe en `public.jugadores`; el alta desde administración envía la
+  zona y la Edge Function la valida con `Intl` antes de insertar. La vista pública
+  `public.jugadores_publicos` **no expone `zona_horaria`**: el administrativo lee la tabla
+  completa y el invitado resuelve la zona desde `pais` con `GL.zonaJugador()`.
 - **Novatos**: notas con el horario local y su offset (`UTC-06:00`), selector con nombres de
   ciudad y mensaje de ayuda si todavía no eligieron zona.
 

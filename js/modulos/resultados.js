@@ -213,6 +213,11 @@
           Object.entries(ESTADOS_PARTIDO).filter(([k]) => k !== 'pendiente').map(([k, v]) =>
             '<option value="' + k + '"' + (p.estado === k ? ' selected' : '') + '>' + v.label + '</option>').join('') +
         '</select></label>' +
+      (p.estado && p.estado !== 'pendiente'
+        ? '<label class="r7-campo"><span>Motivo de corrección</span>' +
+            '<input class="input" type="text" id="motivo" maxlength="160" placeholder="Describe qué se corrigió" required>' +
+          '</label>'
+        : '') +
       '<details class="r7-detalles"><summary>' + icono('chart-no-axes-column', 14) + ' Estadísticas avanzadas (opcional)</summary>' +
         '<div class="r7-stats-grid">' + camposStats(p, cerrada) + '</div></details>' +
       (!cerrada ? (
@@ -450,6 +455,13 @@
 
     let golesLocal = val('#g-local'), golesVisita = val('#g-visita');
     const estado = panel.querySelector('#estado') ? panel.querySelector('#estado').value : 'jugado';
+    const esCorreccion = !!p.estado && p.estado !== 'pendiente';
+    const motivoEl = panel.querySelector('#motivo');
+    const motivo = esCorreccion ? String((motivoEl && motivoEl.value) || '').trim() : null;
+
+    if (esCorreccion && !motivo) {
+      GL.notificar('Indica el motivo de la corrección antes de guardar.', 'advertencia'); return;
+    }
 
     if (GL.esResolucionExpulsion({ estado })) {
       const r = GL.resultado({ estado });
@@ -507,7 +519,7 @@
         p_estado:          estado,
         p_captura_url:     capturaUrl,
         p_ingresado_por:   user ? user.id : null,
-        p_motivo:          null,   // null = ingreso inicial; string = corrección con motivo
+        p_motivo:          motivo, // null = ingreso inicial; texto = corrección con motivo
         p_stats:           stats
       });
 

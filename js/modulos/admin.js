@@ -1419,7 +1419,10 @@
     if (!j) return;
     if (quitar) {
       try {
-        const { error } = await sb.from('grupo_jugadores').delete().eq('jugador_id', j.id);
+        const idsGrupos = GL.grupos().map(g => g.id);
+        if (!idsGrupos.length) { GL.notificar('No hay grupos del torneo activo.', 'advertencia'); return; }
+        const { error } = await sb.from('grupo_jugadores').delete()
+          .eq('jugador_id', j.id).in('grupo_id', idsGrupos);
         if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); return; }
         await recargarContextoAdmin();
         GL.notificar(j.nombre_usuario + ' quedó sin grupo.', 'exito');
@@ -2249,7 +2252,7 @@
             grupos.map(g =>
               '<option value="' + g.id + '"' +
                 (actualGrupo && g.id === actualGrupo.id ? ' selected' : '') + '>' +
-                'Grupo ' + GL.letraGrupo(g) + ' — ' + (GL.clasificacion(g.id).length) + ' jugador(es)' +
+                'Grupo ' + GL.letraGrupo(g) + ' — ' + e6Miembros(g).length + ' jugador(es)' +
               '</option>'
             ).join('') +
           '</select>' +
@@ -2281,7 +2284,14 @@
           const btn = fondo.querySelector('#gr-guardar');
           btn.disabled = true; btn.textContent = 'Moviendo…';
 
-          const { error: errDel } = await sb.from('grupo_jugadores').delete().eq('jugador_id', j.id);
+          const idsGrupos = GL.grupos().map(g => g.id);
+          if (!idsGrupos.length) {
+            GL.notificar('No hay grupos del torneo activo.', 'advertencia');
+            btn.disabled = false; btn.textContent = asignar === true ? 'Asignar' : 'Mover jugador';
+            return;
+          }
+          const { error: errDel } = await sb.from('grupo_jugadores').delete()
+            .eq('jugador_id', j.id).in('grupo_id', idsGrupos);
           if (errDel) {
             GL.notificar(GL.mensaje(errDel, 'guardar', 'la administración'), 'error');
             btn.disabled = false; btn.textContent = asignar === true ? 'Asignar' : 'Mover jugador';
@@ -2900,7 +2910,7 @@
                 (grupos.length
                   ? grupos.map(g =>
                       '<option value="' + g.id + '">Grupo ' + GL.letraGrupo(g) +
-                      ' — ' + GL.clasificacion(g.id).length + ' jugador(es)</option>'
+                      ' — ' + e6Miembros(g).length + ' jugador(es)</option>'
                     ).join('')
                   : '<option value="">Sin grupos disponibles</option>') +
               '</select>' +

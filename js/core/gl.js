@@ -922,7 +922,7 @@ const GL = {
   // 'jugadores_publicos' es la vista ya filtrada en la base de datos.
   _columnas: {
     jugadores:         'id,nombre_usuario,pais,zona_horaria,avatar_url,activo,suspendido,rol,torneo_id,numero,telefono,telefono_e164,telefono_nacional,pais_telefono,telefono_verificado,telefono_valido_plan,email,user_id,super_admin,created_at',
-    jugadores_publicos:'id,nombre_usuario,pais,zona_horaria,avatar_url,activo,suspendido,torneo_id,numero',
+    jugadores_publicos:'id,nombre_usuario,pais,avatar_url,activo,suspendido,torneo_id,numero',
     sanciones:         'id,jugador_id,torneo_id,tipo,puntos_descuento,partidos_suspension,motivo,created_at'
   },
 
@@ -940,16 +940,20 @@ const GL = {
     GL._ctxTime = ahora;
     GL._ctxPromise = (async () => {
       const t = GL.ctx.torneo;
+      /* FASE 2.3 revocó SELECT de anon sobre grupo_jugadores y sanciones.
+         El invitado no debe consultarlas: la pertenencia se derive de clasificacion. */
+      const esPublico = !(typeof Auth !== 'undefined' && Auth && Auth.usuario);
+      const sinDatos = Promise.resolve({ data: [], error: null });
       const [torneos, grupos, jugadores, miembros, jornadas, clasificacion, sanciones] = await Promise.all([
         GL.consultar('torneos', q => q.eq('estado', 'activo').order('created_at', { ascending: false }).limit(1)),
         GL.consultar('grupos', q => q.order('nombre')),
         GL.esAdmin()
           ? GL.consultar('jugadores', q => q.order('nombre_usuario'))
           : GL.consultar('jugadores_publicos', q => q.order('nombre_usuario')),
-        GL.consultar('grupo_jugadores'),
+        esPublico ? sinDatos : GL.consultar('grupo_jugadores'),
         GL.consultar('jornadas', q => q.order('numero', { ascending: true })),
         GL.consultar('clasificacion', q => q.order('pts', { ascending: false })),
-        GL.consultar('sanciones', q => q.order('created_at', { ascending: false }))
+        esPublico ? sinDatos : GL.consultar('sanciones', q => q.order('created_at', { ascending: false }))
       ]);
       const error = torneos.error || grupos.error || jugadores.error || miembros.error || jornadas.error || clasificacion.error || sanciones.error;
       if (error) {
@@ -963,14 +967,18 @@ const GL = {
         torneo,
         grupos: filtrar(grupos.data || []),
         jugadores: filtrar(jugadores.data || []),
-        miembros: miembros.data || [],
+        miembros: [],
         jornadas: filtrar(jornadas.data || []),
         clasificacion: filtrar(clasificacion.data || []),
         sanciones: filtrar(sanciones.data || [])
       };
+      // El invitado no puede leer grupo_jugadores: usa la clasificación pública.
+      const miembrosBase = esPublico
+        ? GL.ctx.clasificacion.map(c => ({ grupo_id: c.grupo_id, jugador_id: c.jugador_id }))
+        : (miembros.data || []);
       // Filtrar miembros al torneo activo usando los grupos ya filtrados
       const gruposDelTorneo = new Set(GL.ctx.grupos.map(g => g.id));
-      GL.ctx.miembros = (miembros.data || []).filter(m => gruposDelTorneo.has(m.grupo_id));
+      GL.ctx.miembros = miembrosBase.filter(m => gruposDelTorneo.has(m.grupo_id));
 
       // Detectar jugadores en dos grupos del mismo torneo (no debería pasar, pero lo bloqueamos)
       const jugadorEnGrupo = {};
@@ -1077,7 +1085,8 @@ const GL = {
   },
 
   jornadaAbiertaNumero() {
-    const j = GL.ctx.jornadas.find(x => x.estado === 'abierta' && x.numero <= CONFIG.JORNADAS_FASE_REGULAR);
+    const total = Number(GL.torneo() && GL.torneo().total_jornadas) || CONFIG.JORNADAS_FASE_REGULAR;
+    const j = GL.ctx.jornadas.find(x => x.estado === 'abierta' && x.numero <= total);
     return j ? j.numero : null;
   },
 

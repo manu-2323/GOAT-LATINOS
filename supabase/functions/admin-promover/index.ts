@@ -1,6 +1,7 @@
 // Supabase Edge Function: admin-promover
 // Permite al superadministrador promover o revocar privilegios de administrador.
-// Requiere JWT válido del superadmin + TOTP si MFA está habilitado.
+// Requiere JWT válido del superadmin. Esta función no verifica nivel AAL2/TOTP:
+// si el proyecto habilita MFA, debe comprobarse el factor antes de autorizar.
 // Registra cada acción en admin_audit_log.
 // @ts-ignore
 /// <reference types="https://esm.sh/@supabase/supabase-js@2/dist/module/index.d.ts" />

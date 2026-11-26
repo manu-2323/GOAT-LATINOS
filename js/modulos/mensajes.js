@@ -402,7 +402,7 @@
         problemas,
         texto: 'MENSAJE NO DISPONIBLE — DATOS SIN VERIFICAR\n\n' +
           'Motivos:\n' + problemas.map((p, i) => (i + 1) + '. ' + p).join('\n') +
-          '\n\nCorregí estos puntos en Supabase y volvé a generar el mensaje.'
+          '\n\nCorregí estos puntos en Administración, Jornadas o Perfil según corresponda y volvé a generar el mensaje.'
       };
     }
 

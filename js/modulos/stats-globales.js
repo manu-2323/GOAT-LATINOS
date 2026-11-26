@@ -328,7 +328,7 @@
           },
           {
             label          : '% Puntos máx',
-            data           : ptsDatos,
+            data           : ptsPct,
             borderColor    : GL.tema.advertencia,
             backgroundColor: GL.tema.alfa(GL.tema.advertencia, 0.1),
             pointBackgroundColor: GL.tema.advertencia,
@@ -350,10 +350,6 @@
         }
       }
     });
-
-    // Corregir referencia a ptsDatos → ptsPct
-    _charts['efectividad'].data.datasets[1].data = ptsPct;
-    _charts['efectividad'].update('none');
   }
 
   /* ── Tabla accesible debajo del gráfico ── */
