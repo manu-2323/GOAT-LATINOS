@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { Buffer } from 'node:buffer';
 
 const base = 'file:///C:/Users/manue/AppData/Local/Temp/opencode/GOAT-LATINOS-deploy';
-const out = 'docs/capturas-fase-3.15';
+const out = 'docs/capturas-fase-3.16';
 fs.mkdirSync(out, { recursive: true });
 
 const PNG = Buffer.from(
@@ -27,6 +27,7 @@ const resultados = {
   navegacion: null,
   foco: null,
   movimientoReducido: null,
+  admin: null,
   consola: [],
   errorEsperado: []
 };
@@ -278,6 +279,52 @@ for (const width of [320, 375, 390, 430, 768, 1024, 1366, 1920]) {
   await page.close();
 }
 
+/* FASE 3.16: los tres paneles de Administración se validan con mocks locales.
+   No se toca Supabase ni se insertan datos en producción. */
+resultados.admin = {};
+for (const [mock, selector, etiqueta] of [
+  ['mock-jugadores-3.5.html', '.j5-pantalla', 'jugadores'],
+  ['mock-equipos-3.6.html', '.e6-pantalla', 'equipos'],
+  ['mock-dashboard-3.4.html', '.da-pantalla', 'dashboard']
+]) {
+  resultados.admin[etiqueta] = {};
+  for (const [width, height] of [[1920, 1080], [1366, 768], [390, 844]]) {
+    const page = await browser.newPage({ viewport: { width, height } });
+    const errores = [];
+    page.on('pageerror', e => errores.push('PAGE ' + e.message));
+    page.on('console', m => { if (m.type() === 'error') errores.push('CONSOLE ' + m.text()); });
+    await page.route(/^https?:\/\//, route => route.abort());
+    await page.goto(base + '/' + mock, { waitUntil: 'load' });
+    await page.waitForSelector('#vista ' + selector, { timeout: 20000 });
+    await page.waitForTimeout(200);
+    resultados.admin[etiqueta][width] = { ...(await metricas(page)), errores };
+    await captura(page, 'admin-' + etiqueta + '-' + width, true);
+
+    if (etiqueta === 'jugadores' && width === 1366) {
+      const visiblesAntes = await page.locator('#vista tr.j5-fila:not([hidden])').count();
+      await page.locator('#j5-inactivos').check();
+      const visiblesDespues = await page.locator('#vista tr.j5-fila:not([hidden])').count();
+      resultados.admin.jugadores.inactivos = {
+        visiblesAntes,
+        visiblesDespues,
+        contador: await page.locator('#j5-contador').innerText(),
+        botonesReincorporar: await page.locator('#vista [data-accion^="reincorporar-"]').count()
+      };
+    }
+    if (etiqueta === 'dashboard' && width === 1366) {
+      const kpis = await page.locator('#vista .da-kpi').allTextContents();
+      await page.locator('#da-refrescar').click();
+      resultados.admin.dashboard.kpis = kpis.map(t => t.replace(/\s+/g, ' ').trim());
+      resultados.admin.dashboard.refresco = {
+        bloqueadoDuranteCarga: await page.locator('#da-refrescar').isDisabled(),
+        jornadasVirtualesContadas: kpis.some(t => /Jornadas abiertas\s+5/.test(t.replace(/\s+/g, ' ')))
+      };
+    }
+    if (errores.length) resultados.consola.push(...errores.map(e => etiqueta + ' ' + width + ': ' + e));
+    await page.close();
+  }
+}
+
 await browser.close();
 fs.writeFileSync(`${out}/verificacion-despues.json`, JSON.stringify(resultados, null, 2));
 console.log(JSON.stringify({
@@ -294,6 +341,7 @@ console.log(JSON.stringify({
   estados: resultados.estados,
   foco: resultados.foco,
   movimientoReducido: resultados.movimientoReducido,
+  admin: resultados.admin,
   consola: resultados.consola,
   errorEsperado: resultados.errorEsperado.length
 }, null, 2));

@@ -3058,6 +3058,13 @@ input[type="checkbox"]:not(.toggle input),input[type="radio"]:not(.toggle input)
 }
 .j5-input-ico .input{padding-left:36px}
 .j5-limpiar{white-space:nowrap}
+.j5-check-inactivos{
+  display:inline-flex;align-items:center;gap:8px;margin-top:var(--gl-space-3);
+  min-height:36px;padding:6px 10px;border:1px solid var(--gl-border);
+  border-radius:var(--gl-radius-sm);background:var(--gl-surface-2);
+  font-size:var(--gl-fs-2xs);color:var(--gl-text-secondary);cursor:pointer
+}
+.j5-check-inactivos input{accent-color:var(--gl-brand-text);width:16px;height:16px}
 .j5-filtros-nota{
   display:flex;align-items:flex-start;gap:6px;margin-top:var(--gl-space-3);
   font-size:var(--gl-fs-2xs);color:var(--gl-text-tertiary);line-height:var(--gl-lh-snug)
@@ -3075,6 +3082,8 @@ input[type="checkbox"]:not(.toggle input),input[type="radio"]:not(.toggle input)
 .j5-panel-cab p{font-size:var(--gl-fs-xs);color:var(--gl-text-secondary)}
 .j5-tabla-wrap{overflow-x:auto}
 .j5-tabla{min-width:960px}
+.j5-tabla tr[hidden]{display:none!important}
+.j5-tabla tr.j5-fila[data-j5-inactivo="1"] td{opacity:.62}
 .j5-tabla th,.j5-tabla td{padding:var(--gl-space-3) 10px;font-size:var(--gl-fs-xs)}
 .j5-tabla th:first-child,.j5-tabla td:first-child{padding-left:var(--gl-space-4)}
 .j5-tabla .jugador-celda{gap:10px;min-height:44px}

@@ -523,7 +523,7 @@
   /* ── API pública: GL.auditoria.registrar() ── */
   GL.auditoria = {
     async registrar(accion, entidadTipo, entidadId, detalle, grupoId) {
-      if (!Auth.jugador) return;
+      if (!Auth.jugador) return { ok: false, motivo: 'sin_sesion' };
       try {
         const uid = (await sb.auth.getUser()).data?.user?.id;
         await sb.rpc('gl_registrar_auditoria', {
@@ -536,9 +536,12 @@
             ? Object.assign({}, detalle || {}, { grupo_id: grupoId })
             : (detalle || {})
         });
+        return { ok: true };
       } catch (e) {
         console.warn('[Auditoría]', e.message);
-        // Fallo silencioso: la operación principal ya se completó
+        /* Se devuelve el fallo para que el llamador pueda avisar. Los
+           llamadores históricos que ignoran el valor no cambian de conducta. */
+        return { ok: false, error: e.message };
       }
     }
   };

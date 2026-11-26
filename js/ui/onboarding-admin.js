@@ -7,6 +7,15 @@
 const OnboardingAdmin = (() => {
   const CLAVE_VISTO = 'gl_tour_admin_v1';
 
+  /* El recorrido es por cuenta: un admin nuevo no debe heredarlo de otro
+     usuario que haya usado el mismo navegador. */
+  function claveVisto() {
+    const id = (typeof Auth !== 'undefined' && Auth && Auth.jugador && Auth.jugador.id)
+      ? Auth.jugador.id : (typeof Auth !== 'undefined' && Auth && Auth.usuario && Auth.usuario.id)
+        ? Auth.usuario.id : 'anon';
+    return CLAVE_VISTO + '::' + id;
+  }
+
   const pasos = [
     {
       ico: 'layout-dashboard', titulo: 'Bienvenido al Centro de control',
@@ -14,8 +23,8 @@ const OnboardingAdmin = (() => {
       accion: null
     },
     {
-      ico: 'trophy', titulo: '1 · Crea el torneo y los grupos',
-      cuerpo: 'En Administración → Configuración defines nombre, temporada y número de jornadas. Después crea los grupos y asigna a los jugadores.',
+      ico: 'trophy', titulo: '1 · Crea el torneo',
+      cuerpo: 'En Administración → Configuración defines nombre, temporada y número de jornadas. Los equipos se generan con el torneo; después asigná los jugadores desde la pestaña Jugadores.',
       accion: { label: 'Abrir Administración', hash: 'administracion' }
     },
     {
@@ -45,13 +54,14 @@ const OnboardingAdmin = (() => {
     },
     {
       ico: 'shield-check', titulo: '7 · Auditoría y exportaciones',
-      cuerpo: 'Auditoría registra cada cambio. Desde cualquier panel puedes exportar a PNG. Usa la ayuda de este tour cuando lo necesites desde el Centro de control.',
+      cuerpo: 'Auditoría muestra los cambios registrados. Algunas acciones todavía no son trazables desde el cliente. Usa «Ver guía» en el Centro de control para repetir este recorrido.',
       accion: { label: 'Ir a Auditoría', hash: 'auditoria' }
     }
   ];
 
   let paso = 0;
   let overlay = null;
+  let onKey = null;
 
   function pct() { return Math.round(((paso + 1) / pasos.length) * 100); }
 
@@ -81,15 +91,17 @@ const OnboardingAdmin = (() => {
 
   function cerrar(irHash) {
     if (overlay) { overlay.remove(); overlay = null; }
-    try { localStorage.setItem(CLAVE_VISTO, '1'); } catch (e) { /* modo privado */ }
+    if (onKey) { document.removeEventListener('keydown', onKey); onKey = null; }
+    try { localStorage.setItem(claveVisto(), '1'); } catch (e) { /* modo privado */ }
     if (irHash) location.hash = irHash;
   }
 
   function iniciar(force) {
     if (!force) {
-      try { if (localStorage.getItem(CLAVE_VISTO)) return; } catch (e) { /* procede */ }
+      try { if (localStorage.getItem(claveVisto())) return; } catch (e) { /* procede */ }
     }
     paso = 0;
+    if (onKey) { document.removeEventListener('keydown', onKey); onKey = null; }
     if (overlay) overlay.remove();
     overlay = document.createElement('div');
     overlay.className = 'ob-overlay';
@@ -138,8 +150,8 @@ const OnboardingAdmin = (() => {
         if (i >= 0 && i < pasos.length) { paso = i; renderPaso(); }
       });
     });
-    const onKey = e => {
-      if (e.key === 'Escape') { cerrar(); document.removeEventListener('keydown', onKey); }
+    onKey = e => {
+      if (e.key === 'Escape') cerrar();
     };
     document.addEventListener('keydown', onKey);
     setTimeout(() => {

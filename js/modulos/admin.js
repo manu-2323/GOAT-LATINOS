@@ -18,7 +18,8 @@
       el.innerHTML = GL.skeleton(8);
       if (!(await GL.asegurarAdmin(el))) return;
       try {
-        await GL.cargarContexto(true);
+        /* El router (app.js) ya cargó y validó el contexto antes de renderizar.
+           Recargarlo aquí duplicaba siete consultas por cada navegación. */
         if (!GL.torneo()) {
           el.innerHTML = htmlSinTorneo();
           enlazar(el, el);
@@ -104,6 +105,41 @@
     Mod.partidosCache = GL.torneoId() ? await GL.partidos({ torneo_id: GL.torneoId() }) : [];
     if (!GL.grupos().some(g => g.id === Mod.grupoJornadas))
       Mod.grupoJornadas = GL.grupos().length ? GL.grupos()[0].id : null;
+  }
+
+  /* Escritura de auditoría esperada. Si falla se informa y se devuelve false:
+     la operación principal no debe presumir trazabilidad completa. */
+  async function auditar(accion, entidadTipo, entidadId, detalle, grupoId) {
+    if (!GL.auditoria || typeof GL.auditoria.registrar !== 'function') return false;
+    try {
+      const r = await GL.auditoria.registrar(accion, entidadTipo, entidadId, detalle, grupoId);
+      return !(r && r.ok === false);
+    } catch (e) {
+      console.warn('[Admin] No se pudo registrar la auditoría:', e);
+      return false;
+    }
+  }
+
+  /* Recarga real del contexto antes de repintar. invalidar() sin recargar
+     dejaba GL.ctx con datos viejos y mostraba información ya modificada. */
+  async function refrescar(root) {
+    try {
+      await recargarContextoAdmin();
+    } catch (e) {
+      console.warn('[Admin] No se pudo refrescar el contexto:', e);
+      GL.notificar('El cambio se guardó, pero la vista puede mostrar datos desactualizados. Recargá la página.', 'advertencia');
+    }
+    if (root) Mod.render(root);
+  }
+
+  /* Listado administrativo: incluye inactivos y expulsados, que GL.jugadores()
+     oculta deliberadamente para las vistas públicas. */
+  function jugadoresAdmin() {
+    return (GL.ctx.jugadores || []).slice();
+  }
+
+  function jugadorAdmin(id) {
+    return jugadoresAdmin().find(j => j.id === id) || null;
   }
 
   // Pinta solamente el contenido de la pestaña activa (lo usa render y el acceso rápido).
@@ -343,16 +379,17 @@
 
   function htmlJugadores() {
     const jugadores = GL.jugadores();
+    const plantelAdmin = jugadoresAdmin();
     const primeraSemana = esPrimeraSemana();
     const total = jugadores.length;
     const sinGrupo = GL.jugadoresSinGrupo().length;
-    const inactivos = (GL.ctx.jugadores || []).filter(j => j.activo === false).length;
+    const inactivos = plantelAdmin.filter(j => j.activo === false || j.rol === 'expulsado').length;
     const conAlerta = jugadores.filter(j => GL.faltas(j.id) >= 3).length;
 
     const opcionesGrupo = GL.grupos().map(g =>
       '<option value="' + esc(g.id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</option>').join('');
 
-    const filas = jugadores.map((j, indice) => {
+    const filas = plantelAdmin.map((j, indice) => {
       const g = GL.grupoDeJugador(j.id);
       const faltas = GL.faltas(j.id);
       const expulsado = j.activo === false || j.rol === 'expulsado';
@@ -362,10 +399,13 @@
       const grupoTexto = g ? 'Grupo ' + GL.letraGrupo(g) : 'Sin asignar';
       const acciones = iconBtn('editar-' + j.id, 'pencil', 'Editar jugador') +
         iconBtn('telefono-' + j.id, 'phone', 'Confirmar teléfono / titularidad') +
-        (g ? (primeraSemana ? iconBtn('grupo-' + j.id, 'users', 'Cambiar de grupo') : '')
-           : iconBtn('asignar-' + j.id, 'user-plus', 'Asignar grupo')) +
-        iconBtn('sancion-' + j.id, 'triangle-alert', 'Aplicar sanción') +
-        iconBtn('suspender-' + j.id, 'user-x', 'Suspender / expulsar') +
+        (expulsado ? '' :
+          (g ? (primeraSemana ? iconBtn('grupo-' + j.id, 'users', 'Cambiar de grupo') : '')
+             : iconBtn('asignar-' + j.id, 'user-plus', 'Asignar grupo'))) +
+        (expulsado ? '' : iconBtn('sancion-' + j.id, 'triangle-alert', 'Aplicar sanción')) +
+        (expulsado
+          ? accionBtn('reincorporar-' + j.id, 'user-check', 'Reincorporar jugador')
+          : iconBtn('suspender-' + j.id, 'user-x', 'Suspender / expulsar')) +
         (j.rol === 'admin'
           ? ''
           : accionBtn('eliminar-' + j.id, 'trash-2', 'Eliminar jugador'));
@@ -375,6 +415,8 @@
           'data-j5-nombre="' + esc(j.nombre_usuario) + '" ' +
           'data-j5-grupo="' + esc(g ? g.id : '') + '" ' +
           'data-j5-estado="' + estado + '" ' +
+          'data-j5-inactivo="' + (expulsado ? '1' : '0') + '" ' +
+          (expulsado ? 'hidden ' : '') +
           'style="animation-delay:' + (indice * .03) + 's">' +
         '<td class="izq j5-celda-nombre" data-label="Jugador"><div class="jugador-celda">' +
           GL.avatarHTML(j, 'avatar-sm') +
@@ -406,8 +448,12 @@
 
     const filaVacia = '<tr class="j5-fila-vacia"><td colspan="9" class="vacio-mensaje">' +
       '<div class="j5-estado-vacio">' + icono('users', 30) +
-      '<strong>Sin jugadores en el torneo</strong>' +
-      '<span>Agregá el primer jugador para comenzar a organizar el plantel.</span></div></td></tr>';
+      (inactivos
+        ? '<strong>Solo hay jugadores inactivos</strong>' +
+          '<span>Marcá «Incluir inactivos» para verlos y reincorporarlos.</span>'
+        : '<strong>Sin jugadores en el torneo</strong>' +
+          '<span>Agregá el primer jugador para comenzar a organizar el plantel.</span>') +
+      '</div></td></tr>';
     const filaSinResultados = '<tr class="j5-fila-sin-resultados" hidden><td colspan="9" class="vacio-mensaje">' +
       '<div class="j5-estado-vacio">' + icono('search-x', 30) +
       '<strong>Sin coincidencias</strong>' +
@@ -460,6 +506,10 @@
           '<button type="button" class="btn sec j5-limpiar" data-j5-limpiar>' +
             icono('rotate-ccw', 16) + 'Limpiar</button>' +
         '</div>' +
+        (inactivos
+          ? '<label class="j5-check-inactivos"><input type="checkbox" id="j5-inactivos">' +
+              ' Incluir inactivos y expulsados (' + inactivos + ')</label>'
+          : '') +
         '<p class="j5-filtros-nota">' + icono('info', 14) +
           'Los filtros actúan sobre la lista ya cargada; no modifican el torneo.</p>' +
       '</section>' +
@@ -488,6 +538,7 @@
     const buscar = cont.querySelector('#j5-buscar');
     const grupo = cont.querySelector('#j5-grupo');
     const estado = cont.querySelector('#j5-estado');
+    const inactivosBox = cont.querySelector('#j5-inactivos');
     const contador = cont.querySelector('#j5-contador');
     const cuerpo = cont.querySelector('#j5-body');
     if (!buscar || !grupo || !estado || !cuerpo) return;
@@ -503,6 +554,7 @@
       const texto = normalizar(buscar.value.trim());
       const grupoValor = grupo.value;
       const estadoValor = estado.value;
+      const incluirInactivos = !!(inactivosBox && inactivosBox.checked);
       let visibles = 0;
 
       filas.forEach(fila => {
@@ -510,7 +562,9 @@
         const coincideGrupo = !grupoValor ||
           (grupoValor === '__sin' ? !fila.dataset.j5Grupo : fila.dataset.j5Grupo === grupoValor);
         const coincideEstado = !estadoValor || fila.dataset.j5Estado === estadoValor;
-        const mostrar = coincideTexto && coincideGrupo && coincideEstado;
+        const esInactiva = fila.dataset.j5Inactivo === '1';
+        const mostrar = coincideTexto && coincideGrupo && coincideEstado &&
+          (!esInactiva || incluirInactivos);
         fila.hidden = !mostrar;
         if (mostrar) visibles++;
       });
@@ -519,14 +573,16 @@
         contador.textContent = visibles + (visibles === 1 ? ' jugador' : ' jugadores') +
           (visibles !== total ? ' de ' + total : '');
       }
-      if (filaVacia) filaVacia.hidden = total > 0;
-      if (filaSinResultados) filaSinResultados.hidden = !(total > 0 && visibles === 0);
+      if (filaVacia) filaVacia.hidden = visibles > 0;
+      if (filaSinResultados) filaSinResultados.hidden = !(filas.length > 0 && visibles === 0);
     };
 
     [buscar, grupo, estado].forEach(el =>
       el.addEventListener(el === buscar ? 'input' : 'change', aplicar));
+    if (inactivosBox) inactivosBox.addEventListener('change', aplicar);
     cont.querySelectorAll('[data-j5-limpiar]').forEach(b => b.addEventListener('click', () => {
       buscar.value = ''; grupo.value = ''; estado.value = '';
+      if (inactivosBox) inactivosBox.checked = false;
       aplicar();
       buscar.focus();
     }));
@@ -542,7 +598,7 @@
       const corte = accion.indexOf('-');
       const tipo  = accion.slice(0, corte);
       const id    = accion.slice(corte + 1);
-      const j     = GL.jugador(id);
+      const j     = jugadorAdmin(id);
       if (!j) return;
       if (tipo === 'editar')   modalEditar(j, root);
       if (tipo === 'telefono') modalConfirmarTelefono(j, root);
@@ -550,6 +606,7 @@
       if (tipo === 'asignar')  modalGrupo(j, root, true);
       if (tipo === 'sancion')  modalSancion(j, root);
       if (tipo === 'suspender') modalSuspender(j, root);
+      if (tipo === 'reincorporar') modalSuspender(j, root);
       if (tipo === 'eliminar')  modalEliminarJugador(j, root);
     };
 
@@ -1220,10 +1277,31 @@
   }
 
   async function mensajeInvoke(error) {
-    try {
-      const cuerpo = await error.context.json();
-      return cuerpo.error || error.message;
-    } catch (e) { return error.message; }
+    const ctx = error && error.context;
+    if (ctx) {
+      /* Clonar evita perder el cuerpo si json() falla o ya fue consumido. */
+      const copia = typeof ctx.clone === 'function' ? ctx.clone() : ctx;
+      try {
+        if (typeof copia.json === 'function') {
+          const cuerpo = await copia.json();
+          if (cuerpo && (cuerpo.error || cuerpo.message))
+            return cuerpo.error || cuerpo.message;
+        }
+      } catch (e) { /* se intenta como texto */ }
+      try {
+        if (typeof copia.text === 'function') {
+          const texto = await copia.text();
+          if (texto) {
+            try {
+              const cuerpo = JSON.parse(texto);
+              if (cuerpo && (cuerpo.error || cuerpo.message))
+                return cuerpo.error || cuerpo.message;
+            } catch (_) { return texto.slice(0, 300); }
+          }
+        }
+      } catch (e) { /* se usa el mensaje del error */ }
+    }
+    return (error && error.message) || 'No se pudo completar la operación.';
   }
 
   /* ---------------- Acciones de torneo y Nueva Temporada ---------------- */
@@ -1418,15 +1496,26 @@
   async function cambiarGrupoRapido(j, root, quitar) {
     if (!j) return;
     if (quitar) {
+      const grupoActual = GL.grupoDeJugador(j.id);
+      const aceptado = await GL.confirmar(
+        '¿Quitar a ' + j.nombre_usuario + ' del ' +
+        (grupoActual ? 'Grupo ' + GL.letraGrupo(grupoActual) : 'grupo actual') +
+        '? El jugador seguirá en el torneo pero no podrá jugar hasta tener grupo.',
+        'Quitar del grupo', 'Quitar del grupo');
+      if (!aceptado) return;
       try {
         const idsGrupos = GL.grupos().map(g => g.id);
         if (!idsGrupos.length) { GL.notificar('No hay grupos del torneo activo.', 'advertencia'); return; }
         const { error } = await sb.from('grupo_jugadores').delete()
           .eq('jugador_id', j.id).in('grupo_id', idsGrupos);
         if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); return; }
-        await recargarContextoAdmin();
+        await auditar('jugador_grupo_cambio', 'jugador', j.id, {
+          jugador: j.nombre_usuario,
+          grupo_anterior: grupoActual ? grupoActual.nombre : 'Sin asignar',
+          grupo_nuevo: 'Sin asignar'
+        });
         GL.notificar(j.nombre_usuario + ' quedó sin grupo.', 'exito');
-        Mod.render(root);
+        await refrescar(root);
       } catch (e) { GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error'); }
       return;
     }
@@ -1448,10 +1537,14 @@
           try {
             const { error } = await sb.from('grupo_jugadores').insert({ grupo_id: gid, jugador_id: j.id });
             if (error) { fondo.setError(GL.mensaje(error, 'guardar', 'la administración')); setBloqueado(false); return; }
+            await auditar('jugador_grupo_cambio', 'jugador', j.id, {
+              jugador: j.nombre_usuario,
+              grupo_anterior: 'Sin asignar',
+              grupo_nuevo: (GL.grupos().find(g => g.id === gid) || {}).nombre || '?'
+            });
             cerrar();
-            await recargarContextoAdmin();
             GL.notificar(j.nombre_usuario + ' asignado al grupo.', 'exito');
-            Mod.render(root);
+            await refrescar(root);
           } catch (e) { fondo.setError(GL.mensaje(e, 'guardar', 'la administración')); setBloqueado(false); }
         })();
       }
@@ -1612,13 +1705,14 @@
             });
             if (error) throw new Error(await mensajeInvoke(error));
             if (data && data.ok === false) throw new Error(data.mensaje || data.error || 'No se pudo eliminar el jugador.');
+            await auditar('jugador_eliminado', 'jugador', j.id, {
+              jugador: j.nombre_usuario
+            });
             cerrar();
-            await recargarContextoAdmin();
             GL.notificar((data && data.mensaje) || j.nombre_usuario + ' eliminado correctamente.', 'exito');
-            Mod.render(root);
+            await refrescar(root);
           } catch (e) {
             fondo.setError(GL.mensaje(e, 'guardar', 'la administración'));
-            GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
             setBloqueado(false);
           }
         })();
@@ -1776,7 +1870,7 @@
         e.stopPropagation();
         const jugadorId     = btn.dataset.jugadorId;
         const jugadorNombre = btn.dataset.jugadorNombre;
-        const j             = GL.jugador(jugadorId);
+        const j             = jugadorAdmin(jugadorId);
         if (!j) return;
 
         const primeraSemana = esPrimeraSemana();
@@ -1788,17 +1882,17 @@
         const items = [
           { accion: 'editar-'    + j.id, ico: 'pencil',         label: 'Editar jugador'    },
           { accion: 'telefono-'  + j.id, ico: 'phone',          label: 'Confirmar teléfono' },
-          g && primeraSemana
+          !expulsado && g && primeraSemana
             ? { accion: 'grupo-' + j.id, ico: 'users',          label: 'Cambiar de grupo'  }
-            : !g
+            : !expulsado && !g
             ? { accion: 'asignar-'+ j.id, ico: 'user-plus',     label: 'Asignar grupo'     }
             : null,
           !expulsado
             ? { accion: 'sancion-'  + j.id, ico: 'triangle-alert', label: 'Aplicar sanción'   }
             : null,
-          !expulsado
-            ? { accion: 'suspender-'+ j.id, ico: 'user-x',         label: 'Suspender / expulsar' }
-            : null,
+          expulsado
+            ? { accion: 'reincorporar-' + j.id, ico: 'user-check', label: 'Reincorporar jugador' }
+            : { accion: 'suspender-'+ j.id, ico: 'user-x',         label: 'Suspender / expulsar' },
           j.rol !== 'admin'
             ? { accion: 'eliminar-' + j.id, ico: 'trash-2', label: 'Eliminar jugador' }
             : null
@@ -1810,7 +1904,7 @@
     cont.querySelectorAll('.acciones-escritorio [data-accion]').forEach(b => b.addEventListener('click', () => {
       const raw = b.dataset.accion, corte = raw.indexOf('-');
       const accion = raw.slice(0, corte), id = raw.slice(corte + 1);
-      const j = GL.jugador(id);
+      const j = jugadorAdmin(id);
       if (!j) return;
       if (accion === 'editar')    modalEditar(j, root);
       if (accion === 'telefono')  modalConfirmarTelefono(j, root);
@@ -1818,6 +1912,7 @@
       if (accion === 'asignar')   modalGrupo(j, root, true);
       if (accion === 'sancion')   modalSancion(j, root);
       if (accion === 'suspender') modalSuspender(j, root);
+      if (accion === 'reincorporar') modalSuspender(j, root);
       if (accion === 'eliminar')  modalEliminarJugador(j, root);
     }));
     const agregar = cont.querySelector('[data-agregar]');
@@ -1839,9 +1934,11 @@
           body: { action: 'add', email, nombre_usuario: nombre, torneo_id: GL.torneoId() }
         });
         if (error) throw new Error(await mensajeInvoke(error));
-        GL.invalidar(); await GL.cargarContexto(true);
+        await auditar('admin_rol_agregado', 'usuario', null, {
+          email, torneo_id: GL.torneoId()
+        });
         GL.notificar(email + ' ahora es administrador.', 'exito');
-        Mod.render(root);
+        await refrescar(root);
       } catch (e) {
         GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
         agregarAdmin.disabled = false;
@@ -1863,9 +1960,12 @@
                 body: { action: 'remove', email, torneo_id: GL.torneoId() }
               });
               if (error) throw new Error(await mensajeInvoke(error));
-              cerrar(); GL.invalidar(); await GL.cargarContexto(true);
+              await auditar('admin_rol_quitado', 'usuario', null, {
+                email, torneo_id: GL.torneoId()
+              });
+              cerrar();
               GL.notificar('Rol de administrador quitado.', 'exito');
-              Mod.render(root);
+              await refrescar(root);
             } catch (e) { GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error'); btn.disabled = false; }
           });
         }
@@ -1907,14 +2007,29 @@
       modalCerrarJornada(Number(b.dataset.cerrarJornada), root)));
     cont.querySelectorAll('[data-abrir-jornada]').forEach(b => b.addEventListener('click', async () => {
       const n = Number(b.dataset.abrirJornada);
-      const { error } = await sb.from('jornadas').update({ estado: 'abierta' })
-        .eq('torneo_id', GL.torneo().id).eq('numero', n).eq('grupo_id', Mod.grupoJornadas);
-      if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); return; }
-      const grupoAud = GL.ctx.grupos.find(g => g.id === Mod.grupoJornadas);
-      GL.auditoria && GL.auditoria.registrar('jornada_abierta', 'jornada', null, {
-        numero: n, grupo: grupoAud ? grupoAud.nombre : '?'
-      });
-      GL.notificar('Jornada ' + n + ' abierta.', 'exito'); GL.invalidar(); Mod.render(root);
+      if (!Mod.grupoJornadas) {
+        GL.notificar('No hay un grupo seleccionado. Elegí un equipo antes de abrir la jornada.', 'advertencia');
+        return;
+      }
+      const aceptado = await GL.confirmar(
+        '¿Abrir la jornada ' + n + '? Permitirá cargar resultados de esos partidos.',
+        'Abrir jornada', 'Abrir jornada');
+      if (!aceptado) return;
+      b.disabled = true;
+      try {
+        const { error } = await sb.from('jornadas').update({ estado: 'abierta' })
+          .eq('torneo_id', GL.torneo().id).eq('numero', n).eq('grupo_id', Mod.grupoJornadas);
+        if (error) throw new Error(GL.mensaje(error, 'guardar', 'la administración'));
+        const grupoAud = GL.ctx.grupos.find(g => g.id === Mod.grupoJornadas);
+        await auditar('jornada_abierta', 'jornada', null, {
+          numero: n, grupo: grupoAud ? grupoAud.nombre : '?'
+        });
+        GL.notificar('Jornada ' + n + ' abierta.', 'exito');
+        await refrescar(root);
+      } catch (e) {
+        GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
+        b.disabled = false;
+      }
     }));
     const buscar = cont.querySelector('#buscar-sancion');
     if (buscar) buscar.addEventListener('input', () => {
@@ -1952,13 +2067,13 @@
       paisTelNT.dispatchEvent(new Event('change'));
     });
     cont.querySelectorAll('[data-nt-eliminar]').forEach(b => b.addEventListener('click', () => {
-      modalEliminarJugador(GL.jugador(b.dataset.ntEliminar), root);
+      modalEliminarJugador(jugadorAdmin(b.dataset.ntEliminar), root);
     }));
     cont.querySelectorAll('[data-nt-quitar]').forEach(b => b.addEventListener('click', () => {
-      cambiarGrupoRapido(GL.jugador(b.dataset.ntQuitar), root, true);
+      cambiarGrupoRapido(jugadorAdmin(b.dataset.ntQuitar), root, true);
     }));
     cont.querySelectorAll('[data-nt-asignar]').forEach(b => b.addEventListener('click', () => {
-      cambiarGrupoRapido(GL.jugador(b.dataset.ntAsignar), root, false);
+      cambiarGrupoRapido(jugadorAdmin(b.dataset.ntAsignar), root, false);
     }));
 
     /* ── Nueva Temporada: paso 3 ── */
@@ -2167,23 +2282,33 @@
             update.numero = nEl && nEl.value !== '' ? Number(nEl.value) : null;
           }
 
-          const { error } = await sb.from('jugadores').update(update).eq('id', j.id);
-          if (error) {
-            // Detectar error de unicidad del servidor (segundo nivel de protección)
-            if (error.message && /jugadores_e164_canonicalizado_uniq|tel[eé]fono ya est[aá] registrado/i.test(error.message)) {
-              errorCampo(fondo, '#ed-tel', 'Ese teléfono ya está registrado en otro jugador.');
-            } else if (error.message && /unique|duplicat/i.test(error.message)) {
-              errorCampo(fondo, '#ed-nombre',
-                'El servidor rechazó el nombre: ya existe en la base de datos.');
-            } else {
-              GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error');
+          try {
+            const { error } = await sb.from('jugadores').update(update).eq('id', j.id);
+            if (error) {
+              // Detectar error de unicidad del servidor (segundo nivel de protección)
+              if (error.message && /jugadores_e164_canonicalizado_uniq|tel[eé]fono ya est[aá] registrado/i.test(error.message)) {
+                errorCampo(fondo, '#ed-tel', 'Ese teléfono ya está registrado en otro jugador.');
+              } else if (error.message && /unique|duplicat/i.test(error.message)) {
+                errorCampo(fondo, '#ed-nombre',
+                  'El servidor rechazó el nombre: ya existe en la base de datos.');
+              } else {
+                GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error');
+              }
+              btn.disabled = false; btn.textContent = 'Guardar cambios';
+              return;
             }
-            btn.disabled = false; btn.textContent = 'Guardar cambios';
-          } else {
+            await auditar('jugador_actualizado', 'jugador', j.id, {
+              nombre_anterior: j.nombre_usuario,
+              nombre_nuevo: nombreNorm,
+              pais: pais.value,
+              zona_horaria: zona.value
+            });
             cerrar();
-            GL.invalidar();
             GL.notificar(esc(nombreNorm) + ' actualizado correctamente.', 'exito');
-            Mod.render(root);
+            await refrescar(root);
+          } catch (e) {
+            GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
+            btn.disabled = false; btn.textContent = 'Guardar cambios';
           }
         });
       }
@@ -2284,43 +2409,54 @@
           const btn = fondo.querySelector('#gr-guardar');
           btn.disabled = true; btn.textContent = 'Moviendo…';
 
-          const idsGrupos = GL.grupos().map(g => g.id);
-          if (!idsGrupos.length) {
-            GL.notificar('No hay grupos del torneo activo.', 'advertencia');
-            btn.disabled = false; btn.textContent = asignar === true ? 'Asignar' : 'Mover jugador';
-            return;
-          }
-          const { error: errDel } = await sb.from('grupo_jugadores').delete()
-            .eq('jugador_id', j.id).in('grupo_id', idsGrupos);
-          if (errDel) {
-            GL.notificar(GL.mensaje(errDel, 'guardar', 'la administración'), 'error');
-            btn.disabled = false; btn.textContent = asignar === true ? 'Asignar' : 'Mover jugador';
-            return;
-          }
-          const { error } = await sb.from('grupo_jugadores').insert({ grupo_id: gid, jugador_id: j.id });
-          if (error) {
-            GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error');
-            btn.disabled = false; btn.textContent = asignar === true ? 'Asignar' : 'Mover jugador';
-            return;
-          }
+          try {
+            const idsGrupos = GL.grupos().map(g => g.id);
+            if (!idsGrupos.length) {
+              GL.notificar('No hay grupos del torneo activo.', 'advertencia');
+              btn.disabled = false; btn.textContent = asignar === true ? 'Asignar' : 'Mover jugador';
+              return;
+            }
+            const { error: errDel } = await sb.from('grupo_jugadores').delete()
+              .eq('jugador_id', j.id).in('grupo_id', idsGrupos);
+            if (errDel) {
+              GL.notificar(GL.mensaje(errDel, 'guardar', 'la administración'), 'error');
+              btn.disabled = false; btn.textContent = asignar === true ? 'Asignar' : 'Mover jugador';
+              return;
+            }
+            const { error } = await sb.from('grupo_jugadores').insert({ grupo_id: gid, jugador_id: j.id });
+            if (error) {
+              /* Compensación: el delete ya se ejecutó. Sin esto el jugador
+                 quedaría sin grupo aunque la operación haya fallado. */
+              if (actualGrupo) {
+                const { error: errRollback } = await sb.from('grupo_jugadores')
+                  .insert({ grupo_id: actualGrupo.id, jugador_id: j.id });
+                if (errRollback) console.warn('[Admin] No se pudo restaurar el grupo original:', errRollback.message);
+              }
+              GL.notificar(GL.mensaje(error, 'guardar', 'la administración') +
+                (actualGrupo ? ' El jugador conserva su grupo anterior.' : ''), 'error');
+              btn.disabled = false; btn.textContent = asignar === true ? 'Asignar' : 'Mover jugador';
+              return;
+            }
 
-          const grupoAnt = actualGrupo ? GL.ctx.grupos.find(g => g.id === actualGrupo.id) : null;
-          const grupoNvo = GL.ctx.grupos.find(g => g.id === gid);
-          GL.auditoria && GL.auditoria.registrar('jugador_grupo_cambio', 'jugador', j.id, {
-            jugador:        j.nombre_usuario,
-            grupo_anterior: grupoAnt ? grupoAnt.nombre : 'Sin asignar',
-            grupo_nuevo:    grupoNvo ? grupoNvo.nombre : '?'
-          });
+            const grupoAnt = actualGrupo ? GL.ctx.grupos.find(g => g.id === actualGrupo.id) : null;
+            const grupoNvo = GL.ctx.grupos.find(g => g.id === gid);
+            await auditar('jugador_grupo_cambio', 'jugador', j.id, {
+              jugador:        j.nombre_usuario,
+              grupo_anterior: grupoAnt ? grupoAnt.nombre : 'Sin asignar',
+              grupo_nuevo:    grupoNvo ? grupoNvo.nombre : '?'
+            });
 
-          cerrar();
-          GL.invalidar();
-          await GL.cargarContexto(true);
-          GL.notificar(
-            esc(j.nombre_usuario) + (asignar === true
-              ? ' asignado a Grupo ' + (grupoNvo ? GL.letraGrupo(grupoNvo) : '?') + '.'
-              : ' movido a Grupo ' + (grupoNvo ? GL.letraGrupo(grupoNvo) : '?') + '.'),
-            'exito');
-          Mod.render(root);
+            cerrar();
+            GL.notificar(
+              esc(j.nombre_usuario) + (asignar === true
+                ? ' asignado a Grupo ' + (grupoNvo ? GL.letraGrupo(grupoNvo) : '?') + '.'
+                : ' movido a Grupo ' + (grupoNvo ? GL.letraGrupo(grupoNvo) : '?') + '.'),
+              'exito');
+            await refrescar(root);
+          } catch (e) {
+            GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
+            btn.disabled = false; btn.textContent = asignar === true ? 'Asignar' : 'Mover jugador';
+          }
         });
       }
     });
@@ -2568,7 +2704,7 @@
             GL.notificar('El motivo de la sanción es obligatorio.', 'advertencia'); return;
           }
           // Verificación final: el jugador no fue expulsado mientras el modal estaba abierto
-          const jFresco = GL.jugador(j.id);
+          const jFresco = jugadorAdmin(j.id);
           if (jFresco && (jFresco.activo === false || jFresco.rol === 'expulsado')) {
             GL.notificar('El jugador ya fue expulsado. No se puede aplicar otra sanción.', 'advertencia');
             cerrar(); return;
@@ -2587,65 +2723,66 @@
             aplicada_por:        Auth.jugador.id
           };
 
-          // 1. Registrar la sanción
-          const { error: errSan } = await sb.from('sanciones').insert(row);
-          if (errSan) {
-            GL.notificar(GL.mensaje(errSan, 'guardar', 'la administración'), 'error');
+          try {
+            // 1. Registrar la sanción
+            const { error: errSan } = await sb.from('sanciones').insert(row);
+            if (errSan) throw new Error(GL.mensaje(errSan, 'guardar', 'la administración'));
+
+            // 2. Actualizar estado del jugador y resolver partidos
+            let resPartidos = { resueltos: 0, errores: [], advertencias: [] };
+
+            if (t.expulsion) {
+              // Expulsión definitiva
+              const { error: errJ } = await sb.from('jugadores')
+                .update({ activo: false, rol: 'expulsado', suspendido: true })
+                .eq('id', j.id)
+                .neq('rol', 'expulsado'); // No re-expulsar si ya lo era (protección)
+              if (errJ) throw new Error(GL.mensaje(errJ, 'guardar', 'la administración'));
+              resPartidos = await resolverPartidosPorSancion(j.id, { tipo: 'expulsion' });
+            } else if (row.partidos_suspension > 0) {
+              // Suspensión temporal
+              const { error: errJ } = await sb.from('jugadores')
+                .update({ suspendido: true })
+                .eq('id', j.id);
+              if (errJ) throw new Error(GL.mensaje(errJ, 'guardar', 'la administración'));
+              resPartidos = await resolverPartidosPorSancion(j.id, {
+                tipo: 'suspension',
+                partidosSuspension: row.partidos_suspension
+              });
+            }
+
+            // 3. Recalcular tabla
+            await recalcularTodosLosGrupos();
+
+            // 4. Auditoría (esperada: el resultado se refleja en el aviso)
+            const trazable = await auditar('sancion_aplicada', 'sancion', null, {
+              jugador:    j.nombre_usuario,
+              tipo:       row.tipo,
+              puntos:     row.puntos_descuento,
+              partidos:   row.partidos_suspension,
+              motivo:     row.motivo,
+              resueltos:  resPartidos.resueltos
+            });
+
+            // 5. Notificación con detalle
+            let msg = 'Sanción aplicada.';
+            if (resPartidos.resueltos) msg += ' ' + resPartidos.resueltos + ' partido(s) resuelto(s).';
+            if (resPartidos.errores.length) {
+              msg += ' Hubo errores en ' + resPartidos.errores.length + ' partido(s): ' + resPartidos.errores[0];
+            }
+            if (resPartidos.advertencias.length) {
+              resPartidos.advertencias.forEach(a => GL.notificar(a, 'advertencia'));
+            }
+            if (!trazable) msg += ' No se pudo registrar la auditoría.';
+
+            cerrar();
+            GL.notificar(msg, resPartidos.errores.length ? 'advertencia' : 'exito');
+            await refrescar(root);
+          } catch (e) {
+            GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
             btn.disabled = false;
             btn.innerHTML = icono('gavel', 16) + 'Aplicar sanción';
-            return;
           }
-
-          // 2. Actualizar estado del jugador y resolver partidos
-          let resPartidos = { resueltos: 0, errores: [], advertencias: [] };
-
-          if (t.expulsion) {
-            // Expulsión definitiva
-            const { error: errJ } = await sb.from('jugadores')
-              .update({ activo: false, rol: 'expulsado', suspendido: true })
-              .eq('id', j.id)
-              .neq('rol', 'expulsado'); // No re-expulsar si ya lo era (protección)
-            if (errJ) console.warn('Expulsión jugador:', errJ.message);
-            resPartidos = await resolverPartidosPorSancion(j.id, { tipo: 'expulsion' });
-          } else if (row.partidos_suspension > 0) {
-            // Suspensión temporal
-            const { error: errJ } = await sb.from('jugadores')
-              .update({ suspendido: true })
-              .eq('id', j.id);
-            if (errJ) console.warn('Suspensión jugador:', errJ.message);
-            resPartidos = await resolverPartidosPorSancion(j.id, {
-              tipo: 'suspension',
-              partidosSuspension: row.partidos_suspension
-            });
-          }
-
-          // 3. Recalcular tabla
-          await recalcularTodosLosGrupos();
-
-          // 4. Auditoría
-          GL.auditoria && GL.auditoria.registrar('sancion_aplicada', 'sancion', null, {
-            jugador:    j.nombre_usuario,
-            tipo:       row.tipo,
-            puntos:     row.puntos_descuento,
-            partidos:   row.partidos_suspension,
-            motivo:     row.motivo,
-            resueltos:  resPartidos.resueltos
-          });
-
-          // 5. Notificación con detalle
-          let msg = 'Sanción aplicada.';
-          if (resPartidos.resueltos) msg += ' ' + resPartidos.resueltos + ' partido(s) resuelto(s).';
-          if (resPartidos.errores.length) {
-            msg += ' Hubo errores en ' + resPartidos.errores.length + ' partido(s): ' + resPartidos.errores[0];
-          }
-          if (resPartidos.advertencias.length) {
-            resPartidos.advertencias.forEach(a => GL.notificar(a, 'advertencia'));
-          }
-
-          cerrar();
-          GL.notificar(msg, resPartidos.errores.length ? 'advertencia' : 'exito');
-          GL.invalidar();
-          Mod.render(root);
         });
       }
     });
@@ -2674,18 +2811,23 @@
           fondo.querySelector('#sus-ok').addEventListener('click', async () => {
             const btn = fondo.querySelector('#sus-ok');
             btn.disabled = true;
-            const { error } = await sb.from('jugadores')
-              .update({ activo: true, rol: 'jugador', suspendido: false })
-              .eq('id', j.id);
-            if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); btn.disabled = false; return; }
-            GL.auditoria && GL.auditoria.registrar('jugador_estado_cambio', 'jugador', j.id, {
-              jugador:         j.nombre_usuario,
-              estado_anterior: 'expulsado',
-              estado_nuevo:    'activo'
-            });
-            cerrar();
-            GL.notificar(esc(j.nombre_usuario) + ' reincorporado al torneo.', 'exito');
-            GL.invalidar(); Mod.render(root);
+            try {
+              const { error } = await sb.from('jugadores')
+                .update({ activo: true, rol: 'jugador', suspendido: false })
+                .eq('id', j.id);
+              if (error) throw new Error(GL.mensaje(error, 'guardar', 'la administración'));
+              await auditar('jugador_estado_cambio', 'jugador', j.id, {
+                jugador:         j.nombre_usuario,
+                estado_anterior: 'expulsado',
+                estado_nuevo:    'activo'
+              });
+              cerrar();
+              GL.notificar(esc(j.nombre_usuario) + ' reincorporado al torneo.', 'exito');
+              await refrescar(root);
+            } catch (e) {
+              GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
+              btn.disabled = false;
+            }
           });
         }
       });
@@ -2782,7 +2924,7 @@
           const accion = sel.value;
 
           // Protección: verificar que el jugador no fue expulsado mientras el modal estaba abierto
-          const jFresco = GL.jugador(j.id);
+          const jFresco = jugadorAdmin(j.id);
           if (accion === 'expulsion' && jFresco && (jFresco.activo === false || jFresco.rol === 'expulsado')) {
             GL.notificar('El jugador ya fue expulsado previamente. Cerrá y recargá la vista.', 'advertencia');
             cerrar(); return;
@@ -2791,51 +2933,57 @@
           btnOk.disabled = true;
           btnOk.innerHTML = icono('loader-circle', 16, 'girando') + 'Aplicando…';
 
-          let resPartidos = { resueltos: 0, errores: [], advertencias: [] };
-          let estadoAnterior = suspendido ? 'suspendido' : 'activo';
-          let estadoNuevo    = '';
+          try {
+            let resPartidos = { resueltos: 0, errores: [], advertencias: [] };
+            let estadoAnterior = suspendido ? 'suspendido' : 'activo';
+            let estadoNuevo    = '';
 
-          if (accion === 'expulsion') {
-            const { error } = await sb.from('jugadores')
-              .update({ activo: false, rol: 'expulsado', suspendido: true })
-              .eq('id', j.id)
-              .neq('rol', 'expulsado'); // Protección anti-doble-expulsión
-            if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); btnOk.disabled = false; return; }
-            resPartidos = await resolverPartidosPorSancion(j.id, { tipo: 'expulsion' });
-            estadoNuevo = 'expulsado';
-          } else {
-            const n = Number(fondo.querySelector('#sus-nparts').value) || 1;
-            const { error } = await sb.from('jugadores')
-              .update({ suspendido: true })
-              .eq('id', j.id);
-            if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); btnOk.disabled = false; return; }
-            resPartidos = await resolverPartidosPorSancion(j.id, {
-              tipo: 'suspension',
-              partidosSuspension: n
+            if (accion === 'expulsion') {
+              const { error } = await sb.from('jugadores')
+                .update({ activo: false, rol: 'expulsado', suspendido: true })
+                .eq('id', j.id)
+                .neq('rol', 'expulsado'); // Protección anti-doble-expulsión
+              if (error) throw new Error(GL.mensaje(error, 'guardar', 'la administración'));
+              resPartidos = await resolverPartidosPorSancion(j.id, { tipo: 'expulsion' });
+              estadoNuevo = 'expulsado';
+            } else {
+              const n = Number(fondo.querySelector('#sus-nparts').value) || 1;
+              const { error } = await sb.from('jugadores')
+                .update({ suspendido: true })
+                .eq('id', j.id);
+              if (error) throw new Error(GL.mensaje(error, 'guardar', 'la administración'));
+              resPartidos = await resolverPartidosPorSancion(j.id, {
+                tipo: 'suspension',
+                partidosSuspension: n
+              });
+              estadoNuevo = 'suspendido';
+            }
+
+            await recalcularTodosLosGrupos();
+
+            const trazable = await auditar('jugador_estado_cambio', 'jugador', j.id, {
+              jugador:         j.nombre_usuario,
+              estado_anterior: estadoAnterior,
+              estado_nuevo:    estadoNuevo,
+              resueltos:       resPartidos.resueltos
             });
-            estadoNuevo = 'suspendido';
+
+            // Notificaciones
+            resPartidos.advertencias.forEach(a => GL.notificar(a, 'advertencia'));
+
+            let msg = esc(j.nombre_usuario) + (accion === 'expulsion' ? ' expulsado.' : ' suspendido.');
+            if (resPartidos.resueltos) msg += ' ' + resPartidos.resueltos + ' partido(s) resuelto(s).';
+            if (resPartidos.errores.length) msg += ' Error en ' + resPartidos.errores.length + ' partido(s).';
+            if (!trazable) msg += ' No se pudo registrar la auditoría.';
+
+            cerrar();
+            GL.notificar(msg, resPartidos.errores.length ? 'advertencia' : 'exito');
+            await refrescar(root);
+          } catch (e) {
+            GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
+            btnOk.disabled = false;
+            btnOk.innerHTML = icono('shield-off', 16) + 'Confirmar acción';
           }
-
-          await recalcularTodosLosGrupos();
-
-          GL.auditoria && GL.auditoria.registrar('jugador_estado_cambio', 'jugador', j.id, {
-            jugador:         j.nombre_usuario,
-            estado_anterior: estadoAnterior,
-            estado_nuevo:    estadoNuevo,
-            resueltos:       resPartidos.resueltos
-          });
-
-          // Notificaciones
-          resPartidos.advertencias.forEach(a => GL.notificar(a, 'advertencia'));
-
-          let msg = esc(j.nombre_usuario) + (accion === 'expulsion' ? ' expulsado.' : ' suspendido.');
-          if (resPartidos.resueltos) msg += ' ' + resPartidos.resueltos + ' partido(s) resuelto(s).';
-          if (resPartidos.errores.length) msg += ' Error en ' + resPartidos.errores.length + ' partido(s).';
-
-          cerrar();
-          GL.notificar(msg, resPartidos.errores.length ? 'advertencia' : 'exito');
-          GL.invalidar();
-          Mod.render(root);
         });
       }
     });
@@ -3040,11 +3188,15 @@
           try {
             const { data, error } = await sb.functions.invoke('admin-crear-jugador', { body });
             if (error) throw new Error(await mensajeInvoke(error));
+            if (data && data.ok === false) throw new Error(data.mensaje || data.error || 'No se pudo crear el jugador.');
+            await auditar('jugador_creado', 'jugador', (data && data.jugador_id) || null, {
+              jugador: nombreNorm,
+              grupo_id: grupoVal,
+              torneo_id: torneoActual.id
+            });
             cerrar();
-            GL.invalidar();
-            await GL.cargarContexto(true);
             GL.notificar(esc(nombreNorm) + ' creado y asignado al grupo.', 'exito');
-            Mod.render(root);
+            await refrescar(root);
           } catch (e) {
             // Detectar errores específicos del servidor y mostrarlos junto al campo
             const msg = e.message || '';
@@ -3131,24 +3283,27 @@
           }
           btn.disabled = true;
           const values = { fecha_inicio: inicio.toISOString(), hora_limite: limite.toISOString() };
-          const { error } = jdata.id
-            ? await sb.from('jornadas').update(values).eq('id', jdata.id)
-            : await sb.from('jornadas').insert(Object.assign({
-                torneo_id: torneo.id, grupo_id: Mod.grupoJornadas, numero: n
-              }, values));
-          if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); btn.disabled = false; return; }
-          const grupoAud = GL.ctx.grupos.find(g => g.id === Mod.grupoJornadas);
-          GL.auditoria && GL.auditoria.registrar('jornada_horario_actualizado', 'jornada', null, {
-            numero: n,
-            grupo: grupoAud ? grupoAud.nombre : '?',
-            inicio: GL.fechaHoraEnZona(inicio, CONFIG.ZONA_REFERENCIA),
-            limite: GL.fechaHoraEnZona(limite, CONFIG.ZONA_REFERENCIA)
-          });
-          cerrar();
-          GL.invalidar();
-          await GL.cargarContexto(true);
-          GL.notificar('Horario de la jornada ' + n + ' guardado.', 'exito');
-          Mod.render(root);
+          try {
+            const { error } = jdata.id
+              ? await sb.from('jornadas').update(values).eq('id', jdata.id)
+              : await sb.from('jornadas').insert(Object.assign({
+                  torneo_id: torneo.id, grupo_id: Mod.grupoJornadas, numero: n
+                }, values));
+            if (error) throw new Error(GL.mensaje(error, 'guardar', 'la administración'));
+            const grupoAud = GL.ctx.grupos.find(g => g.id === Mod.grupoJornadas);
+            await auditar('jornada_horario_actualizado', 'jornada', null, {
+              numero: n,
+              grupo: grupoAud ? grupoAud.nombre : '?',
+              inicio: GL.fechaHoraEnZona(inicio, CONFIG.ZONA_REFERENCIA),
+              limite: GL.fechaHoraEnZona(limite, CONFIG.ZONA_REFERENCIA)
+            });
+            cerrar();
+            GL.notificar('Horario de la jornada ' + n + ' guardado.', 'exito');
+            await refrescar(root);
+          } catch (e) {
+            GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
+            btn.disabled = false;
+          }
         });
       }
     });
@@ -3242,53 +3397,63 @@
                 : 'doble_ausencia'
             }));
 
-          cerrar();
-          await cerrarConFuncion(n, resoluciones, root);
+          await cerrarConFuncion(n, resoluciones, root, {
+            cerrar,
+            onError() { btn.disabled = false; btn.textContent = 'Cerrar jornada'; }
+          });
         });
       }
     });
     iniciarIconos(); return m;
   }
 
-  async function cerrarConFuncion(n, resoluciones, root) {
+  async function cerrarConFuncion(n, resoluciones, root, opciones) {
+    const fallar = mensaje => {
+      GL.notificar(mensaje, 'error');
+      if (opciones && typeof opciones.onError === 'function') opciones.onError();
+    };
     const torneo = GL.torneo();
-    if (!torneo) { GL.notificar('No hay torneo activo.', 'error'); return; }
-
-    // Buscar el grupo_id correspondiente
-    const jornadaObj = GL.ctx.jornadas.find(j =>
-      j.torneo_id === torneo.id && j.numero === n && j.grupo_id === Mod.grupoJornadas);
-
-    // Llamar a la función transaccional en Supabase
-    const { data, error } = await sb.rpc('gl_cerrar_jornada', {
-      p_torneo_id:    torneo.id,
-      p_grupo_id:     Mod.grupoJornadas,
-      p_jornada:      n,
-      p_resoluciones: resoluciones,
-      p_cerrado_por:  (await sb.auth.getUser()).data.user.id
-    });
-
-    if (error) {
-      GL.notificar(GL.mensaje(error, 'guardar', 'la administración'), 'error'); return;
-    }
-    if (data && !data.ok) {
-      GL.notificar('No se pudo cerrar: ' + data.error, 'error'); return;
+    if (!torneo) { fallar('No hay torneo activo.'); return; }
+    if (!Mod.grupoJornadas) {
+      fallar('No hay un grupo seleccionado. Elegí un equipo antes de cerrar la jornada.');
+      return;
     }
 
-    await recalcularTodosLosGrupos();
-    GL.invalidar();
+    try {
+      // Llamar a la función transaccional en Supabase
+      const { data, error } = await sb.rpc('gl_cerrar_jornada', {
+        p_torneo_id:    torneo.id,
+        p_grupo_id:     Mod.grupoJornadas,
+        p_jornada:      n,
+        p_resoluciones: resoluciones,
+        p_cerrado_por:  (await sb.auth.getUser()).data.user.id
+      });
 
-    const resueltos = data && data.partidos_resueltos ? data.partidos_resueltos : 0;
-    const grupoAudC = GL.ctx.grupos.find(g => g.id === Mod.grupoJornadas);
-    GL.auditoria && GL.auditoria.registrar('jornada_cerrada', 'jornada', null, {
-      numero:             n,
-      grupo:              grupoAudC ? grupoAudC.nombre : '?',
-      partidos_resueltos: resueltos
-    });
-    GL.notificar(
-      'Jornada ' + n + ' cerrada.' + (resueltos ? ' ' + resueltos + ' partido(s) resuelto(s).' : '') + ' Tabla actualizada.',
-      'exito'
-    );
-    Mod.render(root);
+      if (error) { fallar(GL.mensaje(error, 'guardar', 'la administración')); return; }
+      if (!data || typeof data !== 'object' || data.ok === false) {
+        fallar('No se pudo cerrar: ' + ((data && (data.error || data.mensaje)) || 'la base de datos no confirmó la operación'));
+        return;
+      }
+
+      await recalcularTodosLosGrupos();
+
+      const resueltos = data && data.partidos_resueltos ? data.partidos_resueltos : 0;
+      const grupoAudC = GL.ctx.grupos.find(g => g.id === Mod.grupoJornadas);
+      await auditar('jornada_cerrada', 'jornada', null, {
+        numero:             n,
+        grupo:              grupoAudC ? grupoAudC.nombre : '?',
+        partidos_resueltos: resueltos
+      });
+      if (opciones && typeof opciones.cerrar === 'function') opciones.cerrar();
+      GL.notificar(
+        'Jornada ' + n + ' cerrada.' + (resueltos ? ' ' + resueltos + ' partido(s) resuelto(s).' : '') + ' Tabla actualizada.',
+        'exito'
+      );
+      await refrescar(root);
+    } catch (e) {
+      fallar(GL.mensaje(e, 'guardar', 'la administración'));
+      return;
+    }
 
     try {
       const mensajes = await GL.modulo('mensajes');
@@ -3298,6 +3463,12 @@
     } catch (e) { console.warn(e); }
     location.hash = 'mensajes';
   }
+
+  /* API de solo pruebas: helpers sin DOM para regresiones de FASE 3.16. */
+  Mod._pruebas = {
+    auditar, refrescar, jugadoresAdmin, jugadorAdmin, mensajeInvoke,
+    validarTotal, leerRpc
+  };
 
   Modulos.admin = Mod;
 })();

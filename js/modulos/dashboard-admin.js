@@ -8,6 +8,46 @@
   /* Instancias Chart.js activas — se destruyen al salir */
   const _charts = {};
 
+  /* Métricas puras, sin DOM: se prueban en tests/fase-3.16.test.js.
+     Las jornadas virtuales y los jugadores inactivos se excluyen donde
+     corresponde para no inflar los indicadores del panel. */
+  function metricasAdmin({ jugadores, partidos, jornadas, grupos, miembros }) {
+    const activosArray = jugadores.filter(j => j.activo !== false && j.rol !== 'expulsado');
+    const jornadasReales = jornadas.filter(j => !j.virtual);
+    const porGrupoJornada = new Map();
+    partidos.forEach(p => {
+      const clave = (p.grupo_id || '') + '|' + p.jornada;
+      if (!porGrupoJornada.has(clave))
+        porGrupoJornada.set(clave, { numero: Number(p.jornada), grupo_id: p.grupo_id || '', partidos: [] });
+      porGrupoJornada.get(clave).partidos.push(p);
+    });
+    const cerradas = new Set(jornadasReales.filter(j => j.estado === 'cerrada')
+      .map(j => (j.grupo_id || '') + '|' + j.numero));
+    const jornadasParaCerrar = Array.from(porGrupoJornada.values())
+      .filter(x => x.partidos.length && x.partidos.every(p => p.estado !== 'pendiente') &&
+        !cerradas.has(x.grupo_id + '|' + x.numero))
+      .sort((a, b) => a.numero - b.numero)
+      .map(x => {
+        const g = grupos.find(gr => gr.id === x.grupo_id);
+        return g && GL.letraGrupo ? 'J' + x.numero + ' · ' + GL.letraGrupo(g) : 'J' + x.numero;
+      });
+    return {
+      totalJugadores: jugadores.length,
+      activos: activosArray.length,
+      suspendidos: activosArray.filter(j => j.suspendido === true).length,
+      expulsados: jugadores.filter(j => j.activo === false || j.rol === 'expulsado').length,
+      jugados: partidos.filter(p => p.estado !== 'pendiente').length,
+      pendientes: partidos.filter(p => p.estado === 'pendiente').length,
+      jornadasAbiertas: jornadasReales.filter(j => j.estado === 'abierta').length,
+      jornadasCerradas: cerradas.size,
+      sinGrupo: activosArray.filter(j => !(miembros || []).some(m => m.jugador_id === j.id)),
+      sinTelefono: activosArray.filter(j =>
+        !(GL.tel && GL.tel.e164Jugador && GL.tel.e164Jugador(j)) && !j.telefono_e164 && !j.telefono),
+      sinFoto: activosArray.filter(j => !j.avatar_url),
+      jornadasParaCerrar
+    };
+  }
+
   const Mod = {
     titulo: 'Centro de control',
 
@@ -16,7 +56,7 @@
       if (!(await GL.asegurarAdmin(el))) return;
 
       try {
-        await GL.cargarContexto(true);
+        /* El router ya cargó el contexto; recargarlo aquí duplicaba consultas. */
         const torneo = GL.torneo();
 
         if (!torneo) {
@@ -34,42 +74,31 @@
 
         /* ── Datos base: una sola consulta, reutilizada por todas las secciones ── */
         const partidos  = await GL.partidos({ torneo_id: torneo.id });
-        const jugadores = GL.jugadores();
+        /* GL.jugadores() oculta inactivos: el panel debe contar el plantel real. */
+        const jugadores = GL.ctx.jugadores || [];
         const grupos    = GL.grupos();
         const miembros  = GL.ctx.miembros || [];
-        const jornadas  = GL.ctx.jornadas || [];
+        /* Las jornadas virtuales se inyectan en memoria para completar el
+           calendario; no son jornadas abiertas de verdad. */
+        const jornadas  = (GL.ctx.jornadas || []).filter(j => !j.virtual);
         const sanciones = GL.ctx.sanciones || [];
 
-        /* ── Métricas (cálculos existentes, sin cambios) ── */
-        const totalJugadores   = jugadores.length;
-        const activos          = jugadores.filter(j => j.activo !== false && j.rol !== 'expulsado').length;
-        const suspendidos      = jugadores.filter(j => j.suspendido === true).length;
-        const expulsados       = jugadores.filter(j => j.rol === 'expulsado' || j.activo === false).length;
-        const jugados          = partidos.filter(p => p.estado !== 'pendiente').length;
-        const pendientes       = partidos.filter(p => p.estado === 'pendiente').length;
-        const jornadasAbiertas = jornadas.filter(j => j.estado !== 'cerrada').length;
-        const jornadasCerradas = jornadas.filter(j => j.estado === 'cerrada').length;
-        const sinGrupo         = GL.jugadoresSinGrupo ? GL.jugadoresSinGrupo() : [];
-        const sinTelefono      = jugadores.filter(j => !j.telefono);
-        const sinFoto          = jugadores.filter(j => !j.avatar_url);
+        /* ── Métricas calculadas sobre datos reales ── */
+        const {
+          totalJugadores, activos, suspendidos, expulsados, jugados, pendientes,
+          jornadasAbiertas, jornadasCerradas, sinGrupo, sinTelefono, sinFoto,
+          jornadasParaCerrar
+        } = metricasAdmin({ jugadores, partidos, jornadas, grupos, miembros });
 
         /* ── Alertas (criterios existentes, sin cambios) ── */
         const alertas = [];
         if (sinGrupo.length)    alertas.push({ tipo:'advertencia', ico:'user-x',       msg: sinGrupo.length + ' jugador(es) sin grupo asignado.', link:'administracion' });
         if (sinTelefono.length) alertas.push({ tipo:'info',        ico:'phone-off',    msg: sinTelefono.length + ' jugador(es) sin teléfono registrado.', link:'administracion' });
         if (sinFoto.length)     alertas.push({ tipo:'info',        ico:'image-off',    msg: sinFoto.length + ' jugador(es) sin fotografía de perfil.', link:'administracion' });
-
-        /* Jornadas que pueden cerrarse (todos sus partidos resueltos) */
-        const totalJornadas = torneo.total_jornadas || 22;
-        const jornNums = Array.from(new Set(partidos.map(p => p.jornada))).sort((a,b)=>a-b);
-        const jornadasListas = jornNums.filter(n => {
-          const delGrupo = partidos.filter(p => p.jornada === n);
-          return delGrupo.length > 0 && delGrupo.every(p => p.estado !== 'pendiente');
-        });
-        const jornadasYaCerradas = new Set(jornadas.filter(j=>j.estado==='cerrada').map(j=>j.numero));
-        const jornadasParaCerrar = jornadasListas.filter(n => !jornadasYaCerradas.has(n));
         if (jornadasParaCerrar.length)
           alertas.push({ tipo:'advertencia', ico:'flag', msg: 'Jornada(s) ' + jornadasParaCerrar.join(', ') + ' lista(s) para cerrar.', link:'jornadas' });
+
+        const totalJornadas = torneo.total_jornadas || 22;
 
         /* Sanciones próximas: jugadores con 2 tarjetas en la temporada */
         const amonestaciones = {};
@@ -253,7 +282,20 @@
           if (window.OnboardingAdmin) OnboardingAdmin.iniciar(true);
         });
         const btnRefrescar = el.querySelector('#da-refrescar');
-        if (btnRefrescar) btnRefrescar.addEventListener('click', () => Mod.render(el));
+        if (btnRefrescar) btnRefrescar.addEventListener('click', async () => {
+          if (btnRefrescar.disabled) return;
+          btnRefrescar.disabled = true;
+          btnRefrescar.textContent = 'Actualizando…';
+          try {
+            GL.invalidar();
+            await GL.cargarContexto(true);
+            await Mod.render(el);
+          } catch (e) {
+            GL.notificar(GL.mensaje(e, 'cargar', 'el centro de control'), 'error');
+            btnRefrescar.disabled = false;
+            btnRefrescar.textContent = 'Actualizar';
+          }
+        });
 
         /* ── Dibujar gráficas ── */
         pintarGraficaCompletados(partidos, totalJornadas);
@@ -588,6 +630,9 @@
       }
     });
   }
+
+  /* API de solo pruebas: cálculo sin DOM ni Supabase. */
+  Mod._metricas = metricasAdmin;
 
   Modulos['dashboard-admin'] = Mod;
 })();
