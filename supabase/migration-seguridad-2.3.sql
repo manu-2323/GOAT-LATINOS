@@ -177,11 +177,11 @@ begin
     raise exception 'Solo el administrador principal puede modificar privilegios, correo o identidad';
   end if;
 
-  if NEW.rol = 'admin' and pg_catalog.coalesce(OLD.rol, '') <> 'admin' then
+  if NEW.rol = 'admin' and coalesce(OLD.rol, '') <> 'admin' then
     raise exception 'Solo el administrador principal puede promover a administrador';
   end if;
 
-  if OLD.rol = 'admin' and pg_catalog.coalesce(NEW.rol, '') <> 'admin' then
+  if OLD.rol = 'admin' and coalesce(NEW.rol, '') <> 'admin' then
     raise exception 'Solo el administrador principal puede revocar a un administrador';
   end if;
 
@@ -244,7 +244,7 @@ begin
 
   NEW.rol := 'jugador';
   NEW.super_admin := false;
-  NEW.email := pg_catalog.lower(pg_catalog.coalesce(auth.jwt() ->> 'email', ''));
+  NEW.email := pg_catalog.lower(coalesce(auth.jwt() ->> 'email', ''));
   NEW.activo := true;
   NEW.suspendido := false;
   NEW.numero := null;

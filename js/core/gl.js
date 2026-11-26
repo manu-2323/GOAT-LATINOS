@@ -617,6 +617,13 @@ const GL = {
     if (m.includes('403') || m.includes('forbidden') || m.includes('row-level security'))
       return 'No tenés permiso para realizar esta acción. Si creés que es un error, contactá al administrador.';
 
+    // Esquema / compatibilidad de base de datos (errores PostgreSQL 42xxx).
+    // Antes del match genérico de "supabase": no es un problema de conexión
+    // ni de credenciales, sino de columnas/tablas/funciones ausentes.
+    if (/\b(42703|42p01|42883|42704)\b/.test(m) ||
+        /column .* does not exist|relation .* does not exist|function .* does not exist|undefined column|undefined table/i.test(m))
+      return 'La base de datos no tiene la estructura esperada' + ctx + '. Contactá al administrador para que aplique la actualización de esquema.';
+
     // Base de datos
     if (m.includes('duplicate') || m.includes('unique') || m.includes('already exists'))
       return 'Este registro ya existe. Revisá si ya fue ingresado previamente.';

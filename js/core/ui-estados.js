@@ -43,7 +43,7 @@
     let texto = String(mensaje == null ? '' : mensaje).trim();
     if (!texto) return '';
     const m = texto.toLowerCase();
-    const tecnico = /failed to fetch|networkerror|unhandledpromiserejection|undefined is not|null is not|typeerror|referenceerror|supabase|jwt|fetch failed|timed out|status code|duplicate key value|violates|permission denied/i.test(m);
+    const tecnico = /failed to fetch|networkerror|unhandledpromiserejection|undefined is not|null is not|typeerror|referenceerror|supabase|jwt|fetch failed|timed out|status code|duplicate key value|violates|permission denied|42703|42p01|42883|42704|does not exist|undefined column|undefined table/i.test(m);
     if (tecnico && GL.traducirError) texto = GL.traducirError(texto);
     return texto
       .replace(/Comprobá/gi, 'Comprueba')

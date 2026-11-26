@@ -329,7 +329,7 @@ describe('FASE 2.3 - 20 escenarios de seguridad', () => {
     expect(aplicarUpdateRol(adminNormal, perfilBase, { rol: 'admin' }))
       .toMatchObject({ ok: false });
     expect(sql23).toContain('Solo el administrador principal puede promover a administrador');
-    expect(sql23).toContain("if NEW.rol = 'admin' and pg_catalog.coalesce(OLD.rol, '') <> 'admin' then");
+    expect(sql23).toContain("if NEW.rol = 'admin' and coalesce(OLD.rol, '') <> 'admin' then");
   });
 
   it('7. [modelo + contrato SQL] super_admin sí puede promover, alterar correo y flags', () => {

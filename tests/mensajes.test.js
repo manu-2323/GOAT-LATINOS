@@ -7,6 +7,15 @@ describe('Mensajes legibles y cuatro estados', () => {
     expect(texto).not.toContain('Failed to fetch');
   });
 
+  it('clasifica 42703 como problema de esquema y no como fallo de conexión', () => {
+    const tecnico = 'Failed to run sql query: ERROR: 42703: column "telefono_nacional" does not exist';
+    const texto = window.GL.mensaje(new Error(tecnico), 'cargar', 'los resultados');
+    expect(texto).toContain('estructura esperada');
+    expect(texto).not.toContain('configuración con la base de datos');
+    expect(texto).not.toContain('42703');
+    expect(texto).not.toContain('does not exist');
+  });
+
   it('unifica el tono y evita voseo', () => {
     expect(window.GL.textoAmigable('Comprobá los datos y usá otro nombre')).toBe('Comprueba los datos y usa otro nombre');
   });

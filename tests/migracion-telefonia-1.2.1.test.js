@@ -160,7 +160,7 @@ describe('Migración correctiva 2.2 — contrato de seguridad', () => {
     expect(cuerpo).toContain("a.accion = 'confirmacion_e164_y_titularidad'");
     expect(cuerpo).toMatch(/a\.jugador_id = j\.id/);
     expect(cuerpo).toContain('a.valor_nuevo = j.telefono_e164');
-    expect(cuerpo).toContain("nullif(pg_catalog.btrim(pg_catalog.coalesce(a.evidencia, '')), '') is not null");
+    expect(cuerpo).toContain("nullif(pg_catalog.btrim(coalesce(a.evidencia, '')), '') is not null");
     expect(cuerpo).toContain('select pg_catalog.max(a2.id)');
   });
 

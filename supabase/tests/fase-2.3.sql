@@ -223,7 +223,7 @@ select pg_temp.assert(
           where a.jugador_id = j.id
             and a.accion = 'confirmacion_e164_y_titularidad'
             and a.valor_nuevo = j.telefono_e164
-            and nullif(pg_catalog.btrim(pg_catalog.coalesce(a.evidencia, '')), '') is not null
+            and nullif(pg_catalog.btrim(coalesce(a.evidencia, '')), '') is not null
             and a.id = (
               select pg_catalog.max(a2.id)
                 from auditoria.telefonos_confirmados a2

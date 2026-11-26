@@ -70,7 +70,7 @@ begin
      or pg_catalog.pg_has_role('gl_owner', 'authenticated', 'SET')
      or pg_catalog.pg_has_role('gl_owner', 'anon', 'SET') then
     raise exception
-      'gl_owner pertenece efectivamente a authenticated/anon',
+      'gl_owner pertenece efectivamente a authenticated/anon'
       using hint = 'Revisar grantor, herencia y dependencias antes de revocar. No se revoca automáticamente.';
   end if;
 
@@ -94,7 +94,7 @@ begin
 
   if v_policies is not null then
     raise exception
-      'Existen políticas RESTRICTIVE aplicables a gl_owner: %', v_policies,
+      'Existen políticas RESTRICTIVE aplicables a gl_owner: %', v_policies
       using hint = 'Revisarlas manualmente antes de ejecutar la migración.';
   end if;
 
@@ -114,7 +114,7 @@ begin
     having count(*) > 1
   ) then
     raise exception
-      'Existen E.164 canónicos duplicados en public.jugadores',
+      'Existen E.164 canónicos duplicados en public.jugadores'
       using hint = 'Resolver manualmente antes de crear el índice único. No se modifica ningún número existente.';
   end if;
 
@@ -132,6 +132,14 @@ begin
       'El índice jugadores_e164_canonicalizado_uniq existe con una definición distinta';
   end if;
 end $$;
+
+-- PostgreSQL exige pertenencia al rol y CREATE sobre el esquema para
+-- transferir la propiedad de una función a gl_owner (creador sin
+-- createrole_self_grant). El CREATE se revoca justo después del cambio de
+-- propietario (bloque 5); la pertenencia queda solo en postgres, rol
+-- administrativo de la base, nunca en anon/authenticated.
+grant gl_owner to postgres;
+grant create on schema public to gl_owner;
 
 -- ---------------------------------------------------------------------------
 -- 1) Esquema privado de auditoría. No debe figurar en "Exposed schemas".
@@ -845,6 +853,8 @@ $$;
 
 alter function public.gl_confirmar_e164(uuid, text, text, boolean, text)
   owner to gl_owner;
+
+revoke create on schema public from gl_owner;
 
 revoke all on function public.gl_confirmar_e164(uuid, text, text, boolean, text)
   from public, anon, authenticated;

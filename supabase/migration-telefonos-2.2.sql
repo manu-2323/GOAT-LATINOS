@@ -153,21 +153,21 @@ end $$;
 update public.jugadores
    set telefono_e164 =
      '+' || pg_catalog.regexp_replace(pg_catalog.btrim(telefono_e164), '\D', '', 'g')
- where nullif(pg_catalog.btrim(pg_catalog.coalesce(telefono_e164, '')), '') is not null
+ where nullif(pg_catalog.btrim(coalesce(telefono_e164, '')), '') is not null
    and telefono_e164 !~ '^\+[1-9][0-9]{7,14}$'
    and pg_catalog.regexp_replace(pg_catalog.btrim(telefono_e164), '\D', '', 'g')
          ~ '^[1-9][0-9]{7,14}$';
 
 update public.jugadores j
    set telefono_verificado = false
- where pg_catalog.coalesce(j.telefono_verificado, false)
+ where coalesce(j.telefono_verificado, false)
    and not exists (
          select 1
            from auditoria.telefonos_confirmados a
           where a.jugador_id = j.id
             and a.accion = 'confirmacion_e164_y_titularidad'
             and a.valor_nuevo = j.telefono_e164
-            and nullif(pg_catalog.btrim(pg_catalog.coalesce(a.evidencia, '')), '') is not null
+            and nullif(pg_catalog.btrim(coalesce(a.evidencia, '')), '') is not null
             /* I1: la evidencia debe ser la ÚLTIMA del jugador. Si después hubo
                otra auditoría, el número pudo sustituirse y restaurarse. */
             and a.id = (
@@ -230,7 +230,7 @@ set search_path = ''
 as $$
 begin
   if NEW.accion = 'confirmacion_e164_y_titularidad'
-     and nullif(pg_catalog.btrim(pg_catalog.coalesce(NEW.evidencia, '')), '') is null then
+     and nullif(pg_catalog.btrim(coalesce(NEW.evidencia, '')), '') is null then
     raise exception 'La titularidad requiere evidencia verificable';
   end if;
   return NEW;
@@ -362,7 +362,7 @@ begin
   end if;
 
   if p_confirmar_titularidad
-     and nullif(pg_catalog.btrim(pg_catalog.coalesce(p_evidencia, '')), '') is null then
+     and nullif(pg_catalog.btrim(coalesce(p_evidencia, '')), '') is null then
     raise exception 'La titularidad requiere evidencia verificable';
   end if;
 
@@ -414,7 +414,7 @@ begin
       order by pg_catalog.length(m.prefijo) desc
       limit 1
     ) mp on true
-    where pg_catalog.nullif(pg_catalog.btrim(pg_catalog.coalesce(j.telefono_e164, '')), '') is not null
+    where nullif(pg_catalog.btrim(coalesce(j.telefono_e164, '')), '') is not null
   ),
   existentes_bloqueantes as (
     select e.*
@@ -479,7 +479,7 @@ begin
     raise exception 'E.164 ya existe en otro jugador';
   end if;
 
-  select pg_catalog.coalesce(pg_catalog.jsonb_agg(e.id), '[]'::jsonb)
+  select coalesce(pg_catalog.jsonb_agg(e.id), '[]'::jsonb)
     into v_no_estructurales
     from existentes_no_estructurales e
    where e.id <> p_jugador_id
@@ -506,7 +506,7 @@ begin
     values (
       p_jugador_id, v_tipo, v_anterior, v_candidato.e164_norm,
       v_admin, pg_catalog.now(), pg_catalog.btrim(p_motivo),
-      pg_catalog.nullif(pg_catalog.btrim(p_evidencia), ''),
+      nullif(pg_catalog.btrim(p_evidencia), ''),
       pg_catalog.txid_current()
     );
 
@@ -533,9 +533,9 @@ begin
       else
         raise exception
           'Violación de unicidad no telefónica: restricción % en %.% (%)',
-          pg_catalog.coalesce(v_restriccion, 'desconocida'),
-          pg_catalog.coalesce(v_esquema, 'desconocido'),
-          pg_catalog.coalesce(v_tabla, 'desconocida'),
+          coalesce(v_restriccion, 'desconocida'),
+          coalesce(v_esquema, 'desconocido'),
+          coalesce(v_tabla, 'desconocida'),
           v_mensaje;
       end if;
   end;
