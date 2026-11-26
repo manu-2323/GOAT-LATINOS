@@ -3,6 +3,8 @@
    Modo A: análisis de captura con Gemini Flash (vía Edge Function)
    Modo B: ingreso manual
    FASE 3.15: validación estricta, historial real y trazabilidad de cambios.
+   FASE 3.21: jornada y grupo contextuales, filtros sobre datos y escritura
+   verificada contra el estado real de la jornada.
    ===================================================================== */
 (function () {
   /* Contrato desplegado de gl_guardar_resultado_interno: solo estos estados.
@@ -18,6 +20,8 @@
     modo: 'manual',
     vista: 'carga',          // 'carga' | 'historial'
     partidoId: null,
+    jornada: null,          // FASE 3.21: jornada abierta seleccionada (null = primera abierta)
+    grupo: null,            // FASE 3.21: grupo seleccionado (null = todos)
     archivo: null,
     datosIA: null,
     analizando: false,
@@ -36,12 +40,16 @@
           return;
         }
 
-        const jn = GL.jornadaAbiertaNumero();
+        /* FASE 3.21: la jornada se resuelve dentro del grupo seleccionado y
+           el filtro de grupo se aplica a los datos, no sólo a las tarjetas. */
         const consulta = await GL.partidos({ torneo_id: GL.torneo().id });
         const { partidos, duplicados } = deduplicar(Array.isArray(consulta) ? consulta : []);
         Mod.partidos = partidos;
 
-        const deJornada = Mod.partidos.filter(p => Number(p.jornada) === Number(jn));
+        const abiertas = jornadasAbiertas(Mod.grupo);
+        const jn = jornadaElegida(abiertas);
+        Mod.jornada = jn;
+        const deJornada = partidosDeJornada(jn, Mod.grupo);
         const pendientes = deJornada.filter(p => p.estado === 'pendiente');
         const jugados = deJornada.length - pendientes.length;
         const progreso = deJornada.length ? Math.round((jugados / deJornada.length) * 100) : 0;
@@ -61,8 +69,10 @@
                 '<span class="r7-eyebrow">' + icono('clipboard-check', 14) + 'Dirección del torneo · Resultados</span>' +
                 '<h1 class="r7-titulo">Carga de resultados</h1>' +
                 '<p class="r7-bajada">' +
-                  (jn ? 'Jornada ' + jn + ' · Validá el marcador antes de guardar. El cálculo de tabla es automático.'
-                      : 'No hay jornada abierta. Podés consultar y corregir el historial; abrí una jornada para cargar resultados nuevos.') +
+                  (jn ? 'Jornada ' + jn + (Mod.grupo ? ' · Grupo ' + esc(etiquetaGrupo(Mod.grupo)) : '') +
+                        ' · Validá el marcador antes de guardar. El cálculo de tabla es automático.'
+                      : 'No hay jornada abierta' + (Mod.grupo ? ' en este grupo' : '') +
+                        '. Podés consultar y corregir el historial; abrí una jornada para cargar resultados nuevos.') +
                 '</p>' +
               '</div>' +
               '<div class="r7-hero-acciones">' +
@@ -106,14 +116,18 @@
                       '<p>Seleccioná un encuentro para cargar su resultado.</p></div>' +
                       '<span id="r7-contador" aria-live="polite">' + pendientes.length + (pendientes.length === 1 ? ' partido' : ' partidos') + '</span></div>' +
                     '<div class="r7-filtros">' +
+                      '<label class="r7-campo"><span>Jornada abierta</span>' +
+                        '<select class="input" id="r7-jornada" aria-label="Elegir jornada abierta">' +
+                          opcionesJornadaAbierta(abiertas, jn) +
+                        '</select></label>' +
+                      '<label class="r7-campo"><span>Grupo</span>' +
+                        '<select class="input" id="r7-grupo" aria-label="Filtrar partidos por grupo">' +
+                          '<option value="">Todos los grupos</option>' + opcionesGrupo(Mod.partidos, Mod.grupo) +
+                        '</select></label>' +
                       '<label class="r7-campo"><span>Buscar partido</span>' +
                         '<span class="r7-input-ico">' + icono('search', 16) +
                           '<input class="input" id="r7-buscar" type="search" placeholder="Ej: jugador o equipo" autocomplete="off" aria-label="Buscar partidos pendientes">' +
                         '</span></label>' +
-                      '<label class="r7-campo"><span>Grupo</span>' +
-                        '<select class="input" id="r7-grupo" aria-label="Filtrar partidos por grupo">' +
-                          '<option value="">Todos los grupos</option>' + opcionesGrupo(pendientes) +
-                        '</select></label>' +
                       '<button type="button" class="btn sec r7-limpiar" data-r7-limpiar>' + icono('rotate-ccw', 16) + 'Limpiar</button>' +
                     '</div>' +
                     '<div id="lista-pendientes" class="r7-lista">' + htmlLista(pendientes) + '</div>' +
@@ -173,14 +187,17 @@
         pintarPanel();
 
         el.querySelectorAll('[data-vista]').forEach(b => b.addEventListener('click', () => {
+          if (Mod.guardando) return;
           Mod.vista = b.dataset.vista;
           Mod.partidoId = null; Mod.archivo = null; Mod.datosIA = null;
           Mod.render(el);
         }));
         el.querySelectorAll('[data-modo]').forEach(b => b.addEventListener('click', () => {
+          if (Mod.guardando) return;
           Mod.modo = b.dataset.modo; Mod.datosIA = null; Mod.archivo = null; Mod.render(el);
         }));
         el.querySelectorAll('[data-partido],[data-resultado]').forEach(b => b.addEventListener('click', () => {
+          if (Mod.guardando) return;
           Mod.partidoId = b.dataset.partido || b.dataset.resultado;
           Mod.archivo = null; Mod.datosIA = null;
           el.querySelectorAll('[data-partido],[data-resultado]').forEach(x =>
@@ -227,11 +244,81 @@
     '</article>';
   }
 
-  function opcionesGrupo(partidos) {
-    return [...new Set(partidos.map(p => p.grupo_id).filter(Boolean))].map(id => {
-      const g = GL.grupo(id);
-      return '<option value="' + esc(id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</option>';
-    }).join('');
+  /* ── Contexto deportivo (FASE 3.21) ──────────────────────────────────
+     Funciones puras sobre GL.ctx y Mod.partidos: permiten auditar jornada,
+     grupo, ausencia de programación y aislamiento sin depender del DOM. */
+  function jornadasAbiertas(grupoId) {
+    const total = Number((GL.torneo() && GL.torneo().total_jornadas) || 22);
+    const vistos = new Set();
+    return ((GL.ctx && GL.ctx.jornadas) || [])
+      .filter(j => !j.virtual && j.estado === 'abierta' &&
+        Number.isFinite(Number(j.numero)) && Number(j.numero) <= total &&
+        (!grupoId || !j.grupo_id || j.grupo_id === grupoId))
+      .map(j => Number(j.numero))
+      .filter(n => { if (vistos.has(n)) return false; vistos.add(n); return true; })
+      .sort((a, b) => a - b);
+  }
+
+  function jornadaElegida(abiertas) {
+    const lista = (abiertas || []).filter(Number.isFinite);
+    if (!lista.length) return null;
+    if (Mod.jornada !== null && Mod.jornada !== undefined && Mod.jornada !== '' &&
+        lista.includes(Number(Mod.jornada))) return Number(Mod.jornada);
+    return lista[0];
+  }
+
+  function partidosDeJornada(numero, grupoId) {
+    if (numero === null || numero === undefined || numero === '') return [];
+    return (Mod.partidos || []).filter(p =>
+      Number(p.jornada) === Number(numero) && (!grupoId || p.grupo_id === grupoId));
+  }
+
+  function etiquetaGrupo(id) {
+    const g = typeof GL.grupo === 'function' ? GL.grupo(id) : null;
+    return typeof GL.letraGrupo === 'function' ? GL.letraGrupo(g) : id;
+  }
+
+  function jornadaDelPartido(p) {
+    if (!p || !(GL.ctx && GL.ctx.jornadas)) return null;
+    return GL.ctx.jornadas.find(j =>
+      Number(j.numero) === Number(p.jornada) &&
+      (!j.grupo_id || !p.grupo_id || j.grupo_id === p.grupo_id)) || null;
+  }
+
+  function validarContextoEscritura(p, estado, esCorreccion) {
+    if (!p) return 'No se identificó el partido. Recargá la vista antes de guardar.';
+    if (Mod.grupo && p.grupo_id && Mod.grupo !== p.grupo_id) {
+      return 'El partido pertenece a otro grupo. Recargá la vista antes de guardar.';
+    }
+    const j = jornadaDelPartido(p);
+    const numero = 'J' + Number(p.jornada);
+    if (esCorreccion) {
+      return (j && j.estado === 'cerrada')
+        ? 'La ' + numero + ' está cerrada; no se puede corregir este resultado. Reabrí la jornada desde Administración.'
+        : null;
+    }
+    if (!j || j.virtual || j.estado !== 'abierta') {
+      return 'La ' + numero + ' no está abierta. Abrí esa jornada desde Administración para cargar resultados nuevos.';
+    }
+    return null;
+  }
+
+  function frescoDe(p, partidosActuales) {
+    if (!p) return null;
+    return (partidosActuales || []).find(x => x.id === p.id) || null;
+  }
+
+  function opcionesGrupo(partidos, seleccionado) {
+    return [...new Set((partidos || []).map(p => p.grupo_id).filter(Boolean))].map(id =>
+      '<option value="' + esc(id) + '"' + (seleccionado === id ? ' selected' : '') + '>Grupo ' +
+      esc(etiquetaGrupo(id)) + '</option>').join('');
+  }
+
+  function opcionesJornadaAbierta(abiertas, elegida) {
+    const lista = abiertas || [];
+    if (!lista.length) return '<option value="">Sin jornada abierta</option>';
+    return lista.map(n => '<option value="' + n + '"' + (Number(elegida) === n ? ' selected' : '') +
+      '>Jornada ' + n + '</option>').join('');
   }
 
   function opcionesGuardables(p) {
@@ -325,10 +412,12 @@
     }).join('') + '</div>';
   }
 
-  /* Filtros locales de solo presentación sobre los partidos ya cargados. */
+  /* La búsqueda es local; jornada y grupo cambian el conjunto de datos y
+     fuerzan un render para recalcular contadores, selección y panel. */
   function enlazarFiltros(cont) {
     const buscar = cont.querySelector('#r7-buscar');
     const grupo = cont.querySelector('#r7-grupo');
+    const jornada = cont.querySelector('#r7-jornada');
     const lista = cont.querySelector('#lista-pendientes');
     if (!buscar || !grupo || !lista) return;
     const contador = cont.querySelector('#r7-contador');
@@ -337,15 +426,16 @@
     const total = tarjetas.length;
     const normalizar = texto => String(texto || '').toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const repintar = () => {
+      const vista = document.getElementById('vista');
+      if (vista) Mod.render(vista);
+    };
 
     const aplicar = () => {
       const texto = normalizar(buscar.value.trim());
-      const grupoId = grupo.value;
       let visibles = 0;
       tarjetas.forEach(tarjeta => {
-        const coincideTexto = !texto || normalizar(tarjeta.dataset.r7Nombre).includes(texto);
-        const coincideGrupo = !grupoId || tarjeta.dataset.r7Grupo === grupoId;
-        const mostrar = coincideTexto && coincideGrupo;
+        const mostrar = !texto || normalizar(tarjeta.dataset.r7Nombre).includes(texto);
         tarjeta.hidden = !mostrar;
         if (mostrar) visibles++;
       });
@@ -356,12 +446,24 @@
       if (sinResultados) sinResultados.hidden = !(total > 0 && visibles === 0);
     };
 
-    [buscar, grupo].forEach(el =>
-      el.addEventListener(el === buscar ? 'input' : 'change', aplicar));
+    buscar.addEventListener('input', aplicar);
+    if (jornada) jornada.addEventListener('change', () => {
+      if (Mod.guardando) return;
+      Mod.jornada = jornada.value === '' ? null : Number(jornada.value);
+      Mod.partidoId = null; Mod.archivo = null; Mod.datosIA = null;
+      repintar();
+    });
+    grupo.addEventListener('change', () => {
+      if (Mod.guardando) return;
+      Mod.grupo = grupo.value || null;
+      Mod.jornada = null;
+      Mod.partidoId = null; Mod.archivo = null; Mod.datosIA = null;
+      repintar();
+    });
     cont.querySelectorAll('[data-r7-limpiar]').forEach(b => b.addEventListener('click', () => {
-      buscar.value = ''; grupo.value = '';
-      aplicar();
-      buscar.focus();
+      if (Mod.guardando) return;
+      Mod.grupo = null; Mod.jornada = null; Mod.partidoId = null;
+      repintar();
     }));
     aplicar();
   }
@@ -723,6 +825,16 @@
     if (actual.local_id !== p.local_id || actual.visitante_id !== p.visitante_id) {
       return 'Los participantes cambiaron desde que abriste el formulario. Recargá la vista.';
     }
+    if (p.jornada !== undefined && actual.jornada !== undefined &&
+        Number(actual.jornada) !== Number(p.jornada)) {
+      return 'La jornada del partido cambió desde que abriste el formulario. Recargá la vista.';
+    }
+    if (p.grupo_id && actual.grupo_id && actual.grupo_id !== p.grupo_id) {
+      return 'El partido cambió de grupo desde que abriste el formulario. Recargá la vista.';
+    }
+    if (p.torneo_id && actual.torneo_id && actual.torneo_id !== p.torneo_id) {
+      return 'El partido ya no pertenece al torneo activo. Recargá la vista.';
+    }
     const clave = [p.jornada, p.local_id, p.visitante_id].join('|');
     if (lista.filter(x => [x.jornada, x.local_id, x.visitante_id].join('|') === clave).length > 1) {
       return 'Hay partidos duplicados para ese cruce. No se guardó nada para no repetir el resultado.';
@@ -769,7 +881,7 @@
       throw new Error('La base de datos no confirmó el guardado. No se informó éxito.');
     }
     if (data.error || data.ok === false) {
-      throw new Error(String(data.error || 'El servidor rechazó el resultado.'));
+      throw new Error(String(data.error || data.mensaje || 'El servidor rechazó el resultado.'));
     }
     return data;
   }
@@ -817,6 +929,7 @@
        pestañas del mismo formulario no pueden alcanzar la RPC dos veces. */
     Mod.guardando = true;
     const btn = panel.querySelector('#guardar');
+    const textoBoton = btn ? btn.innerHTML : '';
     if (btn) btn.disabled = true;
 
     try {
@@ -850,6 +963,17 @@
         return;
       }
 
+      /* FASE 3.21: refrescar el contexto antes de releer. Sin esto, una
+         jornada cerrada en otro pestaña podría seguir viéndose abierta. */
+      if (typeof GL.cargarContexto === 'function') {
+        try {
+          await GL.cargarContexto(true);
+        } catch (e) {
+          GL.notificar('No se pudo verificar el estado de la jornada. No se guardó ningún cambio.', 'error');
+          return;
+        }
+      }
+
       /* Releer el partido justo antes de escribir: evita duplicados y carreras. */
       let actuales = [];
       try {
@@ -861,11 +985,16 @@
       const problema = verificarPartido(p, actuales, esCorreccion);
       if (problema) { GL.notificar(problema, 'advertencia'); return; }
 
+      const fresco = frescoDe(p, actuales);
+      const contexto = validarContextoEscritura(fresco || p, estado, esCorreccion);
+      if (contexto) { GL.notificar(contexto, 'advertencia'); return; }
+      const base = fresco || p;
+
       const datos = {
         golesLocal: marcador.golesLocal, golesVisita: marcador.golesVisita,
         estado, motivo
       };
-      if (!(await confirmarCambio(resumenCambio(p, datos, esCorreccion)))) {
+      if (!(await confirmarCambio(resumenCambio(base, datos, esCorreccion)))) {
         GL.notificar('Guardado cancelado. No se modificó ningún dato.', 'info');
         return;
       }
@@ -918,13 +1047,14 @@
         if (GL.auditoria && GL.auditoria.registrar) {
           await GL.auditoria.registrar(esCorreccion ? 'resultado_corregido' : 'resultado_ingresado',
             'partido', p.id, {
-              local: GL.nombreJugador(p.local_id),
-              visitante: GL.nombreJugador(p.visitante_id),
+              local: GL.nombreJugador(base.local_id),
+              visitante: GL.nombreJugador(base.visitante_id),
               goles_local: marcador.golesLocal,
               goles_visitante: marcador.golesVisita,
               estado,
-              jornada: p.jornada,
-              anterior: esCorreccion ? GL.resultado(p).texto : null,
+              jornada: base.jornada,
+              /* anterior se toma del registro releído, no del snapshot inicial. */
+              anterior: esCorreccion ? GL.resultado(base).texto : null,
               nuevo: marcador.golesLocal + '-' + marcador.golesVisita,
               motivo: motivo || null,
               captura: !!capturaUrl
@@ -939,13 +1069,16 @@
         ? 'Corrección guardada. Tabla, estadísticas y cuadro actualizados.'
         : 'Resultado registrado. Tabla, estadísticas y cuadro actualizados.', 'exito');
       Mod.partidoId = null; Mod.archivo = null; Mod.datosIA = null;
+      /* El RPC recalcula; invalidar fuerza que tabla y estadísticas lean el
+         contexto fresco en lugar de una caché previa al guardado. */
+      if (typeof GL.invalidar === 'function') GL.invalidar();
       await Mod.render(document.getElementById('vista'));
     } catch (e) {
       console.error(e);
       GL.notificar(GL.mensaje(e, 'guardar', 'los resultados'), 'error');
     } finally {
       Mod.guardando = false;
-      if (btn) { btn.disabled = false; btn.innerHTML = icono('save', 18) + 'Confirmar y Guardar'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = textoBoton; }
     }
   }
 
@@ -959,6 +1092,13 @@
   Mod.respuestaConfirmada = respuestaConfirmada;
   Mod.validarStats = validarStats;
   Mod.guardarResultado = guardarResultado;
+  Mod.jornadasAbiertas = jornadasAbiertas;
+  Mod.jornadaElegida = jornadaElegida;
+  Mod.partidosDeJornada = partidosDeJornada;
+  Mod.jornadaDelPartido = jornadaDelPartido;
+  Mod.validarContextoEscritura = validarContextoEscritura;
+  Mod.frescoDe = frescoDe;
+  Mod.esCerrada = esCerrada;
   Mod.estadosGuardables = ESTADOS_GUARDABLES.slice();
 
   Modulos.resultados = Mod;
