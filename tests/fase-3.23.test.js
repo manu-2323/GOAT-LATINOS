@@ -248,13 +248,13 @@ describe('FASE 3.23 — E.9/E.10 y propuesta SQL', () => {
 describe('FASE 3.23 — cache-busting de los archivos modificados', () => {
   it('renueva CSS, textos y la versión con que se cargan los módulos', () => {
     const version = /VERSION: '([^']+)'/.exec(codigoConfig)[1];
-    expect(version).toBe('1.3.6');
+    expect(version).toBe('1.3.7');
     expect(codigoIndex).toContain('css/tokens-3.1.css?v=3.23.0');
     expect(codigoIndex).toContain('css/estilos.css?v=3.23.0');
     expect(codigoIndex).toContain('js/core/config.js?v=' + version);
     expect(codigoIndex).toContain('js/core/gl.js?v=' + version);
     expect(codigoIndex).toContain('js/ui/menu.js?v=' + version);
-    expect(codigoIndex).toContain('js/ui/auth.js?v=1.3.6');
+    expect(codigoIndex).toContain('js/ui/auth.js?v=1.3.7');
     expect(codigoIndex).toContain('js/ui/onboarding.js?v=1.2.4');
     expect(codigoGL).toContain("'js/modulos/' + id + '.js?v=' + encodeURIComponent(CONFIG.VERSION)");
   });

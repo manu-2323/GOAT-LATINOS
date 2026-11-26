@@ -2122,6 +2122,8 @@
     const m = GL.abrirModal({
       titulo: 'Editar jugador — ' + esc(j.nombre_usuario),
       ancho: 'j5-forma',
+      cerrarFondo: false,
+      confirmarDescarto: true,
       cuerpo:
         j5FormIntro('Actualizá los datos visibles del jugador. El teléfono se conserva si no se modifica.') +
         '<div class="j5-form-grid">' +
@@ -2982,6 +2984,8 @@
     const m = GL.abrirModal({
       titulo: 'Agregar jugador al torneo',
       ancho: 'j5-forma',
+      cerrarFondo: false,
+      confirmarDescarto: true,
       cuerpo:
         j5FormIntro('Completá los datos para crear la cuenta y asignar al jugador al torneo activo.') +
         '<div class="j5-form-grid">' +

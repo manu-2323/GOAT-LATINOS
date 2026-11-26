@@ -24,13 +24,14 @@ function iniciarIconos() {
 
 /* FASE 3.3 — Accesibilidad compartida de modales: Escape, Tab contenido,
    cierre idempotente y devolución del foco al control que lo abrió. */
-function activarModalAccesible(fondo, cerrar) {
+function activarModalAccesible(fondo, cerrar, estaActivo) {
   const anterior = document.activeElement;
   let cerrado = false;
   const enfocables = () => [...fondo.querySelectorAll(
     'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
   )].filter(el => el.getClientRects().length > 0);
   const onKey = e => {
+    if (estaActivo && !estaActivo()) return;
     if (e.key === 'Escape') {
       e.preventDefault();
       cerrar();
@@ -362,8 +363,11 @@ const GL = {
   opcionesZonaHoraria(valor, pais) {
     const actual = GL._zonaResuelta(valor) || GL.zonaPorDefectoFormulario(pais);
     const codigo = String(pais || '').toUpperCase();
+    /* El país del jugador ordena y preselecciona, pero NO oculta las demás
+       ubicaciones: el selector de zona es independiente del país telefónico. */
     const lista = codigo
       ? ZONAS_HORARIAS_DISPONIBLES.filter(x => x.pais === codigo)
+          .concat(ZONAS_HORARIAS_DISPONIBLES.filter(x => x.pais !== codigo))
       : ZONAS_HORARIAS_DISPONIBLES;
     const visibles = new Set(lista.map(x => x.zona));
     const extra = actual && !visibles.has(actual)
@@ -695,6 +699,8 @@ const GL = {
       (o.acciones ? '<div class="modal-acciones">' + o.acciones + '</div>' : '') + '</div>';
     root.appendChild(fondo);
     let cerrando = false;
+    /* Opciones: cerrarFondo:false evita el cierre por backdrop;
+       confirmarDescarto:true pide confirmación si el formulario cambió. */
     const cerrarReal = () => {
       if (cerrando) return;
       cerrando = true;
@@ -703,11 +709,32 @@ const GL = {
       fondo.classList.add('saliendo');
       setTimeout(() => { if (fondo.parentNode) fondo.remove(); }, 180);
     };
-    const finalizar = activarModalAccesible(fondo, cerrarReal);
-    fondo.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', cerrarReal));
-    fondo.addEventListener('click', e => { if (e.target === fondo) cerrarReal(); });
+    let datosIniciales = null;
+    const capturarDatos = () => [...fondo.querySelectorAll('input,select,textarea')]
+      .map(el => (el.type === 'checkbox' ? el.checked : el.value));
+    const solicitarCierre = () => {
+      if (fondo._confirmandoCierre) return;
+      if (!o.confirmarDescarto || !datosIniciales ||
+          capturarDatos().every((valor, i) => valor === datosIniciales[i])) {
+        cerrarReal();
+        return;
+      }
+      fondo._confirmandoCierre = true;
+      GL.confirmar('Los datos que ingresaste no se guardaron. ¿Descartar los cambios?',
+        'Descartar cambios', 'Descartar cambios').then(descartar => {
+        fondo._confirmandoCierre = false;
+        if (descartar) cerrarReal();
+      });
+    };
+    const finalizar = activarModalAccesible(fondo, solicitarCierre,
+      () => !fondo._confirmandoCierre);
+    fondo.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', solicitarCierre));
+    fondo.addEventListener('click', e => {
+      if (o.cerrarFondo !== false && e.target === fondo) solicitarCierre();
+    });
     fondo.cerrar = cerrarReal;
     if (o.onAbrir) o.onAbrir(fondo, cerrarReal);
+    if (o.confirmarDescarto) datosIniciales = capturarDatos();
     setTimeout(() => {
       const f = fondo.querySelector('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[data-confirmar],[data-si],.modal-acciones .btn,button');
       if (f) f.focus();
@@ -853,9 +880,11 @@ const GL = {
 
     // Cierre con Escape, Tab contenido y retorno de foco: activarModalAccesible().
 
-    // Cierre por fondo
+    // Cierre por fondo (se puede desactivar con cerrarFondo:false)
     fondo.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', cerrarReal));
-    fondo.addEventListener('click', e => { if (e.target === fondo) cerrarReal(); });
+    fondo.addEventListener('click', e => {
+      if (o.cerrarFondo !== false && e.target === fondo) cerrarReal();
+    });
 
     // Botón confirmar
     const confirmBtn = fondo.querySelector('[data-confirmar]');
