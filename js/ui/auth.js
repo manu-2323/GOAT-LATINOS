@@ -32,6 +32,10 @@ const PantallaAuth = {
     if (alEntrar) PantallaAuth.alEntrar = alEntrar;
     PantallaAuth.ocultar(false);
     try { await GL.cargarPaises(); } catch (e) { console.warn(e); }
+    /* FASE 3.13: arranque y `gl:auth` pueden invocar mostrar() a la vez.
+       Sin esta barrera, dos esperas resueltas creaban dos overlays con el
+       mismo id y formularios duplicados en el acceso. */
+    document.querySelectorAll('#auth.auth').forEach(x => x.remove());
     const o = document.createElement('div');
     o.className = 'auth'; o.id = 'auth';
     const esAdmin = PantallaAuth.modo === 'admin';

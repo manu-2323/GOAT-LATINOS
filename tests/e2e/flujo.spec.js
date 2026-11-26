@@ -62,6 +62,121 @@ test('accesibilidad: sin violaciones críticas', async ({ page }) => {
   }
 });
 
+test('acceso limpio: un overlay, sin avisos y sin consultas administrativas', async ({ page }) => {
+  const rest = [];
+  const auth = [];
+  page.on('request', r => {
+    if (r.url().includes('/rest/v1/')) rest.push(r.url());
+    if (r.url().includes('/auth/v1/')) auth.push(r.url());
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.GL && !!window.Auth && !!document.querySelector('#auth'));
+  await page.waitForLoadState('networkidle').catch(() => {});
+
+  const estado = await page.evaluate(() => ({
+    overlays: document.querySelectorAll('#auth').length,
+    avisos: document.querySelectorAll('.toastify, .gl-notificacion').length,
+    notificaciones: window.GL && window.GL._notificaciones
+  }));
+  expect(estado.overlays).toBe(1);
+  expect(estado.avisos).toBe(0);
+  expect(estado.notificaciones).toBe(0);
+  expect(auth.filter(u => u.includes('refresh_token'))).toEqual([]);
+  expect(rest.filter(u => /jugadores|grupos|partidos|clasificacion|jornadas|notificaciones|auditoria/.test(u))).toEqual([]);
+});
+
+test('refresh vencido: se limpia y recupera sin aviso amarillo', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.Auth && !!window.Auth._cliente);
+  await page.evaluate(() => {
+    const cliente = window.Auth._cliente();
+    const key = (cliente && cliente.auth && cliente.auth.storageKey) || 'sb-zmjzlvsdlfzmhptmtmjx-auth-token';
+    localStorage.setItem(key, JSON.stringify({
+      access_token: 'expired-test-access-token',
+      token_type: 'bearer',
+      expires_in: 3600,
+      expires_at: Math.floor(Date.now() / 1000) - 7200,
+      refresh_token: 'expired-test-refresh-token',
+      user: {
+        id: '00000000-0000-0000-0000-000000000000',
+        aud: 'authenticated',
+        role: 'authenticated',
+        email: 'expired-test@example.invalid'
+      }
+    }));
+  });
+
+  const rest = [];
+  page.on('request', r => {
+    if (r.url().includes('/rest/v1/')) rest.push(r.url());
+  });
+  const refresco = page.waitForResponse(r => r.url().includes('/auth/v1/token?grant_type=refresh_token')).catch(() => null);
+  await page.reload();
+  const respuesta = await refresco;
+  await page.waitForFunction(() => !!window.GL && !!window.Auth && !!document.querySelector('#auth'));
+  await page.waitForLoadState('networkidle').catch(() => {});
+
+  expect(respuesta && respuesta.status()).toBe(400);
+  const estado = await page.evaluate(() => ({
+    overlays: document.querySelectorAll('#auth').length,
+    avisos: document.querySelectorAll('.toastify, .gl-notificacion').length,
+    notificaciones: window.GL && window.GL._notificaciones,
+    usuario: !!window.Auth.usuario
+  }));
+  expect(estado.overlays).toBe(1);
+  expect(estado.avisos).toBe(0);
+  expect(estado.notificaciones).toBe(0);
+  expect(estado.usuario).toBe(false);
+  expect(rest.filter(u => /jugadores|grupos|partidos|clasificacion|jornadas|notificaciones|auditoria/.test(u))).toEqual([]);
+
+  await page.evaluate(() => {
+    const cliente = window.Auth._cliente();
+    const key = (cliente && cliente.auth && cliente.auth.storageKey) || 'sb-zmjzlvsdlfzmhptmtmjx-auth-token';
+    localStorage.removeItem(key);
+  });
+  await page.reload();
+  await page.waitForFunction(() => !!window.Auth && !!document.querySelector('#auth'));
+  const trasLimpiar = await page.evaluate(() => ({
+    overlays: document.querySelectorAll('#auth').length,
+    avisos: document.querySelectorAll('.toastify, .gl-notificacion').length
+  }));
+  expect(trasLimpiar.overlays).toBe(1);
+  expect(trasLimpiar.avisos).toBe(0);
+});
+
+test('acceso responsive: sin desbordes en laptop, escritorio y móvil', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('#auth');
+  for (const viewport of [
+    { width: 1366, height: 768 },
+    { width: 1920, height: 1080 },
+    { width: 390, height: 844 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.waitForTimeout(150);
+    const estado = await page.evaluate(() => {
+      const overlay = document.querySelector('#auth');
+      const estilo = overlay && getComputedStyle(overlay);
+      const caja = overlay && overlay.querySelector('.auth-marco');
+      const r = caja && caja.getBoundingClientRect();
+      const rr = overlay && overlay.getBoundingClientRect();
+      return {
+        desborde: document.documentElement.scrollWidth - window.innerWidth,
+        overlays: document.querySelectorAll('#auth').length,
+        visible: !!estilo && estilo.display !== 'none' && estilo.visibility !== 'hidden' &&
+          !!rr && rr.width > 0 && rr.height > 0,
+        cajaDentro: !!r && r.left >= -1 && r.right <= window.innerWidth + 1,
+        campos: overlay ? overlay.querySelectorAll('input').length : 0
+      };
+    });
+    expect(estado.desborde, `desborde en ${viewport.width}px`).toBeLessThanOrEqual(1);
+    expect(estado.overlays).toBe(1);
+    expect(estado.visible).toBe(true);
+    expect(estado.cajaDentro).toBe(true);
+    expect(estado.campos).toBeGreaterThan(0);
+  }
+});
+
 test('WhatsApp y teléfono: formato nacional y enlace sin +', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction(() => !!window.GL && !!window.GL.tel, null, { timeout: 30000 });
