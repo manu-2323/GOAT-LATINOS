@@ -42,9 +42,9 @@
         const todos = await GL.partidos({ torneo_id: GL.torneo().id });
         const mios = todos.filter(p => p.local_id === j.id || p.visitante_id === j.id);
         const rend = EST.calcularRendimiento(mios, j.id);
-        const fila = GL.clasificacion().find(c => c.jugador_id === j.id) || {};
-        const pos = GL.posicion(j.id);
         const grupo = GL.grupoDeJugador(j.id);
+        const fila = GL.clasificacion(grupo && grupo.id).find(c => c.jugador_id === j.id) || {};
+        const pos = GL.posicion(j.id, grupo && grupo.id);
 
         el.innerHTML =
           '<div class="seccion-head"><div class="seccion-titulo"><h2>Perfil del jugador</h2>' +

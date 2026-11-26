@@ -950,10 +950,10 @@
   function htmlJornadas() {
     const grupos = GL.grupos();
     const total = (GL.torneo() && Number(GL.torneo().total_jornadas)) || 22;
-    const actual = GL.jornadaActual().numero;
-    const jornadas = GL.ctx.jornadas.filter(j => j.grupo_id === Mod.grupoJornadas && j.numero <= total);
+    const actual = typeof GL.jornadaAbiertaNumero === 'function' ? GL.jornadaAbiertaNumero() : GL.jornadaActual().numero;
+    const jornadas = GL.ctx.jornadas.filter(j => !j.virtual && j.grupo_id === Mod.grupoJornadas && j.numero <= total);
     const items = Array.from({ length: total }, (_, i) => i + 1).map(n => {
-      const jdata = jornadas.find(x => x.numero === n) || { estado: 'abierta', fecha: null, numero: n };
+      const jdata = jornadas.find(x => x.numero === n) || { estado: 'sin_programar', fecha: null, numero: n, virtual: true };
       const parts = Mod.partidosCache.filter(p => p.jornada === n && p.grupo_id === Mod.grupoJornadas);
       const hechos = parts.filter(p => p.estado !== 'pendiente').length;
       const pct = parts.length ? Math.round(hechos / parts.length * 100) : 0;
@@ -967,13 +967,15 @@
                 GL.horaEnZona(jdata.hora_limite, CONFIG.ZONA_REFERENCIA)
               : 'Horario por definir') +
             ' · ' + hechos + '/' + parts.length + ' partidos</small>' +
-          (jdata.estado === 'cerrada' ? GL.badge('Cerrada', 'red') : GL.badge('Abierta', 'green')) +
+          (jdata.virtual ? GL.badge('Sin programar', 'neutral') :
+            (jdata.estado === 'cerrada' ? GL.badge('Cerrada', 'red') : GL.badge('Abierta', 'green'))) +
           '<div style="flex:1;min-width:90px;max-width:130px"><div class="barra-progreso"><span style="width:' + pct + '%"></span></div></div>' +
           '<button type="button" class="btn sm sec" data-editar-jornada="' + n + '">' + icono('clock', 14) + 'Horario</button>' +
           '<button type="button" class="btn sm sec" data-ver-jornada="' + n + '">' + icono('eye', 14) + 'Ver</button>' +
-          (jdata.estado === 'abierta'
-            ? '<button type="button" class="btn sm" data-cerrar-jornada="' + n + '">' + icono('lock', 14) + 'Cerrar</button>'
-            : '<button type="button" class="btn sm sec" data-abrir-jornada="' + n + '">' + icono('unlock', 14) + 'Abrir</button>') +
+          (jdata.virtual ? '' :
+            (jdata.estado === 'abierta'
+              ? '<button type="button" class="btn sm" data-cerrar-jornada="' + n + '">' + icono('lock', 14) + 'Cerrar</button>'
+              : '<button type="button" class="btn sm sec" data-abrir-jornada="' + n + '">' + icono('unlock', 14) + 'Abrir</button>')) +
         '</div></div>';
     }).join('');
     return '<div class="seccion-head"><div class="seccion-titulo"><h2>Gestión de jornadas</h2>' +

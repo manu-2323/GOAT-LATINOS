@@ -14,7 +14,9 @@
         const grupos = GL.grupos();
         if (!GL.torneo()) { el.innerHTML = GL.vacio('No hay torneo activo todavía.', 'trophy', null); iniciarIconos(); return; }
         if (!grupos.length) { el.innerHTML = GL.vacio('No hay grupos configurados.'); iniciarIconos(); return; }
-        if (!Mod.grupoId || !grupos.some(g => g.id === Mod.grupoId)) Mod.grupoId = grupos[0].id;
+        if (!Mod.grupoId || !grupos.some(g => g.id === Mod.grupoId)) {
+          Mod.grupoId = (typeof GL.grupoInicial === 'function' ? GL.grupoInicial() : grupos[0]).id;
+        }
         if (!Mod.jornada) Mod.jornada = GL.jornadaActual().numero;
         const total = (GL.torneo() && GL.torneo().total_jornadas) || 22;
         const partidos = (await GL.partidos({ torneo_id: GL.torneo().id, jornada: Mod.jornada }))

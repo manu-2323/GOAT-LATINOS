@@ -82,6 +82,23 @@
     return coincide ? Number(coincide[1]) : null;
   }
 
+  /* Dedup de vista: NO borra filas de Supabase. Conserva una sola entrada
+     por identidad canónica y prefiere la más reciente; si alguna repetida
+     sigue sin leer, conserva ese estado para no ocultar un aviso pendiente. */
+  function _dedupHistorial(filas) {
+    const vistas = new Map();
+    (filas || []).forEach(n => {
+      const clave = _claveNotificacion(n) || ('id:' + _valor(n && n.id));
+      const anterior = vistas.get(clave);
+      if (!anterior) { vistas.set(clave, n); return; }
+      if (anterior.leida && !n.leida) { vistas.set(clave, n); return; }
+      if (!anterior.leida && n.leida) return;
+      const masReciente = _valor(n.created_at) > _valor(anterior.created_at);
+      if (masReciente) vistas.set(clave, n);
+    });
+    return Array.from(vistas.values());
+  }
+
   function _claveNotificacion(n) {
     const fila = n || {};
     const tipo = _valor(fila.tipo);
@@ -170,9 +187,10 @@
         .eq('jugador_id', Auth.jugador.id)
         .order('created_at', { ascending: false });
       if (!error && data) {
+        const visibles = _dedupHistorial(data);
         Mod._historial = data;
-        Mod._cache     = data.slice(0, 80);
-        Mod._sinLeer   = data.filter(n => !n.leida).length;
+        Mod._cache     = visibles.slice(0, 80);
+        Mod._sinLeer   = visibles.filter(n => !n.leida).length;
         Mod._claves    = new Set(data.map(n => _claveNotificacion(n)).filter(Boolean));
       } else if (error) {
         console.warn('[Notif] carga:', error.message);
@@ -199,9 +217,11 @@
 
       /* Jornada abierta: identidad estable por tipo + torneo + jugador + jornada.
          El texto visible sólo se usa como respaldo para filas históricas. */
-      const jornadaActual = GL.jornadaActual();
-      if (jornadaActual) {
-        const numero = jornadaActual.numero;
+      const jornadaAbierta = typeof GL.jornadaAbiertaNumero === 'function'
+        ? GL.jornadaAbiertaNumero()
+        : (GL.jornadaActual() || {}).numero;
+      if (jornadaAbierta) {
+        const numero = jornadaAbierta;
         const titulo = 'Jornada ' + numero + ' abierta';
         const cuerpo = 'Tu jornada ' + numero + ' se encuentra abierta. Consultá tus partidos y coordiná con tu rival.';
         const clave = _claveNotificacion({
@@ -248,7 +268,8 @@
       });
 
       /* Clasificación a eliminatorias: una sola notificación por jugador/torneo. */
-      const pos = GL.posicion ? GL.posicion(jid) : null;
+      const miGrupo = typeof GL.grupoDeJugador === 'function' ? GL.grupoDeJugador(jid) : null;
+      const pos = GL.posicion ? GL.posicion(jid, miGrupo && miGrupo.id) : null;
       if (pos && pos <= 6) {
         const clave = _claveNotificacion({
           tipo: 'clasifica_eliminatorias', torneo_id: tid, jugador_id: jid
@@ -358,8 +379,10 @@
           filter: 'jugador_id=eq.' + Auth.jugador.id
         }, payload => {
           const nueva = payload.new;
-          if (!Mod._cache.find(n => n.id === nueva.id)) {
-            const clave = _claveNotificacion(nueva);
+          const clave = _claveNotificacion(nueva);
+          const duplicada = (clave && Mod._claves.has(clave)) ||
+            !!Mod._cache.find(n => _claveNotificacion(n) === clave && n.id !== nueva.id);
+          if (!Mod._cache.find(n => n.id === nueva.id) && !duplicada) {
             if (clave) Mod._claves.add(clave);
             Mod._historial.unshift(nueva);
             Mod._cache.unshift(nueva);
@@ -722,7 +745,8 @@
 
   Mod._pruebas = {
     clave: _claveNotificacion,
-    jornadaDe: _jornadaDeNotificacion
+    jornadaDe: _jornadaDeNotificacion,
+    dedup: _dedupHistorial
   };
 
   Modulos.notificaciones = Mod;

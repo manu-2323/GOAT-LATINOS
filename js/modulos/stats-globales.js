@@ -393,7 +393,7 @@
         }
 
         if (!Mod.grupoId || !grupos.some(g => g.id === Mod.grupoId)) {
-          Mod.grupoId = grupos[0].id;
+          Mod.grupoId = (typeof GL.grupoInicial === 'function' ? GL.grupoInicial() : grupos[0]).id;
         }
 
         el.innerHTML = _htmlEsqueleto(grupos, Mod.grupoId);

@@ -62,6 +62,7 @@ const OnboardingAdmin = (() => {
   let paso = 0;
   let overlay = null;
   let onKey = null;
+  let focoTimer = null;
 
   function pct() { return Math.round(((paso + 1) / pasos.length) * 100); }
 
@@ -90,6 +91,7 @@ const OnboardingAdmin = (() => {
   }
 
   function cerrar(irHash) {
+    if (focoTimer) { clearTimeout(focoTimer); focoTimer = null; }
     if (overlay) { overlay.remove(); overlay = null; }
     if (onKey) { document.removeEventListener('keydown', onKey); onKey = null; }
     try { localStorage.setItem(claveVisto(), '1'); } catch (e) { /* modo privado */ }
@@ -101,6 +103,7 @@ const OnboardingAdmin = (() => {
       try { if (localStorage.getItem(claveVisto())) return; } catch (e) { /* procede */ }
     }
     paso = 0;
+    if (focoTimer) { clearTimeout(focoTimer); focoTimer = null; }
     if (onKey) { document.removeEventListener('keydown', onKey); onKey = null; }
     if (overlay) overlay.remove();
     overlay = document.createElement('div');
@@ -154,7 +157,9 @@ const OnboardingAdmin = (() => {
       if (e.key === 'Escape') cerrar();
     };
     document.addEventListener('keydown', onKey);
-    setTimeout(() => {
+    focoTimer = setTimeout(() => {
+      focoTimer = null;
+      if (!overlay) return;
       const b = overlay.querySelector('.ob-siguiente');
       if (b) b.focus();
     }, 50);

@@ -5,7 +5,17 @@
    ===================================================================== */
 const OnboardingTour = (() => {
 
-  const CLAVE_VISTO = 'gl_tour_completo_v1';
+  /* FASE 3.20 — la clave incluye la cuenta: antes un mismo navegador
+     compartía el tour entre jugadores distintos. */
+  const CLAVE_BASE = 'gl_tour_completo_v1';
+
+  function claveVisto() {
+    const id = (typeof Auth !== 'undefined' && Auth && Auth.jugador && Auth.jugador.id)
+      ? Auth.jugador.id
+      : ((typeof Auth !== 'undefined' && Auth && Auth.usuario && Auth.usuario.id)
+        ? Auth.usuario.id : 'invitado');
+    return CLAVE_BASE + ':' + id;
+  }
 
   // ── Pasos del tour ────────────────────────────────────────────────
   const pasos = [
@@ -132,7 +142,7 @@ const OnboardingTour = (() => {
 
   function cerrar(irHash) {
     if (overlay) { overlay.remove(); overlay = null; }
-    try { localStorage.setItem(CLAVE_VISTO, '1'); } catch (e) { /* privado */ }
+    try { localStorage.setItem(claveVisto(), '1'); } catch (e) { /* privado */ }
     if (irHash) location.hash = irHash;
   }
 
@@ -140,7 +150,7 @@ const OnboardingTour = (() => {
   function iniciar(force) {
     // Si ya lo vio y no se fuerza, salir silenciosamente
     if (!force) {
-      try { if (localStorage.getItem(CLAVE_VISTO)) return; } catch (e) { /* privado, procede */ }
+      try { if (localStorage.getItem(claveVisto())) return; } catch (e) { /* privado, procede */ }
     }
     forzado = !!force;
     paso = 0;

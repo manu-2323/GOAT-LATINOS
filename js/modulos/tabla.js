@@ -19,7 +19,9 @@
           el.innerHTML = GL.vacio('Todavía no hay grupos configurados. El administrador debe crear el torneo y el cuadro de partidos.');
           iniciarIconos(); return;
         }
-        if (!Mod.grupoId || !grupos.some(g => g.id === Mod.grupoId)) Mod.grupoId = grupos[0].id;
+        if (!Mod.grupoId || !grupos.some(g => g.id === Mod.grupoId)) {
+          Mod.grupoId = (typeof GL.grupoInicial === 'function' ? GL.grupoInicial() : grupos[0]).id;
+        }
         const jornada = GL.jornadaActual();
         Mod.jornada = jornada.numero;
         const partidos = await GL.partidos({ torneo_id: GL.torneo().id, jornada: jornada.numero, grupo_id: Mod.grupoId });

@@ -784,12 +784,35 @@
       }
       if (!(await GL.confirmar('¿Cerrar la jornada ' + numero + '?',
         'Cerrar jornada', 'Cerrar'))) return;
-      const { error } = await sb.from('jornadas').update({ estado: 'cerrada' }).eq('id', j.id);
-      if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'el calendario'), 'error'); return; }
-      GL.auditoria && GL.auditoria.registrar('calendario_jornada_cerrada', 'jornada', null, {
-        numero, grupo: d.grupo ? d.grupo.nombre : '?'
-      });
-      GL.notificar('Jornada ' + numero + ' cerrada.', 'exito');
+      /* FASE 3.20 — usar el mismo RPC transaccional que Jornadas: el cierre
+         directo por REST no recalculaba la clasificación ni registraba la
+         resolución de partidos pendientes. */
+      try {
+        const { data, error } = await sb.rpc('gl_cerrar_jornada', {
+          p_torneo_id: d.torneo.id,
+          p_grupo_id: Mod.grupoId,
+          p_jornada: numero,
+          p_resoluciones: [],
+          p_cerrado_por: (typeof Auth !== 'undefined' && Auth && Auth.usuario && Auth.usuario.id)
+            ? Auth.usuario.id : null
+        });
+        if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la jornada'), 'error'); return; }
+        if (!data || typeof data !== 'object' || data.ok === false) {
+          GL.notificar('No se pudo cerrar: ' +
+            ((data && (data.error || data.mensaje)) || 'la base de datos no confirmó la operación'), 'error');
+          return;
+        }
+        if (typeof GL.recalcularTodo === 'function') await GL.recalcularTodo(d.torneo.id);
+        const resueltos = data.partidos_resueltos || 0;
+        GL.auditoria && GL.auditoria.registrar('jornada_cerrada', 'jornada', null, {
+          numero, grupo: d.grupo ? d.grupo.nombre : '?', partidos_resueltos: resueltos
+        });
+        GL.notificar('Jornada ' + numero + ' cerrada.' +
+          (resueltos ? ' ' + resueltos + ' partido(s) resuelto(s).' : '') + ' Tabla actualizada.', 'exito');
+      } catch (e) {
+        GL.notificar(GL.mensaje(e, 'guardar', 'la jornada'), 'error');
+        return;
+      }
     }
     GL.invalidar();
     await GL.cargarContexto(true);

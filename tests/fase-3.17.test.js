@@ -66,9 +66,9 @@ describe('FASE 3.17 — revisión puntual de seguridad', () => {
   });
 
   it('el cache-busting conserva la corrección y se renueva en fases posteriores', () => {
-    expect(codigoConfig).toMatch(/VERSION: '1\.3\.[23]'/);
-    expect(codigoIndex).toMatch(/\?v=3\.(17|19)\.0/);
-    expect(codigoIndex).toMatch(/js\/core\/config\.js\?v=1\.3\.[23]/);
+    expect(codigoConfig).toMatch(/VERSION: '1\.3\.[234]'/);
+    expect(codigoIndex).toMatch(/\?v=3\.(17|19|20)\.0/);
+    expect(codigoIndex).toMatch(/js\/core\/config\.js\?v=1\.3\.[234]/);
     expect(codigoIndex).toContain('js/core/supabase.js?v=1.2.2');
     expect(codigoIndex).not.toContain('?v=1.3.1');
     expect(codigoIndex).not.toContain('?v=3.16.0');

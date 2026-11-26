@@ -42,7 +42,7 @@ function crearNotificaciones({ filas = [], rpc = vi.fn(async () => ({ error: nul
     codigoNotificaciones + '\nreturn Modulos.notificaciones;'
   );
   const Mod = crear(
-    sb, Auth, GL, { VERSION: '1.3.3' }, Modulos, ventana,
+    sb, Auth, GL, { VERSION: '1.3.4' }, Modulos, ventana,
     () => '', valor => String(valor == null ? '' : valor), () => {}, globalThis.document
   );
   return { Mod, sb, cadena, rpc, GL, Auth };
@@ -152,12 +152,12 @@ describe('FASE 3.19 — carga única de módulos', () => {
   });
 
   it('renueva el cache-busting de lo modificado', () => {
-    expect(codigoConfig).toContain("VERSION: '1.3.3'");
-    expect(codigoIndex).toContain('css/tokens-3.1.css?v=3.19.0');
-    expect(codigoIndex).toContain('css/estilos.css?v=3.19.0');
-    expect(codigoIndex).toContain('js/core/config.js?v=1.3.3');
-    expect(codigoIndex).toContain('js/core/gl.js?v=1.3.3');
-    expect(codigoIndex).toContain('js/ui/menu.js?v=1.3.3');
+    expect(codigoConfig).toMatch(/VERSION: '1\.3\.[34]'/);
+    expect(codigoIndex).toMatch(/css\/tokens-3\.1\.css\?v=3\.(19|20)\.0/);
+    expect(codigoIndex).toMatch(/css\/estilos\.css\?v=3\.(19|20)\.0/);
+    expect(codigoIndex).toMatch(/js\/core\/config\.js\?v=1\.3\.[34]/);
+    expect(codigoIndex).toMatch(/js\/core\/gl\.js\?v=1\.3\.[34]/);
+    expect(codigoIndex).toMatch(/js\/ui\/menu\.js\?v=1\.3\.[34]/);
   });
 });
 

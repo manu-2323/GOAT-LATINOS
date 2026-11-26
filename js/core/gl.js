@@ -1023,7 +1023,10 @@ const GL = {
         GL.ctx.grupos.forEach(g => {
           for (let n = 1; n <= total; n++) {
             if (!existentes.has(n + '|' + g.id)) {
-              GL.ctx.jornadas.push({ numero: n, grupo_id: g.id, torneo_id: torneo.id, estado: 'abierta', fecha: null, virtual: true });
+              /* FASE 3.20: una fila virtual es sólo un marcador de posición.
+                 Nunca debe anunciarse como "abierta": no existe en la BD y
+                 sobre ella no se puede cargar un resultado. */
+              GL.ctx.jornadas.push({ numero: n, grupo_id: g.id, torneo_id: torneo.id, estado: 'sin_programar', fecha: null, virtual: true });
             }
           }
         });
@@ -1079,6 +1082,16 @@ const GL = {
     return m ? GL.grupo(m.grupo_id) : null;
   },
 
+  /* FASE 3.20 — Fuente única para el grupo inicial de las vistas de
+     competición. Admin/sin sesión conservan el primer grupo; jugador usa
+     su propio grupo, igual que Cuadro y Calendario. */
+  grupoInicial() {
+    const id = (typeof Auth !== 'undefined' && Auth && Auth.jugador && Auth.jugador.id)
+      ? Auth.jugador.id : null;
+    const propio = id ? GL.grupoDeJugador(id) : null;
+    return propio || GL.grupos()[0] || null;
+  },
+
   // Historial de grupos de un jugador en temporadas anteriores
   async historialGruposJugador(jugadorId) {
     if (!sb) return [];
@@ -1099,14 +1112,17 @@ const GL = {
   faltas(jugadorId) { return GL.ctx.sanciones.filter(s => s.jugador_id === jugadorId).length; },
 
   jornadaActual() {
-    const js = GL.ctx.jornadas.filter(j => j.numero <= (GL.torneo() ? Number(GL.torneo().total_jornadas) || 22 : 22));
-    return js.find(j => j.estado === 'abierta') ||
-      js.slice().sort((a, b) => b.numero - a.numero)[0] || { numero: 1, estado: 'abierta' };
+    const total = GL.torneo() ? Number(GL.torneo().total_jornadas) || 22 : 22;
+    const js = GL.ctx.jornadas.filter(j => j.numero <= total);
+    const reales = js.filter(j => !j.virtual);
+    return reales.find(j => j.estado === 'abierta') ||
+      reales.slice().sort((a, b) => b.numero - a.numero)[0] ||
+      { numero: 1, estado: 'sin_programar', virtual: true };
   },
 
   jornadaAbiertaNumero() {
     const total = Number(GL.torneo() && GL.torneo().total_jornadas) || CONFIG.JORNADAS_FASE_REGULAR;
-    const j = GL.ctx.jornadas.find(x => x.estado === 'abierta' && x.numero <= total);
+    const j = GL.ctx.jornadas.find(x => !x.virtual && x.estado === 'abierta' && x.numero <= total);
     return j ? j.numero : null;
   },
 
@@ -1165,7 +1181,10 @@ const GL = {
   },
 
   posicion(jugadorId, grupoId) {
-    const tabla = GL.clasificacion(grupoId);
+    /* El puesto es un concepto por grupo. Si no se pasa el grupo, se toma
+       el del propio jugador; antes se mezclaban las dos tablas. */
+    const gid = grupoId || (GL.grupoDeJugador(jugadorId) || {}).id || null;
+    const tabla = GL.clasificacion(gid);
     const i = tabla.findIndex(c => c.jugador_id === jugadorId);
     return i < 0 ? null : i + 1;
   },
