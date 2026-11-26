@@ -3,7 +3,7 @@
 **Fecha:** 2026-11-26  
 **Rama:** `main` (sin ramas auxiliares)  
 **Alcance:** selector `Ciudad o zona horaria`, cierre del modal `Agregar jugador al torneo` e investigación del correo electrónico.  
-**Decisión:** **A — correcciones verificadas localmente; pendiente de cierre de publicación.**
+**Decisión:** **A — correcciones verificadas y publicadas en `main`.**
 
 No se inició una nueva fase. No se modificaron tablas, SQL, RLS, GRANT, firmas RPC, autenticación, datos reales ni configuración de Supabase. No se enviaron correos de prueba.
 
@@ -111,7 +111,10 @@ La validación es de código y DOM simulado (jsdom). No se probó en un disposit
 
 ## 6. Publicación
 
-*Pendiente de completar tras el push: commits, GitHub Actions y GitHub Pages.*
+- **Commit de implementación:** `fd7bb5d0871f2679d050cc1cea8a19362c522ff1` — `fix(uso-real): corregir selector de ubicacion y cierre accidental de modales`. Push directo a `main`, sin ramas auxiliares ni reescritura de historial.
+- **Cierre de verificación:** este informe se actualiza en un segundo commit documental, sin `amend` ni `rebase`.
+- **GitHub Actions:** run `45913883810`, `pages build and deployment`, #54, rama `main`, `head_sha=fd7bb5d0871f2679d050cc1cea8a19362c522ff1`; `status=completed`, `conclusion=success`, actualizado `2026-11-26T23:57:46Z`. Detalle: https://github.com/manu-2323/GOAT-LATINOS/actions/runs/45913883810
+- **GitHub Pages:** https://manu-2323.github.io/GOAT-LATINOS/ sirve `config.js`, `gl.js`, `menu.js` y `auth.js` con `?v=1.3.7`, y `css/estilos.css?v=3.23.0` (CSS sin cambios). Informe público: https://manu-2323.github.io/GOAT-LATINOS/docs/correcciones-uso-real-2026-11-26.html (GitHub Pages sirve el `.md` como `.html`).
 
 ---
 
