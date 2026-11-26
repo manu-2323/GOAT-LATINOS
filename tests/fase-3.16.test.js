@@ -130,8 +130,8 @@ describe('FASE 3.16 — auditoría de Administración', () => {
   });
 
   it('renueva el cache-busting de todos los archivos modificados', () => {
-    expect(codigoConfig).toContain("VERSION: '1.3.1'");
-    expect(codigoIndex).toContain('?v=3.16.0');
+    expect(codigoConfig).toMatch(/VERSION: '1\.3\.[12]'/);
+    expect(codigoIndex).toMatch(/\?v=3\.(16|17)\.0/);
     expect(codigoIndex).toContain('onboarding-admin.js?v=1.2.1');
     expect(codigoIndex).toContain('auditoria.js?v=1.1.1');
     expect(codigoIndex).toContain('dashboard-admin.js?v=1.2.2');

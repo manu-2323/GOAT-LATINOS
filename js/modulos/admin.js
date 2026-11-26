@@ -1037,9 +1037,8 @@
           '<p class="nota-pie">La clave de administrador no se guarda en el navegador: se valida en el servidor.</p>' +
         '</div>' +
         '<div class="card"><div class="card-titulo">' + icono('key-round', 20) + 'Clave de administrador</div>' +
-          '<p class="muted" style="font-size:12px">Solo el administrador principal puede consultarla para compartirla de forma privada con otros administradores.</p>' +
-          '<button type="button" class="btn sec block mt" data-ver-clave>' + icono('eye', 16) + 'Ver clave de administrador</button>' +
-          '<p class="nota-pie">La clave se obtiene del servidor únicamente con tu sesión de administrador principal.</p>' +
+          '<p class="muted" style="font-size:12px">La clave compartida se gestiona en los secretos del proyecto y no se muestra en la aplicación. Para crear una cuenta administradora nueva, pedila al administrador principal.</p>' +
+          '<p class="nota-pie">Ninguna pantalla del panel entrega ni copia esta clave.</p>' +
         '</div></div>';
   }
 
@@ -1972,30 +1971,6 @@
       });
       iniciarIconos();
     }));
-    const verClave = cont.querySelector('[data-ver-clave]');
-    if (verClave) verClave.addEventListener('click', async () => {
-      verClave.disabled = true;
-      try {
-        const clave = await Auth.obtenerClaveAdmin();
-        const m = GL.abrirModal({
-          titulo: 'Clave de administrador',
-          cuerpo: '<p class="modal-texto">Compartila solo con personas autorizadas. No la publiques en el grupo.</p>' +
-            '<div class="nota-clave" id="clave-valor">' + esc(clave) + '</div>',
-          acciones: '<button type="button" class="btn sec" data-cerrar>Cerrar</button>' +
-            '<button type="button" class="btn" id="clave-copiar">' + icono('copy', 16) + 'Copiar clave</button>',
-          onAbrir(fondo) {
-            fondo.querySelector('#clave-copiar').addEventListener('click', async () => {
-              await GL.copiar(clave);
-              GL.notificar('Clave copiada al portapapeles.', 'exito', 'copy');
-            });
-          }
-        });
-        iniciarIconos();
-        return m;
-      } catch (e) { GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error'); }
-      finally { verClave.disabled = false; }
-    });
-
     cont.querySelectorAll('[data-grupo-j]').forEach(b => b.addEventListener('click', () => {
       Mod.grupoJornadas = b.dataset.grupoJ; Mod.render(root);
     }));

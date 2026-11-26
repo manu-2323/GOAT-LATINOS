@@ -79,7 +79,7 @@ cuentas.
 | URL + anon key | `js/core/config.js` (público, ya configurado) |
 | **SERVICE_ROLE_KEY** | Solo secret de Supabase Edge Functions |
 | **GEMINI_API_KEY** | Solo secret de la función `analizar-captura` |
-| **ADMIN_PASSWORD** | Solo secret de `admin-gestionar-admins` y `admin-obtener-clave` |
+| **ADMIN_PASSWORD** | Solo secret de `admin-gestionar-admins`; `admin-obtener-clave` ya no lo entrega |
 | Clave de administrador | Hash bcrypt en `public.admin_credencial` + secreto `ADMIN_PASSWORD`; nunca en claro en frontend, repo ni docs |
 
 > La Service Role Key, la API key de Gemini y la clave de administrador **nunca** se escriben en el
@@ -113,11 +113,12 @@ No reescribas los valores actuales salvo rotación intencional.
 - Ambos administradores tienen `rol='admin'`, por lo que acceden a **todos los módulos** —incluido
   Calendario, Jornadas, Resultados, Mensajes y Administración— y conservan su fila original de jugador,
   con grupo, partidos y estadísticas personales intactos.
-- Manuel conserva `super_admin=true`: esa flag habilita la pestaña **Administradores**, la consulta de
-  la clave y la edición de países. GØA tiene `super_admin=false` pero acceso completo vía `rol='admin'`.
+- Manuel conserva `super_admin=true`: esa flag habilita la pestaña **Administradores** y la edición de
+  países. Desde 3.17 **no habilita consultar la clave**: el panel no la muestra ni la copia. GØA tiene
+  `super_admin=false` pero acceso completo vía `rol='admin'`.
 - `ツ ƈнєяy` pasó a `rol='jugador'` sin perder ningún dato deportivo.
-- `admin-gestionar-admins` y `admin-obtener-clave` siguen exigiendo `super_admin` y usan el secreto
-  `ADMIN_PASSWORD`, rotado a la misma clave compartida.
+- `admin-gestionar-admins` sigue exigiendo `super_admin` y usa el secreto `ADMIN_PASSWORD`, rotado a la
+  misma clave compartida. `admin-obtener-clave` quedó como respuesta `410`: no entrega ningún secreto.
 - Los roles se verifican contra la base de datos **en cada carga de módulo**, no solo al iniciar sesión.
 
 Para corregir un rol a mano (solo si hace falta):
@@ -147,7 +148,7 @@ supabase functions deploy eliminar-cuenta --yes
 | `admin-crear-jugador` | Crea cuenta Auth y fila en `jugadores` con Service Role verificando que quien llama es admin. Si falla la BD, borra el usuario creado. |
 | `admin-bootstrap` | Retirada en 1.0.18. Devuelve 403 y no contiene clave: el acceso usa la RPC `gl_validar_acceso_admin`. |
 | `admin-gestionar-admins` | Alta y baja de administradores, solo para `super_admin`. Bloquea auto-despromoción, quitar al principal y dejar menos de un admin. |
-| `admin-obtener-clave` | Devuelve la clave de administrador solo al `super_admin`; nunca se guarda en frontend ni BD. |
+| `admin-obtener-clave` | Desde 3.17 responde `410` con instrucciones; no lee ni devuelve `ADMIN_PASSWORD`. El botón «Ver clave» fue retirado del panel. |
 | `eliminar-cuenta` | Borra cuenta Auth, fila de jugador, partidos, clasificación, sanciones, membresías y avatar. Exige escribir `ELIMINAR`. Bloquea borrar al `super_admin` o al último admin. |
 
 Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede usar el ingreso manual.

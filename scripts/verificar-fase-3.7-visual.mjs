@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { Buffer } from 'node:buffer';
 
 const base = 'file:///C:/Users/manue/AppData/Local/Temp/opencode/GOAT-LATINOS-deploy';
-const out = 'docs/capturas-fase-3.16';
+const out = 'docs/capturas-fase-3.17';
 fs.mkdirSync(out, { recursive: true });
 
 const PNG = Buffer.from(

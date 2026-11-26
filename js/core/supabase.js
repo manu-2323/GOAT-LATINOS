@@ -609,15 +609,6 @@ const Auth = {
     return true;
   },
 
-  /* Solo super_admin: la clave llega desde la Edge Function, nunca de un archivo. */
-  async obtenerClaveAdmin() {
-    if (!Auth._cliente() || !Auth.usuario) throw new Error('Inicia sesión para continuar.');
-    const { data, error } = await Auth._cliente().functions.invoke('admin-obtener-clave', { body: {} });
-    if (error) throw new Error(Auth.traducir(await mensajeFuncion(error)));
-    if (!data || !data.password) throw new Error('No se pudo obtener la clave de administrador.');
-    return String(data.password);
-  },
-
   /* Firma exacta de la migración 1.2.1:
      public.gl_confirmar_e164(uuid, text, text, boolean default false, text default null)
      Devuelve jsonb. La titularidad solo se marca cuando el admin lo pide. */

@@ -1,9 +1,9 @@
 // Supabase Edge Function: admin-obtener-clave
-// Devuelve ADMIN_PASSWORD únicamente al super_admin autenticado, para que
-// pueda compartirla manualmente con los nuevos administradores.
-// La clave nunca se guarda en el frontend ni en la base de datos.
-
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// FASE 3.17: este endpoint ya NO entrega ADMIN_PASSWORD. La clave compartida
+// vive solo en los secretos del proyecto y se usa server-side para crear
+// cuentas administradoras; ninguna pantalla del panel la muestra ni la copia.
+// Se conserva el slug para que una versión antigua del cliente reciba una
+// respuesta explícita en vez de un 404 opaco.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -11,40 +11,13 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
+const MENSAJE = 'La clave de administrador no se entrega desde la aplicación. ' +
+  'Gestionala en los secretos del proyecto de Supabase.';
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY');
-    if (!serviceKey) throw new Error('Falta configurar la clave de servicio del servidor');
-
-    const token = (req.headers.get('Authorization') || '').replace('Bearer ', '');
-    if (!token) throw new Error('Falta token de sesión');
-    const caller = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } }
-    });
-    const { data: sesion, error: errSesion } = await caller.auth.getUser(token);
-    if (errSesion || !sesion.user) throw new Error('Sesión inválida');
-
-    const admin = createClient(supabaseUrl, serviceKey);
-    const { data: perfil } = await admin.from('jugadores')
-      .select('rol,super_admin')
-      .eq('user_id', sesion.user.id)
-      .maybeSingle();
-    if (!perfil || perfil.rol !== 'admin' || perfil.super_admin !== true) {
-      throw new Error('Solo el administrador principal puede ver la clave.');
-    }
-
-    const password = Deno.env.get('ADMIN_PASSWORD');
-    if (!password) throw new Error('Falta configurar el secret ADMIN_PASSWORD');
-
-    return new Response(JSON.stringify({ password }), {
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    });
-  } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      status: 400, headers: { ...CORS, 'Content-Type': 'application/json' }
-    });
-  }
+  return new Response(JSON.stringify({ ok: false, error: MENSAJE, mensaje: MENSAJE }), {
+    status: 410,
+    headers: { ...CORS, 'Content-Type': 'application/json' }
+  });
 });

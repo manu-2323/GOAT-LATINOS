@@ -1,0 +1,425 @@
+{
+  "capturas": [
+    {
+      "nombre": "despues-con-datos",
+      "ruta": "docs/capturas-fase-3.17/despues-con-datos.png"
+    },
+    {
+      "nombre": "despues-vacio",
+      "ruta": "docs/capturas-fase-3.17/despues-vacio.png"
+    },
+    {
+      "nombre": "despues-cargando",
+      "ruta": "docs/capturas-fase-3.17/despues-cargando.png"
+    },
+    {
+      "nombre": "despues-error",
+      "ruta": "docs/capturas-fase-3.17/despues-error.png"
+    },
+    {
+      "nombre": "despues-cerrada",
+      "ruta": "docs/capturas-fase-3.17/despues-cerrada.png"
+    },
+    {
+      "nombre": "despues-movil",
+      "ruta": "docs/capturas-fase-3.17/despues-movil.png"
+    },
+    {
+      "nombre": "despues-escritorio",
+      "ruta": "docs/capturas-fase-3.17/despues-escritorio.png"
+    },
+    {
+      "nombre": "despues-ancho-1920",
+      "ruta": "docs/capturas-fase-3.17/despues-ancho-1920.png"
+    },
+    {
+      "nombre": "despues-busqueda",
+      "ruta": "docs/capturas-fase-3.17/despues-busqueda.png"
+    },
+    {
+      "nombre": "despues-filtro-grupo",
+      "ruta": "docs/capturas-fase-3.17/despues-filtro-grupo.png"
+    },
+    {
+      "nombre": "despues-sin-resultados",
+      "ruta": "docs/capturas-fase-3.17/despues-sin-resultados.png"
+    },
+    {
+      "nombre": "despues-ingreso-manual",
+      "ruta": "docs/capturas-fase-3.17/despues-ingreso-manual.png"
+    },
+    {
+      "nombre": "despues-guardado-simulado",
+      "ruta": "docs/capturas-fase-3.17/despues-guardado-simulado.png"
+    },
+    {
+      "nombre": "despues-ia-captura",
+      "ruta": "docs/capturas-fase-3.17/despues-ia-captura.png"
+    },
+    {
+      "nombre": "despues-ia-datos-detectados",
+      "ruta": "docs/capturas-fase-3.17/despues-ia-datos-detectados.png"
+    },
+    {
+      "nombre": "despues-historial-movil",
+      "ruta": "docs/capturas-fase-3.17/despues-historial-movil.png"
+    },
+    {
+      "nombre": "despues-historial-vacio",
+      "ruta": "docs/capturas-fase-3.17/despues-historial-vacio.png"
+    },
+    {
+      "nombre": "despues-admin-jugadores-1920",
+      "ruta": "docs/capturas-fase-3.17/despues-admin-jugadores-1920.png"
+    },
+    {
+      "nombre": "despues-admin-jugadores-1366",
+      "ruta": "docs/capturas-fase-3.17/despues-admin-jugadores-1366.png"
+    },
+    {
+      "nombre": "despues-admin-jugadores-390",
+      "ruta": "docs/capturas-fase-3.17/despues-admin-jugadores-390.png"
+    },
+    {
+      "nombre": "despues-admin-equipos-1920",
+      "ruta": "docs/capturas-fase-3.17/despues-admin-equipos-1920.png"
+    },
+    {
+      "nombre": "despues-admin-equipos-1366",
+      "ruta": "docs/capturas-fase-3.17/despues-admin-equipos-1366.png"
+    },
+    {
+      "nombre": "despues-admin-equipos-390",
+      "ruta": "docs/capturas-fase-3.17/despues-admin-equipos-390.png"
+    },
+    {
+      "nombre": "despues-admin-dashboard-1920",
+      "ruta": "docs/capturas-fase-3.17/despues-admin-dashboard-1920.png"
+    },
+    {
+      "nombre": "despues-admin-dashboard-1366",
+      "ruta": "docs/capturas-fase-3.17/despues-admin-dashboard-1366.png"
+    },
+    {
+      "nombre": "despues-admin-dashboard-390",
+      "ruta": "docs/capturas-fase-3.17/despues-admin-dashboard-390.png"
+    }
+  ],
+  "responsive": [
+    {
+      "width": 320,
+      "ancho": 320,
+      "scrollWidth": 320,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 4,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 375,
+      "ancho": 375,
+      "scrollWidth": 375,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 4,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 390,
+      "ancho": 390,
+      "scrollWidth": 390,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 4,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 430,
+      "ancho": 430,
+      "scrollWidth": 430,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 4,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 768,
+      "ancho": 768,
+      "scrollWidth": 768,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 2,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 1024,
+      "ancho": 1024,
+      "scrollWidth": 1024,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 2,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 1366,
+      "ancho": 1366,
+      "scrollWidth": 1366,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 1,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 1920,
+      "ancho": 1920,
+      "scrollWidth": 1920,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 1,
+      "desbordesInternos": [],
+      "traslapes": 0
+    }
+  ],
+  "filtros": {
+    "totalInicial": 4,
+    "trasBuscar": 2,
+    "grupoG1": 2,
+    "combinados": 2,
+    "sinResultados": 1,
+    "trasLimpiar": 4,
+    "contador": "4 partidos"
+  },
+  "historial": {
+    "total": 2,
+    "filtrados": 2,
+    "porNombre": 2,
+    "vacio": 1,
+    "trasLimpiar": 2
+  },
+  "formulario": {
+    "idsManuales": [
+      "g-local",
+      "g-visita",
+      "estado",
+      "guardar",
+      "dropzone-manual",
+      "archivo-manual",
+      "tiros_local",
+      "posesion_local"
+    ],
+    "marcadorWalkover": {
+      "local": "3",
+      "visita": "0"
+    },
+    "avisoValidacion": "La posesión de ambos equipos debe sumar 100.",
+    "guardo": true,
+    "golesEnviados": [
+      3,
+      0
+    ],
+    "auditoria": 1,
+    "toastExito": "Resultado registrado. Tabla, estadísticas y cuadro actualizados."
+  },
+  "ia": {
+    "analizarDeshabilitado": true,
+    "analizarHabilitado": true,
+    "golesDetectados": [
+      "3",
+      "2"
+    ],
+    "ids": [
+      "g-local",
+      "g-visita",
+      "re-hacer",
+      "guardar",
+      "tiros_local",
+      "posesion_local"
+    ]
+  },
+  "estados": {
+    "con-datos": {
+      "estado": "con datos",
+      "tieneSkeleton": false,
+      "tieneVacio": false,
+      "esError": false,
+      "pantalla": true,
+      "partidos": 4,
+      "guardarDeshabilitado": false
+    },
+    "vacio": {
+      "estado": "sin jornada abierta",
+      "tieneSkeleton": false,
+      "tieneVacio": true,
+      "esError": false,
+      "pantalla": true,
+      "partidos": 0,
+      "guardarDeshabilitado": false
+    },
+    "cargando": {
+      "estado": "cargando",
+      "tieneSkeleton": true,
+      "tieneVacio": false,
+      "esError": false,
+      "pantalla": false,
+      "partidos": 0,
+      "guardarDeshabilitado": false
+    },
+    "error": {
+      "estado": "error",
+      "tieneSkeleton": false,
+      "tieneVacio": false,
+      "esError": true,
+      "pantalla": false,
+      "partidos": 0,
+      "guardarDeshabilitado": false
+    },
+    "cerrada": {
+      "estado": "jornada cerrada",
+      "tieneSkeleton": false,
+      "tieneVacio": false,
+      "esError": false,
+      "pantalla": true,
+      "partidos": 4,
+      "guardarDeshabilitado": true
+    }
+  },
+  "navegacion": null,
+  "foco": {
+    "etiqueta": "input",
+    "clase": "input",
+    "outlineColor": "rgb(255, 107, 122)",
+    "outlineWidth": "2px"
+  },
+  "movimientoReducido": {
+    "barra": "1e-05s",
+    "boton": "1e-05s"
+  },
+  "admin": {
+    "jugadores": {
+      "390": {
+        "ancho": 390,
+        "scrollWidth": 390,
+        "fuentesMenores12": [],
+        "minControl": 18,
+        "filasKpi": 0,
+        "desbordesInternos": [],
+        "traslapes": 0,
+        "errores": []
+      },
+      "1366": {
+        "ancho": 1366,
+        "scrollWidth": 1366,
+        "fuentesMenores12": [],
+        "minControl": 18,
+        "filasKpi": 0,
+        "desbordesInternos": [],
+        "traslapes": 0,
+        "errores": []
+      },
+      "1920": {
+        "ancho": 1920,
+        "scrollWidth": 1920,
+        "fuentesMenores12": [],
+        "minControl": 18,
+        "filasKpi": 0,
+        "desbordesInternos": [],
+        "traslapes": 0,
+        "errores": []
+      },
+      "inactivos": {
+        "visiblesAntes": 6,
+        "visiblesDespues": 8,
+        "contador": "8 jugadores",
+        "botonesReincorporar": 2
+      }
+    },
+    "equipos": {
+      "390": {
+        "ancho": 390,
+        "scrollWidth": 390,
+        "fuentesMenores12": [],
+        "minControl": 44,
+        "filasKpi": 0,
+        "desbordesInternos": [],
+        "traslapes": 0,
+        "errores": []
+      },
+      "1366": {
+        "ancho": 1366,
+        "scrollWidth": 1366,
+        "fuentesMenores12": [],
+        "minControl": 44,
+        "filasKpi": 0,
+        "desbordesInternos": [],
+        "traslapes": 0,
+        "errores": []
+      },
+      "1920": {
+        "ancho": 1920,
+        "scrollWidth": 1920,
+        "fuentesMenores12": [],
+        "minControl": 44,
+        "filasKpi": 0,
+        "desbordesInternos": [],
+        "traslapes": 0,
+        "errores": []
+      }
+    },
+    "dashboard": {
+      "390": {
+        "ancho": 390,
+        "scrollWidth": 390,
+        "fuentesMenores12": [],
+        "minControl": 44,
+        "filasKpi": 0,
+        "desbordesInternos": [],
+        "traslapes": 0,
+        "errores": []
+      },
+      "1366": {
+        "ancho": 1366,
+        "scrollWidth": 1366,
+        "fuentesMenores12": [],
+        "minControl": 44,
+        "filasKpi": 0,
+        "desbordesInternos": [],
+        "traslapes": 0,
+        "errores": []
+      },
+      "1920": {
+        "ancho": 1920,
+        "scrollWidth": 1920,
+        "fuentesMenores12": [],
+        "minControl": 44,
+        "filasKpi": 0,
+        "desbordesInternos": [],
+        "traslapes": 0,
+        "errores": []
+      },
+      "kpis": [
+        "Partidos jugados4de 7 programados · Jornada 3",
+        "Jugadores65 activos",
+        "Pendientes3sin resultado",
+        "Jornadas abiertas4de 4",
+        "Jornadas cerradas4finalizadas",
+        "Grupos2en el torneo",
+        "Suspendidos11 expulsados"
+      ],
+      "refresco": {
+        "bloqueadoDuranteCarga": false,
+        "jornadasVirtualesContadas": false
+      }
+    }
+  },
+  "consola": [],
+  "errorEsperado": [
+    "CONSOLE Error: Failed to fetch partidos\n    at Object.partidos (file:///C:/Users/manue/AppData/Local/Temp/opencode/GOAT-LATINOS-deploy/mock-resultados-3.7.html?estado=error:112:68)\n    at Object.render (file:///C:/Users/manue/AppData/Local/Temp/opencode/GOAT-LATINOS-deploy/js/modulos/resultados.js:40:35)"
+  ]
+}
