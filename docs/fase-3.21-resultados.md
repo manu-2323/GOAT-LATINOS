@@ -1,6 +1,6 @@
 # FASE 3.21 — Auditoría y consolidación de Resultados
 
-**Estado:** Implementada y verificada localmente. **Pendiente de autorización para commit, push y publicación.**
+**Estado:** CERRADA Y PUBLICADA en `main`, verificada en GitHub Actions y GitHub Pages.
 **Rama:** `main`
 **Base:** `a49b31e2876b32095e82544a5687c0c5c6279180` (= `origin/main`, FASE 3.20 publicada)
 **Fecha:** 2026-11-26
@@ -194,8 +194,24 @@ Requieren autorización explícita; **no se aplicó ninguno**:
 
 ## K) Estado final
 
-- Implementación local de FASE 3.21: **completa**.
+- FASE 3.21: **cerrada y publicada** en `main`.
+- Commit de implementación: `4355d9e1792b281c255869f614d758370e50a2f7`.
+- Commit de cierre: el que incorpora este informe final y la evidencia de publicación.
 - Pruebas locales: **verdes** (Vitest 210/210, Playwright 18/6 skip, 6 verificadores visuales, estáticos limpios).
-- `HEAD` y `origin/main` siguen en `a49b31e2876b32095e82544a5687c0c5c6279180`.
-- Árbol de trabajo: 6 archivos modificados y 2 archivos nuevos (`tests/fase-3.21.test.js`, este informe).
-- **No hay commit, push ni publicación.** Se detiene aquí a la espera de autorización explícita para publicar FASE 3.21.
+- `HEAD` local y `origin/main` coinciden; el árbol de trabajo quedó limpio.
+- No se modificó Supabase, SQL, RLS, RPC, Edge Functions ni datos reales.
+
+## L) Evidencia de publicación
+
+- `git push origin main` terminó con `EXIT=0`; `origin/main` pasó de `a49b31e…` a `4355d9e…`.
+- GitHub Actions: run `45901486258` (`pages build and deployment`) para el SHA `4355d9e1792b281c255869f614d758370e50a2f7`, `status=completed`, `conclusion=success`.
+  - https://github.com/manu-2323/GOAT-LATINOS/actions/runs/45901486258
+- GitHub Pages sirvió HTTP 200 en:
+  - https://manu-2323.github.io/GOAT-LATINOS/
+  - https://manu-2323.github.io/GOAT-LATINOS/index.html
+  - https://manu-2323.github.io/GOAT-LATINOS/js/core/config.js
+  - https://manu-2323.github.io/GOAT-LATINOS/js/modulos/resultados.js
+  - https://manu-2323.github.io/GOAT-LATINOS/docs/fase-3.21-resultados.md
+- Cache-busting comprobado en Pages: `config.js?v=1.3.5`, `gl.js?v=1.3.5` y `menu.js?v=1.3.5`, sin referencias residuales a `?v=1.3.4` en esos tres scripts; `CONFIG.VERSION` publicado es `1.3.5`.
+- El módulo publicado `js/modulos/resultados.js` contiene los marcadores de FASE 3.21 y el selector `#r7-jornada`.
+- El informe `docs/fase-3.21-resultados.md` está publicado y accesible con su título completo.
