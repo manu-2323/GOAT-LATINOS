@@ -41,8 +41,8 @@ const OnboardingTour = (() => {
       id: 'telefono',
       ico: 'smartphone',
       titulo: 'País, teléfono y WhatsApp',
-      cuerpo: 'El sistema usa tu teléfono únicamente para generar el enlace de WhatsApp que el ' +
-              'administrador incluye en los mensajes de jornada. Nadie más puede ver tu número. ' +
+      cuerpo: 'El sistema usa tu teléfono para generar el enlace de WhatsApp de los mensajes de jornada. ' +
+              'La consulta autorizada lo muestra a administradores y compañeros de grupo, no a cualquier usuario. ' +
               'Elegí el país del teléfono y confirmá el formato: validarlo no confirma la titularidad.',
       accion: { label: 'Actualizar mi teléfono', hash: 'perfil' }
     },

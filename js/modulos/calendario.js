@@ -12,6 +12,7 @@
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const SIN_DISPONIBILIDAD = 'Sin registrar';
+  const operacionesEstado = new Set();
 
   const Mod = {
     titulo: 'Calendario y programación',
@@ -76,6 +77,28 @@
 
   /* --------------------------- Datos --------------------------- */
 
+  /* FASE 3.23 — Una jornada virtual del core (estado sin_programar, sin id)
+     nunca es una jornada abierta. Sólo se considera abierta la fila persistida
+     con estado exacto 'abierta'; cualquier otro valor se muestra como
+     'Sin programar' en vez de inventar un estado deportivo. */
+  function estadoPersistido(j) {
+    if (!j || j.virtual || !j.id || j.estado === 'sin_programar') return 'sin_programar';
+    if (j.estado === 'cerrada') return 'cerrada';
+    if (j.estado === 'abierta') return 'abierta';
+    return 'sin_programar';
+  }
+
+  function etiquetaEstado(j) {
+    const estado = estadoPersistido(j);
+    return estado === 'abierta' ? 'Abierta' :
+           estado === 'cerrada' ? 'Cerrada' : 'Sin programar';
+  }
+
+  function colorEstado(j) {
+    const estado = estadoPersistido(j);
+    return estado === 'abierta' ? 'green' : estado === 'cerrada' ? 'red' : 'neutral';
+  }
+
   function aInstante(valor) {
     if (!valor) return null;
     if (valor instanceof Date) return isNaN(valor.getTime()) ? null : valor;
@@ -112,8 +135,10 @@
         const fecha = inicio || limite || aInstante(j.fecha);
         const p = fecha ? GL.partesEnZona(fecha, Mod.zona) : null;
         const partidos = Mod.partidos.filter(x => Number(x.jornada) === Number(j.numero));
+        const estado = estadoPersistido(j);
         return Object.assign({}, j, {
           numero: Number(j.numero),
+          estado,
           inicio,
           limite,
           fecha,
@@ -122,7 +147,8 @@
           dia: p ? p.day : null,
           partidos,
           pendientes: partidos.filter(x => x.estado === 'pendiente').length,
-          abierta: j.estado !== 'cerrada'
+          abierta: estado === 'abierta',
+          sinProgramar: estado === 'sin_programar'
         });
       })
       .sort((a, b) => a.numero - b.numero);
@@ -158,7 +184,8 @@
       historial,
       limites,
       abiertas: jornadas.filter(j => j.abierta).length,
-      cerradas: jornadas.filter(j => !j.abierta).length,
+      cerradas: jornadas.filter(j => j.estado === 'cerrada').length,
+      sinProgramar: jornadas.filter(j => j.sinProgramar).length,
       pendientes: jornadas.reduce((n, j) => n + j.pendientes, 0),
       programadas: jornadas.filter(j => j.inicio || j.limite || j.fecha).length,
       conflictos: detectarConflictos(jornadas),
@@ -331,8 +358,10 @@
             (c.hoy ? ' hoy' : '') + '">' +
           '<span class="cal-dia">' + c.dia + '</span>' +
           '<div class="cal-eventos">' + eventos.slice(0, 2).map(j =>
-            '<button type="button" class="cal-evento ' + (j.abierta ? 'abierta' : 'cerrada') +
-            '" data-cal-jornada="' + j.numero + '" title="Ver jornada ' + j.numero + '">' +
+            '<button type="button" class="cal-evento ' +
+            (j.sinProgramar ? 'programa' : j.abierta ? 'abierta' : 'cerrada') +
+            '" data-cal-jornada="' + j.numero + '" title="' + esc(etiquetaEstado(j)) +
+            ' · ver jornada ' + j.numero + '">' +
             'J' + j.numero + (j.pendientes ? '<small>' + j.pendientes + ' pend.</small>' : '') +
             '</button>').join('') +
             (eventos.length > 2 ? '<span class="cal-mas">+' + (eventos.length - 2) + '</span>' : '') +
@@ -341,6 +370,7 @@
       '<div class="cal-leyenda">' +
         '<span><i class="cal-punto abierta"></i>Abierta</span>' +
         '<span><i class="cal-punto cerrada"></i>Cerrada</span>' +
+        '<span><i class="cal-punto programa"></i>Sin programar: ' + d.sinProgramar + '</span>' +
         '<span><i class="cal-punto programa"></i>Sin fecha asignada: ' +
           (d.total - d.programadas) + '</span>' +
       '</div>' +
@@ -401,11 +431,12 @@
         icono('flag', 18) + '</div>' +
         '<div class="chips">' + GL.badge(d.abiertas + ' abiertas', 'green', 'unlock') +
           GL.badge(d.cerradas + ' cerradas', 'red', 'lock') +
+          GL.badge(d.sinProgramar + ' sin programar', 'neutral', 'help-circle') +
           GL.badge(d.pendientes + ' pendientes', 'orange', 'clock') + '</div>' +
         '<div class="cal-estado-lista">' + d.jornadas.slice(-6).map(j =>
           '<button type="button" data-cal-jornada="' + j.numero + '">' +
             '<span>Jornada ' + j.numero + '</span>' +
-            GL.badge(j.abierta ? 'Abierta' : 'Cerrada', j.abierta ? 'green' : 'red') +
+            GL.badge(etiquetaEstado(j), colorEstado(j)) +
           '</button>').join('') + '</div></section>' +
       '<section class="card tight"><div class="cal-card-head"><h3>Horarios internacionales</h3>' +
         icono('globe', 18) + '</div>' +
@@ -485,7 +516,7 @@
               '<small>' + esc(j.inicio ? fechaCompletaEnZona(j.inicio, Mod.zona) :
                 (j.limite ? 'Límite ' + fechaCompletaEnZona(j.limite, Mod.zona) : 'Sin fecha asignada')) +
               '</small></span>' +
-              GL.badge(j.abierta ? 'Abierta' : 'Cerrada', j.abierta ? 'green' : 'red') +
+              GL.badge(etiquetaEstado(j), colorEstado(j)) +
             '</button>').join('') + '</div>'
         : GL.vacio('No hay partidos pendientes en el grupo.', 'circle-check', null)) +
       '</section>';
@@ -526,18 +557,21 @@
     const filas = d.jornadas.map(j =>
       '<tr data-jornada-fila="' + j.numero + '">' +
         '<td><strong>J' + j.numero + '</strong></td>' +
-        '<td>' + GL.badge(j.abierta ? 'Abierta' : 'Cerrada', j.abierta ? 'green' : 'red') + '</td>' +
+        '<td>' + GL.badge(etiquetaEstado(j), colorEstado(j)) + '</td>' +
         '<td>' + esc(j.inicio ? fechaCompletaEnZona(j.inicio, CONFIG.ZONA_REFERENCIA) : 'Por programar') + '</td>' +
         '<td>' + esc(j.limite ? fechaCompletaEnZona(j.limite, CONFIG.ZONA_REFERENCIA) : 'Por programar') + '</td>' +
         '<td>' + esc(j.pendientes) + '</td>' +
         '<td class="cal-acciones-admin">' +
           '<button type="button" class="btn sm sec" data-cal-horario="' + j.numero + '">' +
             icono('calendar-clock', 14) + 'Fechas</button>' +
-          (j.abierta
-            ? '<button type="button" class="btn sm" data-cal-estado="' + j.numero +
-              '" data-accion="cerrar">' + icono('lock', 14) + 'Cerrar</button>'
-            : '<button type="button" class="btn sm sec" data-cal-estado="' + j.numero +
-              '" data-accion="abrir">' + icono('unlock', 14) + 'Abrir</button>') +
+          (j.sinProgramar
+            ? '<button type="button" class="btn sm sec" disabled title="Programá la jornada desde Jornadas">' +
+              icono('help-circle', 14) + 'Sin programar</button>'
+            : (j.abierta
+              ? '<button type="button" class="btn sm" data-cal-estado="' + j.numero +
+                '" data-accion="cerrar">' + icono('lock', 14) + 'Cerrar</button>'
+              : '<button type="button" class="btn sm sec" data-cal-estado="' + j.numero +
+                '" data-accion="abrir">' + icono('unlock', 14) + 'Abrir</button>')) +
           '<button type="button" class="btn-icon" data-cal-jornada="' + j.numero +
             '" aria-label="Ver jornada ' + j.numero + '">' + icono('eye', 16) + '</button>' +
         '</td></tr>').join('');
@@ -606,19 +640,19 @@
     el.querySelectorAll('[data-cal-horario]').forEach(b => b.addEventListener('click', () =>
       modalHorario(el, d, Number(b.dataset.calHorario))));
     el.querySelectorAll('[data-cal-estado]').forEach(b => b.addEventListener('click', () =>
-      cambiarEstado(el, d, Number(b.dataset.calEstado), b.dataset.accion)));
+      cambiarEstado(el, d, b, Number(b.dataset.calEstado), b.dataset.accion)));
   }
 
   function modalJornada(el, d, numero) {
-    const j = d.mapa[numero] || { numero, estado: 'abierta', partidos: [], pendientes: 0 };
+    const j = d.mapa[numero] || { numero, estado: 'sin_programar', virtual: true,
+      partidos: [], pendientes: 0 };
     const inicio = j.inicio ? fechaCompletaEnZona(j.inicio, Mod.zona) : 'Por programar';
     const limite = j.limite ? fechaCompletaEnZona(j.limite, Mod.zona) : 'Por programar';
     const cuerpo =
       '<div class="cal-modal-resumen">' +
         '<div><span>Apertura</span><strong>' + esc(inicio) + '</strong></div>' +
         '<div><span>Fecha límite</span><strong>' + esc(limite) + '</strong></div>' +
-        '<div><span>Estado</span>' + GL.badge(j.abierta ? 'Abierta' : 'Cerrada',
-          j.abierta ? 'green' : 'red') + '</div>' +
+        '<div><span>Estado</span>' + GL.badge(etiquetaEstado(j), colorEstado(j)) + '</div>' +
         '<div><span>Pendientes</span>' + GL.badge(j.pendientes + ' partido(s)',
           j.pendientes ? 'orange' : 'green') + '</div>' +
       '</div>' +
@@ -668,7 +702,7 @@
   }
 
   function modalHorario(el, d, numero) {
-    const j = d.mapa[numero] || { numero, estado: 'abierta' };
+    const j = d.mapa[numero] || { numero, estado: 'sin_programar', virtual: true };
     const ini = partesEnReferencia(j.inicio);
     const fin = partesEnReferencia(j.limite);
     const etiqueta = GL.etiquetaZona(CONFIG.ZONA_REFERENCIA);
@@ -718,14 +752,23 @@
             'Conflicto de horario', 'Guardar de todos modos'))) return;
 
           const btn = fondo.querySelector('#cal-h-guardar');
+          if (btn.disabled) return;
           btn.disabled = true;
           const values = { fecha_inicio: inicio.toISOString(), hora_limite: limite.toISOString() };
-          const { error } = j.id
-            ? await sb.from('jornadas').update(values).eq('id', j.id)
-            : await sb.from('jornadas').insert(Object.assign({
-                torneo_id: d.torneo.id, grupo_id: Mod.grupoId, numero,
-                estado: j.estado || 'abierta'
-              }, values));
+          let error;
+          try {
+            const respuesta = j.id
+              ? await sb.from('jornadas').update(values).eq('id', j.id)
+              : await sb.from('jornadas').insert(Object.assign({
+                  torneo_id: d.torneo.id, grupo_id: Mod.grupoId, numero,
+                  /* FASE 3.23: programar fechas no abre la jornada. El estado
+                     se crea como sin_programar y se abre sólo desde Abrir. */
+                  estado: j.id ? j.estado : 'sin_programar'
+                }, values));
+            error = respuesta.error;
+          } catch (e) {
+            error = e;
+          }
           if (error) {
             GL.notificar(GL.mensaje(error, 'guardar', 'el calendario'), 'error');
             btn.disabled = false;
@@ -748,75 +791,139 @@
     iniciarIconos();
   }
 
-  async function cambiarEstado(el, d, numero, accion) {
-    if (!(await GL.asegurarAdmin(el))) return;
-    const j = d.mapa[numero] || {};
-    if (accion === 'abrir') {
-      if (j.id && j.abierta) {
-        GL.notificar('La jornada ' + numero + ' ya está abierta.', 'info');
-        return;
-      }
-      const values = { estado: 'abierta' };
-      if (!j.id) Object.assign(values, {
-        torneo_id: d.torneo.id, grupo_id: Mod.grupoId, numero
+  function jornadaPersistida(d, numero) {
+    const filas = (GL.ctx && GL.ctx.jornadas) || [];
+    return filas.find(j => j.id && Number(j.numero) === Number(numero) &&
+      (!j.grupo_id || j.grupo_id === Mod.grupoId) &&
+      (!j.torneo_id || j.torneo_id === d.torneo.id));
+  }
+
+  function verificarCambio(d, numero, estadoEsperado) {
+    const actual = jornadaPersistida(d, numero);
+    return !!actual && estadoPersistido(actual) === estadoEsperado;
+  }
+
+  async function abrirJornada(d, j, numero, boton) {
+    if (!j.id || j.virtual || j.sinProgramar) {
+      GL.notificar('Primero programá la jornada ' + numero +
+        ' en Jornadas; una jornada sin registrar no se puede abrir.', 'advertencia');
+      return false;
+    }
+    if (j.abierta) {
+      GL.notificar('La jornada ' + numero + ' ya está abierta.', 'info');
+      return false;
+    }
+    if (!(await GL.confirmar('¿Abrir la jornada ' + numero +
+      '? Permitirá cargar resultados de esos partidos.', 'Abrir jornada', 'Abrir jornada'))) return false;
+    if (boton) boton.disabled = true;
+    try {
+      /* FASE 3.23: sólo se actualiza la fila persistida. Antes se insertaba
+         una jornada nueva desde Calendario, creando estados no confirmados. */
+      const { error } = await sb.from('jornadas')
+        .update({ estado: 'abierta' })
+        .eq('id', j.id)
+        .eq('torneo_id', d.torneo.id)
+        .eq('grupo_id', Mod.grupoId)
+        .eq('numero', numero);
+      if (error) throw error;
+      return true;
+    } catch (e) {
+      GL.notificar(GL.mensaje(e, 'guardar', 'el calendario'), 'error');
+      return false;
+    }
+  }
+
+  async function cerrarJornada(d, j, numero, boton) {
+    if (!j.id || j.sinProgramar) {
+      GL.notificar('Primero programá la jornada ' + numero + ' antes de cerrarla.', 'advertencia');
+      return null;
+    }
+    if (!j.abierta) {
+      GL.notificar('La jornada ' + numero + ' no está abierta.', 'info');
+      return null;
+    }
+    if (j.pendientes) {
+      GL.notificar('La jornada ' + numero + ' tiene ' + j.pendientes +
+        ' partido(s) pendiente(s). Resolvelos en Jornadas antes de cerrarla.', 'advertencia');
+      return null;
+    }
+    if (!(await GL.confirmar('¿Cerrar la jornada ' + numero + '?',
+      'Cerrar jornada', 'Cerrar'))) return null;
+    if (boton) boton.disabled = true;
+    /* FASE 3.20 — usar el mismo RPC transaccional que Jornadas: el cierre
+       directo por REST no recalculaba la clasificación ni registraba la
+       resolución de partidos pendientes. */
+    try {
+      const { data, error } = await sb.rpc('gl_cerrar_jornada', {
+        p_torneo_id: d.torneo.id,
+        p_grupo_id: Mod.grupoId,
+        p_jornada: numero,
+        p_resoluciones: [],
+        p_cerrado_por: (typeof Auth !== 'undefined' && Auth && Auth.usuario && Auth.usuario.id)
+          ? Auth.usuario.id : null
       });
-      const { error } = j.id
-        ? await sb.from('jornadas').update(values).eq('id', j.id)
-        : await sb.from('jornadas').insert(values);
-      if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'el calendario'), 'error'); return; }
-      GL.auditoria && GL.auditoria.registrar('calendario_jornada_abierta', 'jornada', null, {
-        numero, grupo: d.grupo ? d.grupo.nombre : '?'
-      });
-      GL.notificar('Jornada ' + numero + ' abierta.', 'exito');
-    } else {
-      if (!j.id) {
-        GL.notificar('Primero programá la jornada ' + numero + ' antes de cerrarla.', 'advertencia');
+      if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la jornada'), 'error'); return null; }
+      if (!data || typeof data !== 'object' || data.ok === false) {
+        GL.notificar('No se pudo cerrar: ' +
+          ((data && (data.error || data.mensaje)) || 'la base de datos no confirmó la operación'), 'error');
+        return null;
+      }
+      return { resueltos: data.partidos_resueltos || 0 };
+    } catch (e) {
+      GL.notificar(GL.mensaje(e, 'guardar', 'la jornada'), 'error');
+      return null;
+    }
+  }
+
+  async function cambiarEstado(el, d, boton, numero, accion) {
+    const clave = [d.torneo.id, Mod.grupoId, numero, accion].join('|');
+    if (operacionesEstado.has(clave)) {
+      GL.notificar('La jornada ' + numero + ' ya tiene una operación en curso.', 'info');
+      return;
+    }
+    operacionesEstado.add(clave);
+    try {
+      if (!(await GL.asegurarAdmin(el))) return;
+      const j = d.mapa[numero] || {};
+      let resueltos = 0;
+      let estadoEsperado = 'abierta';
+      if (accion === 'abrir') {
+        if (!(await abrirJornada(d, j, numero, boton))) return;
+      } else {
+        const cierre = await cerrarJornada(d, j, numero, boton);
+        if (!cierre) return;
+        resueltos = cierre.resueltos;
+        estadoEsperado = 'cerrada';
+      }
+
+      /* FASE 3.23: recargar y comprobar el estado real antes de avisar éxito. */
+      GL.invalidar();
+      await GL.cargarContexto(true);
+      if (!verificarCambio(d, numero, estadoEsperado)) {
+        GL.notificar('La base de datos no confirmó el cambio de la jornada ' +
+          numero + '. Recargá antes de volver a intentarlo.', 'error');
         return;
       }
-      if (!j.abierta) {
-        GL.notificar('La jornada ' + numero + ' ya está cerrada.', 'info');
-        return;
+      if (accion === 'cerrar' && typeof GL.recalcularTodo === 'function') {
+        await GL.recalcularTodo(d.torneo.id);
       }
-      if (j.pendientes) {
-        GL.notificar('La jornada ' + numero + ' tiene ' + j.pendientes +
-          ' partido(s) pendiente(s). Resolvelos en Jornadas antes de cerrarla.', 'advertencia');
-        return;
-      }
-      if (!(await GL.confirmar('¿Cerrar la jornada ' + numero + '?',
-        'Cerrar jornada', 'Cerrar'))) return;
-      /* FASE 3.20 — usar el mismo RPC transaccional que Jornadas: el cierre
-         directo por REST no recalculaba la clasificación ni registraba la
-         resolución de partidos pendientes. */
-      try {
-        const { data, error } = await sb.rpc('gl_cerrar_jornada', {
-          p_torneo_id: d.torneo.id,
-          p_grupo_id: Mod.grupoId,
-          p_jornada: numero,
-          p_resoluciones: [],
-          p_cerrado_por: (typeof Auth !== 'undefined' && Auth && Auth.usuario && Auth.usuario.id)
-            ? Auth.usuario.id : null
+      if (accion === 'abrir') {
+        GL.auditoria && GL.auditoria.registrar('calendario_jornada_abierta', 'jornada', null, {
+          numero, grupo: d.grupo ? d.grupo.nombre : '?'
         });
-        if (error) { GL.notificar(GL.mensaje(error, 'guardar', 'la jornada'), 'error'); return; }
-        if (!data || typeof data !== 'object' || data.ok === false) {
-          GL.notificar('No se pudo cerrar: ' +
-            ((data && (data.error || data.mensaje)) || 'la base de datos no confirmó la operación'), 'error');
-          return;
-        }
-        if (typeof GL.recalcularTodo === 'function') await GL.recalcularTodo(d.torneo.id);
-        const resueltos = data.partidos_resueltos || 0;
+        GL.notificar('Jornada ' + numero + ' abierta.', 'exito');
+      } else {
         GL.auditoria && GL.auditoria.registrar('jornada_cerrada', 'jornada', null, {
           numero, grupo: d.grupo ? d.grupo.nombre : '?', partidos_resueltos: resueltos
         });
         GL.notificar('Jornada ' + numero + ' cerrada.' +
           (resueltos ? ' ' + resueltos + ' partido(s) resuelto(s).' : '') + ' Tabla actualizada.', 'exito');
-      } catch (e) {
-        GL.notificar(GL.mensaje(e, 'guardar', 'la jornada'), 'error');
-        return;
       }
+      Mod.render(el);
+    } finally {
+      operacionesEstado.delete(clave);
+      if (boton && boton.isConnected) boton.disabled = false;
     }
-    GL.invalidar();
-    await GL.cargarContexto(true);
-    Mod.render(el);
   }
 
   /* --------------------------- Exportación --------------------------- */
@@ -852,7 +959,7 @@
       inicio: icsFecha(j.inicio),
       fin: icsFecha(fin),
       titulo: CONFIG.NOMBRE_LIGA + ' - Jornada ' + j.numero + ' (' + grupo + ')',
-      detalle: 'Estado: ' + (j.abierta ? 'Abierta' : 'Cerrada') + '\n' +
+      detalle: 'Estado: ' + etiquetaEstado(j) + '\n' +
                'Partidos pendientes: ' + j.pendientes + '\n' +
                'Horario de referencia: ' + CONFIG.ZONA_REFERENCIA + '\n' +
                'Zona del calendario: ' + Mod.zona,
@@ -953,7 +1060,7 @@
   function htmlImprimir(d) {
     const filas = d.jornadas.map(j =>
       '<tr><td>J' + j.numero + '</td>' +
-      '<td>' + esc(j.abierta ? 'Abierta' : 'Cerrada') + '</td>' +
+      '<td>' + esc(etiquetaEstado(j)) + '</td>' +
       '<td>' + esc(j.inicio ? fechaCompletaEnZona(j.inicio, Mod.zona) : 'Por programar') + '</td>' +
       '<td>' + esc(j.limite ? fechaCompletaEnZona(j.limite, Mod.zona) : 'Por programar') + '</td>' +
       '<td>' + esc(j.pendientes) + '</td></tr>').join('');
@@ -979,6 +1086,10 @@
       '<p class="cal-print-nota">' + esc(GL.notaHorarios()) +
         ' Disponibilidad: ' + SIN_DISPONIBILIDAD + '.</p>';
   }
+
+  /* Hook de pruebas aisladas: permite verificar concurrencia sin simular
+     dobles clics del navegador. No se usa desde la interfaz. */
+  Mod._cambiarEstado = cambiarEstado;
 
   Modulos.calendario = Mod;
 })();

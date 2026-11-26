@@ -195,7 +195,13 @@ describe('FASE 3.20 — Escenario A: administrador', () => {
     const { GL, Auth } = crearGL({
       jornadas: [{ id: 'jornada-a1-2', numero: 2, grupo_id: 'g-a', estado: 'abierta', fecha: '2026-03-01T12:00:00Z' }]
     });
-    const rpc = vi.fn(async () => ({ data: { ok: true, partidos_resueltos: 1 }, error: null }));
+    /* La verificación posterior a recargar exige que el RPC confirme el
+       cambio en el contexto; el arnés lo refleja como lo haría Supabase. */
+    const rpc = vi.fn(async () => {
+      const fila = GL.ctx.jornadas.find(j => j.numero === 2);
+      if (fila) fila.estado = 'cerrada';
+      return { data: { ok: true, partidos_resueltos: 1 }, error: null };
+    });
     const recalcularTodo = vi.fn(async () => ({}));
     Object.assign(GL, window.GL);
     Object.assign(GL, {

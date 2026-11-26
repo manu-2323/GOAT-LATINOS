@@ -98,7 +98,7 @@ const PantallaAuth = {
         '<small>LEAGUE MANAGER</small></div>' +
         '<div class="auth-caja">' + cuerpo + '</div>' +
         '<p class="auth-pie">' + (esAdmin
-          ? 'Solo dos correos están autorizados. La clave se valida en el servidor y nunca se guarda en el navegador.'
+          ? 'Ingresá con un correo habilitado para administración. La RPC del servidor valida correo y clave antes de iniciar sesión.'
           : 'Al registrarte quedarás pendiente de aprobación hasta que el administrador te asigne a un grupo.') + '</p>' +
       '</div>';
     document.body.appendChild(o);

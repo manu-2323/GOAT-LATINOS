@@ -152,12 +152,12 @@ describe('FASE 3.19 — carga única de módulos', () => {
   });
 
   it('renueva el cache-busting de lo modificado', () => {
-    expect(codigoConfig).toMatch(/VERSION: '1\.3\.[345]'/);
-    expect(codigoIndex).toMatch(/css\/tokens-3\.1\.css\?v=3\.(19|20)\.0/);
-    expect(codigoIndex).toMatch(/css\/estilos\.css\?v=3\.(19|20)\.0/);
-    expect(codigoIndex).toMatch(/js\/core\/config\.js\?v=1\.3\.[345]/);
-    expect(codigoIndex).toMatch(/js\/core\/gl\.js\?v=1\.3\.[345]/);
-    expect(codigoIndex).toMatch(/js\/ui\/menu\.js\?v=1\.3\.[345]/);
+    expect(codigoConfig).toMatch(/VERSION: '1\.3\.[3456]'/);
+    expect(codigoIndex).toMatch(/css\/tokens-3\.1\.css\?v=3\.(19|20|23)\.0/);
+    expect(codigoIndex).toMatch(/css\/estilos\.css\?v=3\.(19|20|23)\.0/);
+    expect(codigoIndex).toMatch(/js\/core\/config\.js\?v=1\.3\.[3456]/);
+    expect(codigoIndex).toMatch(/js\/core\/gl\.js\?v=1\.3\.[3456]/);
+    expect(codigoIndex).toMatch(/js\/ui\/menu\.js\?v=1\.3\.[3456]/);
   });
 });
 
