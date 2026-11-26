@@ -6,7 +6,8 @@ const CONFIG = {
   SUPABASE_URL: 'https://zmjzlvsdlfzmhptmtmjx.supabase.co',
   SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptanpsdnNkbGZ6bWhwdG10bWp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0ODE4MDIsImV4cCI6MjExMTA1NzgwMn0.4FosjYMKwl3n6ab-8Zw48lwxdmk1NQzsHAxynNFiRoA',
   NOMBRE_LIGA: 'GOATS LATINOS',
-  VERSION: '1.2.0',
+  VERSION: '1.2.1',
+  LIBPHONENUMBER_VERSION: '1.13.17',
   BUCKET_CAPTURAS: 'capturas-partidos',
   BUCKET_AVATARES: 'avatares',
   JORNADAS_FASE_REGULAR: 22,
@@ -25,24 +26,25 @@ const CONFIG = {
 /* Horario base de referencia: Nicaragua / Costa Rica (UTC-6), 11:00 AM – 9:00 PM.
    La bandera emoji se usa SOLO en textos generados para WhatsApp. */
 const PAISES = {
-  // prefijo: código de país E.164 (sin +), digitos: longitud esperada del número local
+  // prefijo: código de país E.164 (sin +). digitos: valor histórico de una sola longitud.
+  // longitudes: longitudes provisionales del mapa SQL 1.2.1; NO definen validez del plan.
   // horario: texto histórico de respaldo. zona: IANA usada si el jugador no eligió ciudad.
-  CR: { nombre: 'Costa Rica',  horario: '11:00 AM – 9:00 PM',  prefijo: '506', digitos: 8,  zona: 'America/Costa_Rica' },
-  NI: { nombre: 'Nicaragua',   horario: '11:00 AM – 9:00 PM',  prefijo: '505', digitos: 8,  zona: 'America/Managua' },
-  MX: { nombre: 'México',      horario: '11:00 AM – 9:00 PM',  prefijo: '52',  digitos: 10, zona: 'America/Mexico_City' },
-  GT: { nombre: 'Guatemala',   horario: '11:00 AM – 9:00 PM',  prefijo: '502', digitos: 8,  zona: 'America/Guatemala' },
-  HN: { nombre: 'Honduras',    horario: '11:00 AM – 9:00 PM',  prefijo: '504', digitos: 8,  zona: 'America/Tegucigalpa' },
-  SV: { nombre: 'El Salvador', horario: '11:00 AM – 9:00 PM',  prefijo: '503', digitos: 8,  zona: 'America/El_Salvador' },
-  CO: { nombre: 'Colombia',    horario: '12:00 PM – 10:00 PM', prefijo: '57',  digitos: 10, zona: 'America/Bogota' },
-  EC: { nombre: 'Ecuador',     horario: '12:00 PM – 10:00 PM', prefijo: '593', digitos: 9,  zona: 'America/Guayaquil' },
-  PA: { nombre: 'Panamá',      horario: '12:00 PM – 10:00 PM', prefijo: '507', digitos: 8,  zona: 'America/Panama' },
-  PE: { nombre: 'Perú',        horario: '12:00 PM – 10:00 PM', prefijo: '51',  digitos: 9,  zona: 'America/Lima' },
-  VE: { nombre: 'Venezuela',   horario: '12:30 PM – 10:30 PM', prefijo: '58',  digitos: 10, zona: 'America/Caracas' },
-  BO: { nombre: 'Bolivia',     horario: '1:00 PM – 11:00 PM',  prefijo: '591', digitos: 8,  zona: 'America/La_Paz' },
-  AR: { nombre: 'Argentina',   horario: '2:00 PM – 12:00 AM',  prefijo: '54',  digitos: 10, zona: 'America/Argentina/Buenos_Aires' },
-  CL: { nombre: 'Chile',       horario: '2:00 PM – 12:00 AM',  prefijo: '56',  digitos: 9,  zona: 'America/Santiago' },
-  PY: { nombre: 'Paraguay',    horario: '2:00 PM – 12:00 AM',  prefijo: '595', digitos: 9,  zona: 'America/Asuncion' },
-  BR: { nombre: 'Brasil',      horario: '2:00 PM – 12:00 AM',  prefijo: '55',  digitos: 11, zona: 'America/Sao_Paulo' }
+  CR: { nombre: 'Costa Rica',  horario: '11:00 AM – 9:00 PM',  prefijo: '506', digitos: 8,  longitudes: [8,10],          zona: 'America/Costa_Rica' },
+  NI: { nombre: 'Nicaragua',   horario: '11:00 AM – 9:00 PM',  prefijo: '505', digitos: 8,  longitudes: [8],             zona: 'America/Managua' },
+  MX: { nombre: 'México',      horario: '11:00 AM – 9:00 PM',  prefijo: '52',  digitos: 10, longitudes: [10],            zona: 'America/Mexico_City' },
+  GT: { nombre: 'Guatemala',   horario: '11:00 AM – 9:00 PM',  prefijo: '502', digitos: 8,  longitudes: [8,11],          zona: 'America/Guatemala' },
+  HN: { nombre: 'Honduras',    horario: '11:00 AM – 9:00 PM',  prefijo: '504', digitos: 8,  longitudes: [8,11],          zona: 'America/Tegucigalpa' },
+  SV: { nombre: 'El Salvador', horario: '11:00 AM – 9:00 PM',  prefijo: '503', digitos: 8,  longitudes: [7,8,11],        zona: 'America/El_Salvador' },
+  CO: { nombre: 'Colombia',    horario: '12:00 PM – 10:00 PM', prefijo: '57',  digitos: 10, longitudes: [8,10,11],       zona: 'America/Bogota' },
+  EC: { nombre: 'Ecuador',     horario: '12:00 PM – 10:00 PM', prefijo: '593', digitos: 9,  longitudes: [8,9,10,11],     zona: 'America/Guayaquil' },
+  PA: { nombre: 'Panamá',      horario: '12:00 PM – 10:00 PM', prefijo: '507', digitos: 8,  longitudes: [7,8,10,11],     zona: 'America/Panama' },
+  PE: { nombre: 'Perú',        horario: '12:00 PM – 10:00 PM', prefijo: '51',  digitos: 9,  longitudes: [8,9],           zona: 'America/Lima' },
+  VE: { nombre: 'Venezuela',   horario: '12:30 PM – 10:30 PM', prefijo: '58',  digitos: 10, longitudes: [10],            zona: 'America/Caracas' },
+  BO: { nombre: 'Bolivia',     horario: '1:00 PM – 11:00 PM',  prefijo: '591', digitos: 8,  longitudes: [8,9],           zona: 'America/La_Paz' },
+  AR: { nombre: 'Argentina',   horario: '2:00 PM – 12:00 AM',  prefijo: '54',  digitos: 10, longitudes: [10,11],         zona: 'America/Argentina/Buenos_Aires' },
+  CL: { nombre: 'Chile',       horario: '2:00 PM – 12:00 AM',  prefijo: '56',  digitos: 9,  longitudes: [9,10,11],       zona: 'America/Santiago' },
+  PY: { nombre: 'Paraguay',    horario: '2:00 PM – 12:00 AM',  prefijo: '595', digitos: 9,  longitudes: [6,7,8,9,10,11], zona: 'America/Asuncion' },
+  BR: { nombre: 'Brasil',      horario: '2:00 PM – 12:00 AM',  prefijo: '55',  digitos: 11, longitudes: [8,9,10,11],     zona: 'America/Sao_Paulo' }
 };
 
 /* Zonas IANA disponibles. Los países con más de una zona muestran varias ciudades

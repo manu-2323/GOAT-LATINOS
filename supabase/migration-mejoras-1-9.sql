@@ -97,35 +97,14 @@ revoke all on function public.gl_correo_existe(text) from public;
 grant execute on function public.gl_correo_existe(text) to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- 3) Protección de rol y campos sensibles (reemplaza el trigger anterior)
+-- 3) Protección de rol y campos sensibles (FASE 2.3)
 -- ---------------------------------------------------------------------------
-create or replace function public.gl_proteger_rol()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  if auth.role() = 'service_role' then
-    return new;
-  end if;
-
-  if public.gl_es_super_admin() then
-    return new;
-  end if;
-
-  -- El resto de usuarios no puede escalar privilegios ni alterar datos de liga.
-  if new.rol is distinct from old.rol
-     or new.activo is distinct from old.activo
-     or new.suspendido is distinct from old.suspendido
-     or new.torneo_id is distinct from old.torneo_id
-     or new.super_admin is distinct from old.super_admin
-     or new.email is distinct from old.email then
-    raise exception 'No tenés permisos para modificar el rol o los datos de liga';
-  end if;
-
-  return new;
-end; $$;
-
-drop trigger if exists gl_proteger_rol on public.jugadores;
-create trigger gl_proteger_rol before update on public.jugadores
-  for each row execute function public.gl_proteger_rol();
+-- FASE 2.3: se retira la redefinición histórica de gl_proteger_rol().
+-- Esta versión impedía la suspensión legítima hecha por administradores
+-- normales y no bloqueaba de forma consistente la promoción por REST.
+-- La única definición autoritativa está en:
+--   supabase/migration-seguridad-2.3.sql
+-- Reejecutar esta migración antigua NO debe sobrescribir la defensa final.
 
 -- ---------------------------------------------------------------------------
 -- 5) Bucket de avatares (JPG/PNG, máx. 2 MB)

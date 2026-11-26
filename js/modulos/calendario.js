@@ -228,10 +228,15 @@
   function linkContacto(jugadorId) {
     const base = GL.jugador(jugadorId) || {};
     const contacto = Mod.contactos[jugadorId] || {};
-    const datos = Object.assign({}, contacto, {
+    // El contexto ya trae telefono_e164/pais_telefono. La RPC legacy solo
+    // expone telefono + pais, así que se usa como respaldo, nunca al revés.
+    const datos = Object.assign({}, contacto, base, {
+      telefono_e164: base.telefono_e164 || contacto.telefono_e164 || '',
+      pais_telefono: base.pais_telefono || contacto.pais_telefono || base.pais || contacto.pais || '',
+      telefono: base.telefono || contacto.telefono || '',
       nombre_usuario: base.nombre_usuario || contacto.nombre_usuario || GL.nombreJugador(jugadorId)
     });
-    if (!contacto.telefono) return '';
+    if (!GL.tel.e164Jugador(datos)) return '';
     return GL.linkWhatsapp(datos, datos.nombre_usuario);
   }
 
@@ -245,11 +250,11 @@
         ' · ' + esc(GL.etiquetaZona(Mod.zona)) + '</p></div>' +
       '<div class="seccion-acciones">' +
         '<button type="button" class="btn sm sec" data-cal-pdf>' +
-          icono('file-down', 15) + 'Exportar PDF</button>' +
+          icono('file-down', 16) + 'Exportar PDF</button>' +
         '<button type="button" class="btn sm sec" data-cal-enlaces>' +
-          icono('link', 15) + 'Enlaces de calendario</button>' +
+          icono('link', 16) + 'Enlaces de calendario</button>' +
         '<button type="button" class="btn sm sec" data-cal-ics>' +
-          icono('download', 15) + 'Descargar .ics</button>' +
+          icono('download', 16) + 'Descargar .ics</button>' +
       '</div></div>' +
 
       '<div class="cal-metricas grid cuatro">' +
@@ -391,9 +396,9 @@
 
     return '<aside class="cal-lateral">' +
       '<section class="card tight"><div class="cal-card-head"><h3>Fechas límite</h3>' +
-        icono('calendar-clock', 17) + '</div>' + limitesHTML + '</section>' +
+        icono('calendar-clock', 18) + '</div>' + limitesHTML + '</section>' +
       '<section class="card tight"><div class="cal-card-head"><h3>Estado de jornadas</h3>' +
-        icono('flag', 17) + '</div>' +
+        icono('flag', 18) + '</div>' +
         '<div class="chips">' + GL.badge(d.abiertas + ' abiertas', 'green', 'unlock') +
           GL.badge(d.cerradas + ' cerradas', 'red', 'lock') +
           GL.badge(d.pendientes + ' pendientes', 'orange', 'clock') + '</div>' +
@@ -403,7 +408,7 @@
             GL.badge(j.abierta ? 'Abierta' : 'Cerrada', j.abierta ? 'green' : 'red') +
           '</button>').join('') + '</div></section>' +
       '<section class="card tight"><div class="cal-card-head"><h3>Horarios internacionales</h3>' +
-        icono('globe', 17) + '</div>' +
+        icono('globe', 18) + '</div>' +
         '<div class="cal-zona-actual">' + icono('map-pin', 14) +
           esc(GL.etiquetaZona(Mod.zona)) + '</div>' +
         '<div class="cal-horario-linea"><span>Referencia</span><strong>' +
@@ -449,22 +454,22 @@
         '<span class="badge-jornada">J' + esc(p.jornada) + '</span>' +
         (p.estado === 'pendiente' ? GL.badge('Pendiente', 'orange', 'clock') : GL.badge(resultado.estado.label,
           resultado.estado.color, resultado.estado.icono)) +
-        '<span class="cal-cuando">' + icono('clock', 13) + esc(cuando) + '</span>' +
+        '<span class="cal-cuando">' + icono('clock', 14) + esc(cuando) + '</span>' +
       '</div>' +
       '<div class="cal-partido-equipos">' +
         '<span' + (soyLocal ? ' class="cal-mio"' : '') + '>' +
-          (soyLocal ? icono('home', 13) : '') + esc(GL.nombreJugador(p.local_id)) +
+          (soyLocal ? icono('home', 14) : '') + esc(GL.nombreJugador(p.local_id)) +
           GL.banderaHTML(local.pais, 14) + '</span>' +
         '<strong class="cal-marcador">' + esc(resultado.texto) + '</strong>' +
         '<span' + (!soyLocal && esMio ? ' class="cal-mio"' : '') + '>' +
           GL.banderaHTML(visita.pais, 14) + esc(GL.nombreJugador(p.visitante_id)) +
-          (!soyLocal && esMio ? icono('plane', 13) : '') + '</span>' +
+          (!soyLocal && esMio ? icono('plane', 14) : '') + '</span>' +
       '</div>' +
-      (rival ? '<div class="cal-rival">' + icono('swords', 13) + 'Rival: ' +
+      (rival ? '<div class="cal-rival">' + icono('swords', 14) + 'Rival: ' +
           esc(GL.nombreJugador(rival.id)) + ' · ' + esc(GL.nombrePais(rival.pais)) +
           (GL.banderaHTML(rival.pais, 14) || '') + '</div>' : '') +
-      '<div class="cal-partido-contacto">' + icono('message-circle', 13) + contacto + '</div>' +
-      '<div class="cal-dispo">' + icono('info', 12) + 'Disponibilidad: ' + SIN_DISPONIBILIDAD + '</div>' +
+      '<div class="cal-partido-contacto">' + icono('message-circle', 14) + contacto + '</div>' +
+      '<div class="cal-dispo">' + icono('info', 14) + 'Disponibilidad: ' + SIN_DISPONIBILIDAD + '</div>' +
     '</article>';
   }
 
@@ -527,14 +532,14 @@
         '<td>' + esc(j.pendientes) + '</td>' +
         '<td class="cal-acciones-admin">' +
           '<button type="button" class="btn sm sec" data-cal-horario="' + j.numero + '">' +
-            icono('calendar-clock', 13) + 'Fechas</button>' +
+            icono('calendar-clock', 14) + 'Fechas</button>' +
           (j.abierta
             ? '<button type="button" class="btn sm" data-cal-estado="' + j.numero +
-              '" data-accion="cerrar">' + icono('lock', 13) + 'Cerrar</button>'
+              '" data-accion="cerrar">' + icono('lock', 14) + 'Cerrar</button>'
             : '<button type="button" class="btn sm sec" data-cal-estado="' + j.numero +
-              '" data-accion="abrir">' + icono('unlock', 13) + 'Abrir</button>') +
+              '" data-accion="abrir">' + icono('unlock', 14) + 'Abrir</button>') +
           '<button type="button" class="btn-icon" data-cal-jornada="' + j.numero +
-            '" aria-label="Ver jornada ' + j.numero + '">' + icono('eye', 15) + '</button>' +
+            '" aria-label="Ver jornada ' + j.numero + '">' + icono('eye', 16) + '</button>' +
         '</td></tr>').join('');
 
     return '<section class="card cal-admin"><div class="cal-card-head"><div>' +
@@ -545,13 +550,13 @@
         '<th>Jornada</th><th>Estado</th><th>Apertura</th><th>Límite</th>' +
         '<th>Pendientes</th><th>Acciones</th></tr></thead><tbody>' + filas + '</tbody></table></div>' +
       '<div class="cal-admin-bloques">' +
-        '<div><h4>' + icono('triangle-alert', 15) + 'Conflictos de horario</h4>' +
+        '<div><h4>' + icono('triangle-alert', 16) + 'Conflictos de horario</h4>' +
           (d.conflictos.length
             ? '<ul class="cal-lista-alertas">' + d.conflictos.map(c =>
                 '<li>J' + c.numero + ' · ' + esc(c.texto) + '</li>').join('') + '</ul>'
             : '<p class="vacio-mensaje">No se detectaron superposiciones entre jornadas con fecha.</p>') +
         '</div>' +
-        '<div><h4>' + icono('users', 15) + 'Participantes sin disponibilidad</h4>' +
+        '<div><h4>' + icono('users', 16) + 'Participantes sin disponibilidad</h4>' +
           (d.jugadores.length
             ? '<div class="chips">' + d.jugadores.map(j =>
                 GL.badge(GL.nombreJugador(j.id) + ': ' + SIN_DISPONIBILIDAD, 'neutral')) .join('') + '</div>'
@@ -627,10 +632,10 @@
     const acciones = '<button type="button" class="btn sec" data-cerrar>Cerrar</button>' +
       (d.admin
         ? '<button type="button" class="btn" data-cal-modal-horario="' + numero + '">' +
-            icono('calendar-clock', 15) + 'Editar horario</button>'
+            icono('calendar-clock', 16) + 'Editar horario</button>'
         : '') +
       '<button type="button" class="btn sec" data-cal-modal-gcal="' + numero + '">' +
-        icono('link', 15) + 'Google Calendar</button>';
+        icono('link', 16) + 'Google Calendar</button>';
 
     GL.abrirModal({
       titulo: 'Jornada ' + numero,
@@ -690,7 +695,7 @@
           'Si las franjas se superponen con otra jornada, el sistema te avisará antes de guardar.</p>',
       acciones: '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
         '<button type="button" class="btn" id="cal-h-guardar">' +
-          icono('save', 15) + 'Guardar programación</button>',
+          icono('save', 16) + 'Guardar programación</button>',
       onAbrir(fondo, cerrar) {
         fondo.querySelector('#cal-h-guardar').addEventListener('click', async () => {
           if (!(await GL.asegurarAdmin(el))) { cerrar(); return; }
@@ -850,7 +855,7 @@
           '<div><span><strong>Jornada ' + j.numero + '</strong>' +
             '<small>' + esc(fechaCompletaEnZona(j.inicio, Mod.zona)) + '</small></span>' +
             '<button type="button" class="btn sm sec" data-cal-gcal="' + j.numero + '">' +
-              icono('external-link', 13) + 'Google</button>' +
+              icono('external-link', 14) + 'Google</button>' +
             '<button type="button" class="btn-icon" data-cal-copiar="' + j.numero +
               '" aria-label="Copiar enlace">' + icono('copy', 14) + '</button>' +
           '</div>').join('') + '</div>'
@@ -861,7 +866,7 @@
       cuerpo: html,
       acciones: '<button type="button" class="btn sec" data-cerrar>Cerrar</button>' +
         '<button type="button" class="btn" id="cal-ics-modal">' +
-          icono('download', 15) + 'Descargar .ics</button>',
+          icono('download', 16) + 'Descargar .ics</button>',
       onAbrir(fondo) {
         fondo.querySelector('#cal-ics-modal').addEventListener('click', () => descargarICS(d));
         fondo.querySelectorAll('[data-cal-gcal]').forEach(b => b.addEventListener('click', () => {

@@ -49,8 +49,10 @@ returns boolean language sql security definer set search_path = public as $$
 $$;
 
 grant usage on schema public to anon, authenticated;
-grant select on torneos, jugadores, grupos, grupo_jugadores, partidos,
-  sanciones, clasificacion, jornadas to anon, authenticated;
+/* FASE 2.3: jugadores es privado. anon solo lee la vista pública creada en
+   migration-registro-seguro.sql y los catálogos sin datos personales. */
+grant select on torneos, grupos, partidos, clasificacion, jornadas to anon, authenticated;
+grant select on jugadores, grupo_jugadores, sanciones to authenticated;
 
 alter table torneos         enable row level security;
 alter table jugadores       enable row level security;
@@ -74,7 +76,7 @@ drop policy if exists gl_read on clasificacion;
 drop policy if exists gl_read on jornadas;
 
 create policy gl_read on torneos         for select to anon, authenticated using (true);
-create policy gl_read on jugadores       for select to anon, authenticated using (true);
+create policy gl_read on jugadores       for select to authenticated using (true);
 create policy gl_read on grupos          for select to anon, authenticated using (true);
 create policy gl_read on grupo_jugadores for select to anon, authenticated using (true);
 create policy gl_read on partidos        for select to anon, authenticated using (true);
@@ -113,24 +115,13 @@ create policy gl_propio_update on jugadores for update to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- ---------------------------------------------------------------------------
--- 5) Trigger: evita que un jugador se promueva a sí mismo mediante UPDATE
+-- 5) Trigger de roles: definición autoritativa en FASE 2.3
 -- ---------------------------------------------------------------------------
-create or replace function public.gl_proteger_rol()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  if auth.role() = 'service_role' or public.gl_es_admin() then
-    return new;
-  end if;
-  new.rol := old.rol;
-  new.activo := old.activo;
-  new.suspendido := old.suspendido;
-  new.torneo_id := old.torneo_id;
-  return new;
-end; $$;
-
-drop trigger if exists gl_proteger_rol on jugadores;
-create trigger gl_proteger_rol before update on jugadores
-  for each row execute function public.gl_proteger_rol();
+-- FASE 2.3: NO se redefine gl_proteger_rol() aquí. Las versiones anteriores
+-- permitían que un administrador normal promoviera a otros jugadores por REST.
+-- La única definición válida se instala en:
+--   supabase/migration-seguridad-2.3.sql
+-- Reejecutar este script antiguo NO debe debilitar esa definición.
 
 -- ---------------------------------------------------------------------------
 -- 6) Bucket de capturas: público para leer, solo admins para subir/borrar

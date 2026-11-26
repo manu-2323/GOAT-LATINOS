@@ -1,0 +1,30 @@
+{
+  "ejecutada": true,
+  "tipo": "app real autenticada con Supabase",
+  "resultado": {
+    "titulo": "Equipos",
+    "tarjetas": 2,
+    "kpis": [
+      "2",
+      "1",
+      "0",
+      "0"
+    ],
+    "contador": "2 equipos",
+    "miembrosContexto": 1,
+    "jugadoresContexto": 0,
+    "scrollWidth": 1366,
+    "ancho": 1366
+  },
+  "erroresConsola": [
+    "CONSOLE Failed to load resource: the server responded with a status of 400 ()",
+    "CONSOLE Failed to load resource: the server responded with a status of 400 ()",
+    "CONSOLE Failed to load resource: the server responded with a status of 400 ()"
+  ],
+  "fallosRed": [
+    "400 https://zmjzlvsdlfzmhptmtmjx.supabase.co/rest/v1/jugadores?select=id%2Cnombre_usuario%2Cpais%2Czona_horaria%2Cavatar_url%2Cactivo%2Csuspendido%2Crol%2Ctorneo_id%2Cnumero%2Ctelefono%2Ctelefono_e164%2Ctelefono_nacional%2Cpais_telefono%2Ctelefono_verificado%2Ctelefono_valido_plan%2Cemail%2Cuser_id%2Csuper_admin%2Ccreated_at&order=nombre_usuario.asc",
+    "400 https://zmjzlvsdlfzmhptmtmjx.supabase.co/rest/v1/jugadores?select=id%2Cnombre_usuario%2Cpais%2Czona_horaria%2Cavatar_url%2Cactivo%2Csuspendido%2Crol%2Ctorneo_id%2Cnumero%2Ctelefono%2Ctelefono_e164%2Ctelefono_nacional%2Cpais_telefono%2Ctelefono_verificado%2Ctelefono_valido_plan%2Cemail%2Cuser_id%2Csuper_admin%2Ccreated_at&order=nombre_usuario.asc",
+    "400 https://zmjzlvsdlfzmhptmtmjx.supabase.co/rest/v1/jugadores?select=id%2Cnombre_usuario%2Cpais%2Czona_horaria%2Cavatar_url%2Cactivo%2Csuspendido%2Crol%2Ctorneo_id%2Cnumero%2Ctelefono%2Ctelefono_e164%2Ctelefono_nacional%2Cpais_telefono%2Ctelefono_verificado%2Ctelefono_valido_plan%2Cemail%2Cuser_id%2Csuper_admin%2Ccreated_at&order=nombre_usuario.asc"
+  ],
+  "captura": "docs/capturas-fase-3.6/despues-equipos-real.png"
+}

@@ -16,46 +16,91 @@
   },
 
   async render(el) {
-    el.innerHTML = GL.skeleton(5);
+    el.innerHTML = GL.skeleton(6, 20, true);
     if (!(await GL.asegurarAdmin(el))) return;
     try {
       await GL.cargarContexto(true);
       const grupos = GL.grupos(), total = (GL.torneo() && Number(GL.torneo().total_jornadas)) || 22;
       if (!Mod.grupoId || !grupos.some(g => g.id === Mod.grupoId)) Mod.grupoId = grupos[0] && grupos[0].id;
       const jn = Mod.jornada || GL.jornadaActual().numero;
+      const jdata = (GL.ctx.jornadas || []).find(j =>
+        j.torneo_id === (GL.torneo() && GL.torneo().id) && j.grupo_id === Mod.grupoId && j.numero === jn);
+      const estadoJornada = jdata ? (jdata.estado === 'cerrada' ? 'Cerrada' : 'Abierta') : 'Sin dato';
+      const letra = GL.grupo(Mod.grupoId) ? GL.letraGrupo(GL.grupo(Mod.grupoId)) : '—';
+
       el.innerHTML =
-        '<div class="seccion-head"><div class="seccion-titulo"><h2>Generador de mensajes</h2>' +
-          '<p>Textos verificados, listos para copiar y pegar en el grupo de WhatsApp</p></div></div>' +
-        '<div class="tabs">' +
-          '<button type="button" class="tab' + (Mod.tipo === 'apertura' ? ' activo' : '') + '" data-tipo="apertura">' + icono('flag', 16) + 'Apertura de jornada</button>' +
-          '<button type="button" class="tab' + (Mod.tipo === 'cierre' ? ' activo' : '') + '" data-tipo="cierre">' + icono('flag-off', 16) + 'Cierre de jornada</button>' +
-        '</div>' +
-        '<div class="card"><div class="campo-row">' +
-          '<label class="campo"><span>Grupo</span><select class="input" id="msg-grupo">' +
-            grupos.map(g => '<option value="' + g.id + '"' + (g.id === Mod.grupoId ? ' selected' : '') + '>Grupo ' + GL.letraGrupo(g) + '</option>').join('') +
-          '</select></label>' +
-          '<label class="campo"><span>Jornada</span><select class="input" id="msg-jornada">' +
-            Array.from({ length: total }, (_, i) => i + 1).map(n =>
-              '<option value="' + n + '"' + (n === jn ? ' selected' : '') + '>Jornada ' + n + '</option>').join('') +
-          '</select></label>' +
-        '</div></div>' +
-        '<div class="card"><div class="card-titulo">' + icono('message-square-text', 19) + 'Vista previa' +
-          '<span class="spacer"></span><span class="badge neutral">WhatsApp</span></div>' +
-          '<div id="msg-estado"></div>' +
-          '<textarea class="input texto-mensaje" id="msg-texto" readonly></textarea>' +
-          '<div class="vista-previa wa-preview"><div class="vista-previa-head">' + icono('message-circle', 14) +
-            'Vista previa en WhatsApp</div><pre id="msg-preview"></pre></div>' +
-          '<div class="barra-acciones mt" style="display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap">' +
-            '<button type="button" class="btn sec" data-descargar>' + icono('download', 16) + 'Descargar .txt</button>' +
-            '<button type="button" class="btn sec" data-wa>' + icono('send', 16) + 'Enviar por WhatsApp</button>' +
-            '<button type="button" class="btn" data-copiar>' + icono('copy', 16) + 'Copiar al portapapeles</button>' +
-          '</div></div>';
+        '<div class="m8-pantalla" data-mensajes>' +
+          '<header class="m8-hero">' +
+            '<div class="m8-hero-copy">' +
+              '<span class="m8-eyebrow">' + icono('send', 14) + 'Dirección del torneo · Comunicación</span>' +
+              '<h1 class="m8-titulo">Generador de mensajes</h1>' +
+              '<p class="m8-bajada">Textos verificados, listos para copiar y pegar en el grupo de WhatsApp.</p>' +
+            '</div>' +
+            '<div class="m8-hero-acciones">' + GL.badge('WhatsApp', 'neutral', 'message-circle') +
+              GL.badge(Mod.tipo === 'apertura' ? 'Apertura' : 'Cierre', 'gold', Mod.tipo === 'apertura' ? 'flag' : 'flag-off') +
+            '</div>' +
+          '</header>' +
+          '<section class="m8-kpis" aria-label="Contexto del mensaje">' +
+            m8Kpi(jn + ' / ' + total, 'Jornada', 'Dentro de la temporada', 'calendar-days') +
+            m8Kpi('Grupo ' + letra, 'Destinatario', grupos.length + (grupos.length === 1 ? ' grupo' : ' grupos') + ' en el torneo', 'users') +
+            m8Kpi(Mod.tipo === 'apertura' ? 'Apertura' : 'Cierre', 'Modalidad', 'Según el estado de la jornada', 'message-square-text') +
+            m8Kpi(estadoJornada, 'Jornada', 'Dato real del torneo activo', estadoJornada === 'Cerrada' ? 'lock' : 'flag') +
+          '</section>' +
+          '<div class="m8-tabs" role="tablist" aria-label="Tipo de mensaje">' +
+            '<button type="button" class="m8-tab' + (Mod.tipo === 'apertura' ? ' activo' : '') + '" data-tipo="apertura" role="tab" aria-selected="' + (Mod.tipo === 'apertura') + '">' +
+              icono('flag', 16) + 'Apertura de jornada</button>' +
+            '<button type="button" class="m8-tab' + (Mod.tipo === 'cierre' ? ' activo' : '') + '" data-tipo="cierre" role="tab" aria-selected="' + (Mod.tipo === 'cierre') + '">' +
+              icono('flag-off', 16) + 'Cierre de jornada</button>' +
+          '</div>' +
+          '<div class="m8-layout">' +
+            '<section class="m8-panel m8-config-panel" aria-labelledby="m8-config-titulo">' +
+              '<div class="m8-panel-cab"><div><h2 id="m8-config-titulo">' + icono('sliders-horizontal', 18) + 'Contexto del mensaje</h2>' +
+                '<p>Elegí el grupo y la jornada. El texto se genera con datos ya cargados.</p></div></div>' +
+              '<div class="m8-campos">' +
+                '<label class="m8-campo"><span>Grupo</span>' +
+                  '<select class="input" id="msg-grupo">' +
+                    grupos.map(g => '<option value="' + esc(g.id) + '"' + (g.id === Mod.grupoId ? ' selected' : '') + '>Grupo ' + esc(GL.letraGrupo(g)) + '</option>').join('') +
+                  '</select></label>' +
+                '<label class="m8-campo"><span>Jornada</span>' +
+                  '<select class="input" id="msg-jornada">' +
+                    Array.from({ length: total }, (_, i) => i + 1).map(n =>
+                      '<option value="' + n + '"' + (n === jn ? ' selected' : '') + '>Jornada ' + n + '</option>').join('') +
+                  '</select></label>' +
+              '</div>' +
+              '<p class="m8-nota">' + icono('info', 14) +
+                ' Si falta algún dato verificable, el mensaje queda bloqueado. No se escribe nada en Supabase.</p>' +
+              '<div class="m8-flujo">' +
+                '<span class="m8-flujo-paso activo">' + icono('check', 14) + 'Datos</span>' +
+                '<span class="m8-flujo-linea" aria-hidden="true"></span>' +
+                '<span class="m8-flujo-paso activo">' + icono('check', 14) + 'Texto</span>' +
+                '<span class="m8-flujo-linea" aria-hidden="true"></span>' +
+                '<span class="m8-flujo-paso">' + icono('send', 14) + 'Compartir</span>' +
+              '</div>' +
+            '</section>' +
+            '<section class="m8-panel m8-preview-panel" aria-labelledby="m8-preview-titulo">' +
+              '<div class="m8-panel-cab"><div><h2 id="m8-preview-titulo">' + icono('message-square-text', 18) + 'Vista previa</h2>' +
+                '<p>Revisá el texto antes de copiarlo o enviarlo.</p></div>' +
+                '<span id="m8-verificacion" class="m8-chip">Verificando…</span></div>' +
+              '<div id="msg-estado" class="m8-estado" aria-live="polite"></div>' +
+              '<label class="m8-campo m8-campo-texto"><span>Texto generado</span>' +
+                '<textarea class="input texto-mensaje m8-texto" id="msg-texto" readonly></textarea></label>' +
+              '<div class="m8-wa"><div class="m8-wa-head">' + icono('message-circle', 14) + 'Vista previa en WhatsApp</div>' +
+                '<pre id="msg-preview" class="m8-wa-cuerpo"></pre></div>' +
+              '<div class="m8-acciones">' +
+                '<button type="button" class="btn sec" data-descargar>' + icono('download', 16) + 'Descargar .txt</button>' +
+                '<button type="button" class="btn sec" data-wa>' + icono('send', 16) + 'Enviar por WhatsApp</button>' +
+                '<button type="button" class="btn" data-copiar>' + icono('copy', 16) + 'Copiar al portapapeles</button>' +
+              '</div>' +
+            '</section>' +
+          '</div>' +
+        '</div>';
 
       const grupoSel = el.querySelector('#msg-grupo');
       const jornadaSel = el.querySelector('#msg-jornada');
       const txt = el.querySelector('#msg-texto');
       const vista = el.querySelector('#msg-preview');
       const estado = el.querySelector('#msg-estado');
+      const chip = el.querySelector('#m8-verificacion');
       const botones = Array.from(el.querySelectorAll('[data-descargar], [data-wa], [data-copiar]'));
 
       const actualizar = async () => {
@@ -63,15 +108,15 @@
         txt.value = resultado.texto;
         vista.textContent = resultado.texto;
         const bloqueado = resultado.problemas.length > 0;
-        estado.style.cssText = 'margin-bottom:12px;padding:10px 12px;border-radius:var(--radius);font-size:13px;line-height:1.5;' +
-          (bloqueado
-            ? 'background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.45);'
-            : 'background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.38);');
+        estado.className = 'm8-estado ' + (bloqueado ? 'bloqueado' : 'verificado');
         estado.innerHTML = bloqueado
-          ? '<strong>' + icono('triangle-alert', 15) + ' No se puede generar el mensaje todavía</strong>' +
-            '<ul style="margin:7px 0 0 18px;padding:0">' +
-            resultado.problemas.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>'
-          : '<strong>' + icono('check-circle-2', 15) + ' Datos verificados</strong> — la jornada está cerrada, los resultados y la clasificación están actualizados.';
+          ? '<strong>' + icono('triangle-alert', 16) + ' No se puede generar el mensaje todavía</strong>' +
+            '<ul class="m8-problemas">' + resultado.problemas.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>'
+          : '<strong>' + icono('check-circle-2', 16) + ' Datos verificados</strong> — la jornada está ' +
+            (Mod.tipo === 'apertura' ? 'abierta' : 'cerrada') + ', con resultados y clasificación actualizados.';
+        chip.className = 'm8-chip ' + (bloqueado ? 'bloqueado' : 'verificado');
+        chip.innerHTML = icono(bloqueado ? 'lock' : 'check-circle-2', 14) +
+          (bloqueado ? resultado.problemas.length + ' pendiente' + (resultado.problemas.length === 1 ? '' : 's') : 'Listo');
         botones.forEach(b => { b.disabled = bloqueado; });
       };
 
@@ -85,8 +130,7 @@
       btnCopiar.addEventListener('click', async () => {
         await GL.copiar(txt.value);
         btnCopiar.innerHTML = icono('check', 16) + 'Copiado';
-        btnCopiar.style.background = 'var(--accent-green)';
-        btnCopiar.style.color = '#000';
+        btnCopiar.classList.add('copiado');
         setTimeout(() => { Mod.render(el); }, 2000);
       });
       el.querySelector('[data-descargar]').addEventListener('click', () =>
@@ -99,6 +143,17 @@
     iniciarIconos();
   }
   };
+
+  function m8Kpi(valor, etiqueta, nota, ico) {
+    return '<article class="m8-kpi">' +
+      '<span class="m8-kpi-ico">' + icono(ico, 20) + '</span>' +
+      '<span class="m8-kpi-copy">' +
+        '<strong class="m8-kpi-valor">' + esc(valor) + '</strong>' +
+        '<span class="m8-kpi-label">' + esc(etiqueta) + '</span>' +
+        '<span class="m8-kpi-nota">' + esc(nota) + '</span>' +
+      '</span>' +
+    '</article>';
+  }
 
   /* Zona explícita del jugador. Los países con varias zonas NO se infieren
      del país: si el jugador no eligió ciudad, el dato no es verificable. */

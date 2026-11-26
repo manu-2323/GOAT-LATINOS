@@ -1,0 +1,138 @@
+{
+  "capturas": [
+    {
+      "nombre": "antes-escritorio-1366",
+      "ruta": "docs/capturas-fase-3.2/antes-escritorio-1366.png",
+      "width": 1366,
+      "height": 768
+    },
+    {
+      "nombre": "despues-escritorio-1366",
+      "ruta": "docs/capturas-fase-3.2/despues-escritorio-1366.png",
+      "width": 1366,
+      "height": 768
+    },
+    {
+      "nombre": "antes-movil-390",
+      "ruta": "docs/capturas-fase-3.2/antes-movil-390.png",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "nombre": "despues-movil-390",
+      "ruta": "docs/capturas-fase-3.2/despues-movil-390.png",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "responsive": [
+    {
+      "width": 320,
+      "ancho": 320,
+      "scrollWidth": 320,
+      "bodyBg": "rgb(11, 13, 16)",
+      "fuentesMenores12": [],
+      "navMovilVisible": true,
+      "solapesNav": 0
+    },
+    {
+      "width": 375,
+      "ancho": 375,
+      "scrollWidth": 375,
+      "bodyBg": "rgb(11, 13, 16)",
+      "fuentesMenores12": [],
+      "navMovilVisible": true,
+      "solapesNav": 0
+    },
+    {
+      "width": 390,
+      "ancho": 390,
+      "scrollWidth": 390,
+      "bodyBg": "rgb(11, 13, 16)",
+      "fuentesMenores12": [],
+      "navMovilVisible": true,
+      "solapesNav": 0
+    },
+    {
+      "width": 430,
+      "ancho": 430,
+      "scrollWidth": 430,
+      "bodyBg": "rgb(11, 13, 16)",
+      "fuentesMenores12": [],
+      "navMovilVisible": true,
+      "solapesNav": 0
+    },
+    {
+      "width": 768,
+      "ancho": 768,
+      "scrollWidth": 768,
+      "bodyBg": "rgb(11, 13, 16)",
+      "fuentesMenores12": [],
+      "navMovilVisible": true,
+      "solapesNav": 0
+    },
+    {
+      "width": 1024,
+      "ancho": 1024,
+      "scrollWidth": 1024,
+      "bodyBg": "rgb(11, 13, 16)",
+      "fuentesMenores12": [],
+      "navMovilVisible": false,
+      "solapesNav": 0
+    },
+    {
+      "width": 1366,
+      "ancho": 1366,
+      "scrollWidth": 1366,
+      "bodyBg": "rgb(11, 13, 16)",
+      "fuentesMenores12": [],
+      "navMovilVisible": false,
+      "solapesNav": 0
+    },
+    {
+      "width": 1920,
+      "ancho": 1920,
+      "scrollWidth": 1920,
+      "bodyBg": "rgb(11, 13, 16)",
+      "fuentesMenores12": [],
+      "navMovilVisible": false,
+      "solapesNav": 0
+    }
+  ],
+  "navegacion": [
+    {
+      "id": "calendario",
+      "titulo": "Calendario",
+      "sidebarAriaCurrent": "page",
+      "movilAriaCurrent": "page",
+      "masAriaCurrent": null,
+      "menuExpanded": "false"
+    },
+    {
+      "id": "administracion",
+      "titulo": "Administración",
+      "sidebarAriaCurrent": "page",
+      "movilAriaCurrent": null,
+      "masAriaCurrent": "page",
+      "menuExpanded": "false"
+    },
+    {
+      "id": "tabla",
+      "titulo": "Tabla",
+      "sidebarAriaCurrent": "page",
+      "movilAriaCurrent": "page",
+      "masAriaCurrent": null,
+      "menuExpanded": "false"
+    }
+  ],
+  "foco": {
+    "etiqueta": "a",
+    "clase": "skip-link",
+    "outlineColor": "rgb(255, 107, 122)",
+    "outlineWidth": "2px"
+  },
+  "movimientoReducido": {
+    "scrollBehavior": "auto",
+    "animacionBarra": "none"
+  }
+}

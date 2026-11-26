@@ -127,14 +127,14 @@
           ).join('') + '</div>';
 
         return '<div style="margin-bottom:16px">' +
-          '<div style="font-weight:600;font-family:Rajdhani;font-size:15px;margin-bottom:8px;color:var(--accent-gold)">' +
+          '<div style="font-weight:600;font-family:var(--gl-font-sans);font-size:15px;margin-bottom:8px;color:var(--accent-gold)">' +
             icono('users', 14) + ' Grupo ' + letra + ' — ' + jugadores.length + ' jugadores · ' + totalPartidos + ' partidos · 22 jornadas</div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
             htmlJornada(j1, 1) +
             htmlJornada(j12, 12) +
           '</div>' +
           '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">' +
-            icono('info', 12) + ' Jornadas 1–11: ida · Jornadas 12–22: vuelta con equipos invertidos' +
+            icono('info', 14) + ' Jornadas 1–11: ida · Jornadas 12–22: vuelta con equipos invertidos' +
           '</div></div>';
       };
 
@@ -243,26 +243,26 @@
       const visita = GL.jugador(p.visitante_id) || {};
       const horarioLocal = GL.horarioJugador(local);
       const horarioVisita = GL.horarioJugador(visita);
-      const waLocal = GL.linkWhatsapp(local.telefono, local.nombre_usuario);
-      const waVisita = GL.linkWhatsapp(visita.telefono, visita.nombre_usuario);
+      const waLocal = GL.linkWhatsapp(local, local.nombre_usuario);
+      const waVisita = GL.linkWhatsapp(visita, visita.nombre_usuario);
       const contacto = (waLocal || waVisita)
         ? '<div class="horario-linea" style="justify-content:space-between;flex-wrap:wrap">' +
             (waLocal || '<span></span>') + (waVisita || '<span></span>') + '</div>'
         : '';
       return '<div class="partido-card partido-card-fixture" style="animation-delay:' + (i * .04) + 's">' +
         '<div class="equipo-row local">' +
-          '<div class="equipo">' + icono('home', 15) +
+          '<div class="equipo">' + icono('home', 16) +
             '<span>' + esc(GL.nombreJugador(p.local_id)) + '</span>' + GL.banderaHTML(local.pais, 15) + '</div></div>' +
         '<div class="marcador-centro">' +
           '<div class="marcador ' + (r.pendiente ? '' : 'jugado') + '">' + r.texto + '</div>' +
           '<div class="estado-mini" style="justify-content:center;margin-top:4px">' + icono(r.estado.icono, 12) + r.estado.label + '</div></div>' +
         '<div class="equipo-row visita">' +
           '<div class="equipo visita">' + GL.banderaHTML(visita.pais, 15) +
-            '<span>' + esc(GL.nombreJugador(p.visitante_id)) + '</span>' + icono('plane', 15) + '</div></div>' +
+            '<span>' + esc(GL.nombreJugador(p.visitante_id)) + '</span>' + icono('plane', 16) + '</div></div>' +
         '<div class="detalles-partido">' +
-          '<div class="horario-linea">' + icono('clock', 13) +
+          '<div class="horario-linea">' + icono('clock', 14) +
             '<span>' + esc(GL.nombreJugador(p.local_id)) + ': ' + esc(horarioLocal) + '</span></div>' +
-          '<div class="horario-linea">' + icono('clock', 13) +
+          '<div class="horario-linea">' + icono('clock', 14) +
             '<span>' + esc(GL.nombreJugador(p.visitante_id)) + ': ' + esc(horarioVisita) + '</span></div>' +
           contacto +
         '</div></div>';

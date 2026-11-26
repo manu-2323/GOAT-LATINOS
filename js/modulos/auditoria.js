@@ -115,7 +115,7 @@
           '<div class="seccion-acciones">' +
             GL.badge('SOLO LECTURA', 'neutral', 'lock') +
             '<button type="button" class="btn sec" id="aud-exportar">' +
-              icono('download', 15) + 'Exportar CSV</button>' +
+              icono('download', 16) + 'Exportar CSV</button>' +
           '</div>' +
         '</div>' +
 
@@ -196,7 +196,7 @@
 
         /* Contador y resumen */
         '<div class="aud-resumen-barra">' +
-          '<span>' + icono('list', 13) + ' <strong>' + total + '</strong> registro' + (total !== 1 ? 's' : '') +
+          '<span>' + icono('list', 14) + ' <strong>' + total + '</strong> registro' + (total !== 1 ? 's' : '') +
             (Mod._filtroAccion || Mod._filtroGrupo || Mod._filtroJugador || Mod._filtroFechaDesde
               ? ' <span class="badge gold" style="font-size:10px">Filtros activos</span>'
               : '') +
@@ -230,8 +230,8 @@
         (totalPags > 1
           ? '<div class="paginacion">' +
               (Mod._pagina > 0
-                ? '<button type="button" class="btn sec" id="aud-ant">' + icono('chevron-left', 15) + 'Anterior</button>'
-                : '<button class="btn sec" disabled>' + icono('chevron-left', 15) + 'Anterior</button>') +
+                ? '<button type="button" class="btn sec" id="aud-ant">' + icono('chevron-left', 16) + 'Anterior</button>'
+                : '<button class="btn sec" disabled>' + icono('chevron-left', 16) + 'Anterior</button>') +
               '<div class="paginacion-nums">' +
                 Array.from({ length: Math.min(totalPags, 7) }, (_, i) => {
                   const p = i;
@@ -240,14 +240,14 @@
                 }).join('') +
               '</div>' +
               (Mod._pagina < totalPags - 1
-                ? '<button type="button" class="btn sec" id="aud-sig">Siguiente ' + icono('chevron-right', 15) + '</button>'
-                : '<button class="btn sec" disabled>Siguiente ' + icono('chevron-right', 15) + '</button>') +
+                ? '<button type="button" class="btn sec" id="aud-sig">Siguiente ' + icono('chevron-right', 16) + '</button>'
+                : '<button class="btn sec" disabled>Siguiente ' + icono('chevron-right', 16) + '</button>') +
             '</div>'
           : '') +
 
         /* Aviso de inmutabilidad */
         '<div class="aud-aviso-inmutable">' +
-          icono('lock', 12) +
+          icono('lock', 14) +
           ' Los registros de auditoría son inmutables y no pueden editarse ni eliminarse desde esta interfaz.' +
         '</div>';
 
@@ -333,7 +333,7 @@
         icono(cfg.ico, 12) + esc(cfg.label) + '</span></td>' +
       '<td class="aud-resumen">' + esc(resumen) + '</td>' +
       '<td><span class="badge neutral" style="font-size:10px">' + esc(r.entidad_tipo || '—') + '</span></td>' +
-      '<td class="aud-quien">' + icono('user', 12) + esc(quien) + '</td>' +
+      '<td class="aud-quien">' + icono('user', 14) + esc(quien) + '</td>' +
       '<td><button class="btn-aud-det" title="Ver detalle">' + icono('eye', 14) + '</button></td>' +
     '</tr>';
   }
@@ -429,7 +429,7 @@
           '</div>' +
           '<div class="aud-det-fila">' +
             '<span>Responsable</span>' +
-            '<strong>' + icono('user', 13) + esc(_nombreAdmin(r.realizado_por)) + '</strong>' +
+            '<strong>' + icono('user', 14) + esc(_nombreAdmin(r.realizado_por)) + '</strong>' +
           '</div>' +
           '<div class="aud-det-fila">' +
             '<span>Entidad afectada</span>' +
@@ -462,7 +462,7 @@
         '</details>' +
 
         /* Aviso inmutabilidad */
-        '<div class="aud-det-lock">' + icono('lock', 12) +
+        '<div class="aud-det-lock">' + icono('lock', 14) +
           ' Este registro es inmutable. No puede modificarse desde la interfaz.</div>' +
 
         '</div>',

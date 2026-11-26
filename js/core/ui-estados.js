@@ -118,19 +118,24 @@
       '<button type="button" class="btn ' + (a.tipo || 'sec') + '" data-estado-accion="' + i + '">' +
         esc(a.etiqueta || 'Reintentar') + '</button>'
     ).join('');
-    const comun = '<div class="panel-estado gl-anim-entrada"><div class="gl-estado-icono">' +
-      ico(o.icono || 'inbox', 30) + '</div><div class="estado-titulo">' + esc(titulo) + '</div>' +
+    const comun = '<div class="panel-estado gl-anim-entrada" role="' +
+      (modo === 'error' ? 'alert' : 'status') + '" aria-live="polite">' +
+      '<div class="gl-estado-icono">' +
+      ico(o.icono || 'inbox', 24) + '</div><div class="estado-titulo">' + esc(titulo) + '</div>' +
       (texto ? '<p class="estado-texto">' + esc(texto) + '</p>' : '');
     let html = '';
     if (modo === 'cargando') {
-      html = comun + '<div class="estado-barra" role="progressbar" aria-label="' + esc(titulo || 'Cargando') + '"><i></i></div></div>';
+      html = comun.replace('panel-estado gl-anim-entrada', 'panel-estado is-cargando gl-anim-entrada') +
+        '<div class="estado-barra" role="progressbar" aria-label="' + esc(titulo || 'Cargando') + '"><i></i></div></div>';
     } else if (modo === 'vacio') {
-      html = comun + (acciones ? '<div class="estado-accion">' + acciones + '</div>' : '') + '</div>';
+      html = comun.replace('panel-estado gl-anim-entrada', 'panel-estado is-vacio gl-anim-entrada') +
+        (acciones ? '<div class="estado-accion">' + acciones + '</div>' : '') + '</div>';
     } else if (modo === 'error') {
       html = comun.replace('panel-estado gl-anim-entrada', 'panel-estado is-error gl-anim-entrada') +
         (acciones ? '<div class="estado-accion">' + acciones + '</div>' : '') + '</div>';
     } else {
-      html = '<div class="panel-estado gl-anim-entrada">' + (o.contenido || '') + '</div>';
+      html = '<div class="panel-estado gl-anim-entrada" role="status" aria-live="polite">' +
+        (o.contenido || '') + '</div>';
     }
     contenedor.setAttribute('aria-busy', modo === 'cargando' ? 'true' : 'false');
     contenedor.innerHTML = html;

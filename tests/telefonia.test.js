@@ -10,10 +10,11 @@ describe('Telefonía internacional con libphonenumber-js', () => {
     expect(window.GL.tel.nacional('+50581085555', 'NI')).toBe('8108-5555');
   });
 
-  it('no aplica el formato de Nicaragua a otros países', () => {
-    const nacional = window.GL.tel.nacional('+12025550123', 'US');
+  it('no aplica el formato de Nicaragua a otro país del mapa', () => {
+    const nacional = window.GL.tel.nacional('+50581085555', 'CR');
     expect(nacional).not.toContain('-505');
-    expect(window.GL.tel.esValido('+12025550123', 'US')).toBe(true);
+    expect(nacional).not.toContain('+505');
+    expect(window.GL.tel.validar('+50581085555', 'CR', true).ok).toBe(false);
   });
 
   it('rechaza un número inválido para el país elegido', () => {

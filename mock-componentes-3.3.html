@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vista de componentes · FASE 3.3</title>
+  <link rel="stylesheet" href="css/tokens-3.1.css">
+  <link rel="stylesheet" href="css/estilos.css">
+  <style>
+    /* Solo maquetación del banco de pruebas; los componentes viven en estilos.css */
+    .demo { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+    .demo > header { margin-bottom: 24px; }
+    .demo h1 { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+    .demo h2 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+    .demo p.demo-intro { color: var(--gl-text-secondary); margin-top: 6px; }
+    .demo-section { margin-top: 28px; }
+    .demo-section > .seccion-head { margin-bottom: 12px; }
+    .demo-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .demo-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .demo-note { font-size: 12px; color: var(--gl-text-tertiary); margin-top: 8px; }
+    @media (max-width: 480px) { .demo { padding: 18px 12px 72px; } }
+  </style>
+</head>
+<body>
+  <div class="demo">
+    <header>
+      <h1>Sistema de componentes · FASE 3.3</h1>
+      <p class="demo-intro">Banco de pruebas local con los componentes reales del proyecto. Sin Supabase remoto.</p>
+    </header>
+
+    <section class="demo-section" data-cmp="botones">
+      <div class="seccion-head"><div class="seccion-titulo"><h2>Botones y acciones</h2><p>Familias, estados y tamaños.</p></div></div>
+      <div class="card">
+        <div class="demo-row">
+          <button type="button" class="btn" data-accion="primario">Primario</button>
+          <button type="button" class="btn sec" data-accion="secundario">Secundario</button>
+          <button type="button" class="btn contorno" data-accion="contorno">Contorno</button>
+          <button type="button" class="btn texto" data-accion="texto">Texto</button>
+          <button type="button" class="btn peligro" data-accion="peligro">Peligro</button>
+          <button type="button" class="btn verde" data-accion="exito">Éxito</button>
+          <button type="button" class="btn-icon" aria-label="Añadir jugador" data-accion="icono"><i data-lucide="plus" style="width:20px;height:20px"></i></button>
+          <button type="button" class="btn sm" data-accion="tabla">Acción de tabla</button>
+          <button type="button" class="btn" disabled data-accion="deshabilitado">Deshabilitado</button>
+          <button type="button" class="btn cargando" aria-busy="true" disabled data-accion="cargando"><span class="gl-boton-spinner" aria-hidden="true"></span>Guardando…</button>
+        </div>
+        <p class="demo-note">Los eventos de demostración solo marcan el botón pulsado; no sustituyen acciones reales.</p>
+      </div>
+    </section>
+
+    <section class="demo-section" data-cmp="formularios">
+      <div class="seccion-head"><div class="seccion-titulo"><h2>Formularios y campos</h2><p>Etiquetas, ayuda, error y estados.</p></div></div>
+      <div class="demo-grid">
+        <form class="card" onsubmit="return false">
+          <label class="campo">
+            <span>Nombre del jugador <b class="requerido" aria-hidden="true">*</b></span>
+            <input class="input" type="text" value="CR7_LATINO" required>
+            <small class="campo-ayuda">Nombre con el que aparece en FC Mobile.</small>
+          </label>
+          <label class="campo">
+            <span>Correo electrónico <b class="requerido" aria-hidden="true">*</b></span>
+            <input class="input estado-mal" type="email" value="correo-invalido" aria-invalid="true" aria-describedby="demo-correo-estado" required>
+            <span class="campo-estado mal" id="demo-correo-estado" role="alert"><i data-lucide="circle-alert" style="width:14px;height:14px"></i>Introduce un correo válido, por ejemplo nombre@correo.com.</span>
+          </label>
+          <label class="campo">
+            <span>Torneo</span>
+            <select class="input">
+              <option>Liga Apertura 2026</option>
+              <option>Liga Clausura 2026</option>
+            </select>
+          </label>
+        </form>
+        <form class="card" onsubmit="return false">
+          <label class="campo"><span>Buscar jugador</span><input class="input" type="search" placeholder="Nombre o código"></label>
+          <label class="campo"><span>Fecha del partido</span><input class="input" type="date" value="2026-11-25"></label>
+          <label class="campo"><span>Observaciones</span><textarea class="input" rows="2" placeholder="Detalles opcionales"></textarea></label>
+          <div class="demo-row">
+            <label class="toggle"><input type="checkbox" checked> Activo</label>
+            <label class="toggle"><input type="radio" name="demo-radio" checked> Local</label>
+            <label class="toggle"><input type="radio" name="demo-radio"> Visita</label>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="demo-section" data-cmp="tarjetas-kpi">
+      <div class="seccion-head"><div class="seccion-titulo"><h2>Tarjetas, paneles y KPI</h2><p>Jerarquía y densidad según función.</p></div></div>
+      <div class="grid cuatro">
+        <article class="card"><div class="metrica"><span class="ico"><i data-lucide="users" style="width:20px;height:20px"></i></span><div><div class="valor">128</div><div class="label">Jugadores</div></div></div></article>
+        <article class="card"><div class="metrica"><span class="ico"><i data-lucide="trophy" style="width:20px;height:20px"></i></span><div><div class="valor">6</div><div class="label">Torneos</div></div></div></article>
+        <article class="card"><div class="metrica"><span class="ico"><i data-lucide="target" style="width:20px;height:20px"></i></span><div><div class="valor">42</div><div class="label">Partidos</div></div></div></article>
+        <article class="card"><div class="metrica"><span class="ico"><i data-lucide="chart-no-axes-column" style="width:20px;height:20px"></i></span><div><div class="valor">1.284</div><div class="label">Puntos</div></div></div></article>
+      </div>
+      <div class="demo-grid" style="margin-top:14px">
+        <article class="card">
+          <div class="card-titulo"><i data-lucide="crown" style="width:18px;height:18px"></i><span>Top goleadores</span></div>
+          <ul class="lista-top">
+            <li><span class="rank">1</span><span class="avatar-sm">CR</span><span class="nombre">CR7_LATINO</span><span class="cant">18</span></li>
+            <li><span class="rank">2</span><span class="avatar-sm">LM</span><span class="nombre">LIONEL_M10</span><span class="cant">15</span></li>
+          </ul>
+        </article>
+        <article class="card">
+          <div class="card-titulo"><i data-lucide="calendar-days" style="width:18px;height:18px"></i><span>Próximos partidos</span></div>
+          <div class="partidos-lista">
+            <div class="partido-card"><span class="equipo">CR7_LATINO</span><span class="marcador">2 : 1</span><span class="equipo visita">LIONEL_M10</span></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="demo-section" data-cmp="tablas">
+      <div class="seccion-head"><div class="seccion-titulo"><h2>Tablas y listados</h2><p>Encabezado, filas, acciones y paginación.</p></div><div class="seccion-acciones"><button type="button" class="btn sm" data-accion="exportar">Exportar</button></div></div>
+      <div class="tabla-wrap" tabindex="0" role="region" aria-label="Tabla de jugadores de ejemplo">
+        <table class="tabla">
+          <thead><tr><th class="izq">Jugador</th><th>Estado</th><th class="num">PJ</th><th class="num">Pts</th><th class="col-expand"><span class="sr-only">Acciones</span></th></tr></thead>
+          <tbody>
+            <tr><td class="izq"><div class="jugador-celda"><span class="pos-badge clasifica">1</span><span>CR7_LATINO</span></div></td><td><span class="badge green">Activo</span></td><td class="num">12</td><td class="num">36</td><td><button type="button" class="btn-icono" aria-label="Editar CR7_LATINO"><i data-lucide="pencil" style="width:16px;height:16px"></i></button></td></tr>
+            <tr><td class="izq"><div class="jugador-celda"><span class="pos-badge medio">2</span><span>LIONEL_M10</span></div></td><td><span class="badge orange">Pendiente</span></td><td class="num">12</td><td class="num">33</td><td><button type="button" class="btn-icono" aria-label="Editar LIONEL_M10"><i data-lucide="pencil" style="width:16px;height:16px"></i></button></td></tr>
+            <tr class="fila-mia"><td class="izq"><div class="jugador-celda"><span class="pos-badge descenso">3</span><span>MI_JUGADOR</span></div></td><td><span class="badge red">Sancionado</span></td><td class="num">11</td><td class="num">28</td><td><button type="button" class="btn-icono" aria-label="Editar MI_JUGADOR"><i data-lucide="pencil" style="width:16px;height:16px"></i></button></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="paginacion" aria-label="Paginación"><button type="button" class="btn-pag" aria-label="Página anterior">‹</button><button type="button" class="btn-pag activo" aria-current="page">1</button><button type="button" class="btn-pag">2</button><button type="button" class="btn-pag" aria-label="Página siguiente">›</button></div>
+    </section>
+
+    <section class="demo-section" data-cmp="modales">
+      <div class="seccion-head"><div class="seccion-titulo"><h2>Modales y diálogos</h2><p>Encabezado, cierre, contenido y acciones.</p></div></div>
+      <div class="card demo-row">
+        <button type="button" class="btn" id="demo-abrir-modal">Abrir modal</button>
+        <button type="button" class="btn sec" id="demo-abrir-dialogo">Abrir diálogo</button>
+      </div>
+    </section>
+
+    <section class="demo-section" data-cmp="estados">
+      <div class="seccion-head"><div class="seccion-titulo"><h2>Estados de interfaz</h2><p>Carga, vacío, error y skeleton.</p></div></div>
+      <div class="demo-grid">
+        <div id="demo-estado-cargando"></div>
+        <div id="demo-estado-vacio"></div>
+        <div id="demo-estado-error"></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="skeleton-lista" aria-hidden="true">
+          <div class="skeleton-fila"><span class="skeleton" style="width:18%"></span><span class="skeleton" style="width:42%"></span><span class="skeleton" style="width:12%"></span></div>
+          <div class="skeleton-fila"><span class="skeleton" style="width:14%"></span><span class="skeleton" style="width:36%"></span><span class="skeleton" style="width:16%"></span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-root"></div>
+
+  <script>
+    window.supabase = { createClient: function () { return null; } };
+    window.lucide = {
+      createIcons: function () {
+        document.querySelectorAll('i[data-lucide]:not([data-gl-icon])').forEach(function (i) {
+          var w = i.style.width || '18px';
+          i.setAttribute('data-gl-icon', '');
+          i.innerHTML = '<svg viewBox="0 0 24 24" width="' + w + '" height="' + w + '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l3 2"></path></svg>';
+        });
+      }
+    };
+  </script>
+  <script src="js/core/gl.js"></script>
+  <script src="js/core/ui-estados.js"></script>
+  <script>
+    document.querySelectorAll('[data-accion]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (b.disabled) return;
+        b.dataset.pulsado = 'true';
+      });
+    });
+    document.getElementById('demo-abrir-modal').addEventListener('click', function () {
+      GL.abrirModal({
+        titulo: 'Editar jugador',
+        cuerpo: '<label class="campo"><span>Nombre</span><input class="input" value="CR7_LATINO"></label><p class="nota-pie">Los cambios se guardan al confirmar.</p>',
+        acciones: '<button type="button" class="btn sec" data-cerrar>Cancelar</button><button type="button" class="btn" data-cerrar>Guardar</button>'
+      });
+    });
+    document.getElementById('demo-abrir-dialogo').addEventListener('click', function () {
+      GL.dialogo({
+        titulo: 'Eliminar jugador',
+        icono: 'triangle-alert',
+        tipo: 'peligro',
+        ancho: 'sm',
+        consecuencias: '<ul><li>Se perderá su historial en la temporada.</li></ul>',
+        cuerpo: '<p class="modal-texto">Esta acción no se puede deshacer.</p>',
+        confirmTexto: 'Eliminar'
+      });
+    });
+    GL.estado(document.getElementById('demo-estado-cargando'), 'cargando', { titulo: 'Cargando jugadores', texto: 'Estamos preparando la lista de participantes.' });
+    GL.estado(document.getElementById('demo-estado-vacio'), 'vacio', { titulo: 'Sin resultados', texto: 'No hay jugadores con ese filtro.', icono: 'search', acciones: [{ etiqueta: 'Limpiar filtros', tipo: 'sec', accion: function () {} }] });
+    GL.estado(document.getElementById('demo-estado-error'), 'error', { titulo: 'No pudimos cargar', texto: 'Comprueba tu conexión e inténtalo nuevamente.', icono: 'circle-alert', acciones: [{ etiqueta: 'Reintentar', tipo: '', accion: function () {} }] });
+    lucide.createIcons();
+  </script>
+</body>
+</html>

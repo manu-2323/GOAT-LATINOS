@@ -2,14 +2,80 @@
 // Crea o elimina (action:'delete') un usuario de Auth y su fila en `jugadores`
 // usando la SERVICE ROLE. Verifica que quien llama sea administrador.
 // La clave secreta NUNCA se expone al frontend.
+// 1.2.1: el teléfono se valida en el servidor con la MISMA versión fija de
+// libphonenumber-js que usa el frontend. `telefono_verificado` nunca se escribe
+// desde aquí: la titularidad solo la confirma una persona.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import * as phone from 'https://esm.sh/libphonenumber-js@1.13.17/min';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-version, x-supabase-client-info',
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
+
+// Los 16 países activos del mapa 1.2.1. Un prefijo fuera de esta lista no
+// puede acreditarse como "válido para el plan".
+const PAISES_TELEFONO = new Set([
+  'CR', 'NI', 'MX', 'GT', 'HN', 'SV', 'CO', 'EC',
+  'PA', 'PE', 'VE', 'BO', 'AR', 'CL', 'PY', 'BR'
+]);
+
+function camposTelefono(b: any) {
+  const e164 = String(b.telefono_e164 || '').trim();
+  const pais = String(b.pais_telefono || b.pais || '').toUpperCase();
+  const nacional = String(b.telefono_nacional || '').trim();
+
+  if (!/^\+[1-9]\d{7,14}$/.test(e164)) {
+    throw new Error('El teléfono debe enviarse en formato E.164 válido (con +).');
+  }
+  if (!PAISES_TELEFONO.has(pais)) {
+    throw new Error('El país del teléfono no está habilitado.');
+  }
+  if (b.telefono_valido_plan !== true) {
+    throw new Error('El teléfono debe tener formato válido para el plan.');
+  }
+
+  const digitos = e164.slice(1);
+  // El campo histórico se conserva solo como dígitos y debe coincidir.
+  if (b.telefono) {
+    const legado = String(b.telefono).replace(/\D/g, '');
+    if (legado && legado !== digitos) {
+      throw new Error('El teléfono y su representación E.164 no coinciden.');
+    }
+  }
+
+  const parsed = phone.parsePhoneNumberFromString(e164);
+  if (!parsed || !parsed.isValid()) {
+    throw new Error('El teléfono no es válido según libphonenumber-js.');
+  }
+  if (parsed.country && String(parsed.country).toUpperCase() !== pais) {
+    throw new Error('El prefijo del teléfono no corresponde al país elegido.');
+  }
+
+  // El campo nacional no puede quedar como E.164 cuando el formulario no lo
+  // envió. Se recalcula con la misma librería y el país ya validado.
+  const nacionalCalculado = (() => {
+    const objeto = phone.parsePhoneNumberFromString(e164, pais);
+    if (!objeto) return '';
+    try {
+      return typeof objeto.formatNational === 'function'
+        ? objeto.formatNational()
+        : objeto.format('NATIONAL');
+    } catch (_) {
+      return '';
+    }
+  })();
+
+  return {
+    telefono: digitos,
+    telefono_e164: e164,
+    telefono_nacional: nacional || nacionalCalculado,
+    pais_telefono: pais,
+    telefono_valido_plan: true
+  };
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -77,6 +143,7 @@ Deno.serve(async (req) => {
 
     if (action !== 'create') throw new Error('Acción no válida');
     if (!b.email || !b.password || !b.nombre_usuario) throw new Error('Faltan datos obligatorios');
+    const telefono = camposTelefono(b);
 
     // La zona IANA se valida en el servidor: Intl la rechaza si no existe.
     let zonaHoraria = 'America/Managua';
@@ -93,7 +160,11 @@ Deno.serve(async (req) => {
       email: b.email,
       password: b.password,
       email_confirm: true,
-      user_metadata: { nombre_usuario: b.nombre_usuario }
+      user_metadata: {
+        nombre_usuario: b.nombre_usuario,
+        pais: b.pais || 'NI',
+        ...telefono
+      }
     });
     if (errAuth) throw errAuth;
 
@@ -102,9 +173,9 @@ Deno.serve(async (req) => {
         user_id: creado.user.id,
         nombre_usuario: b.nombre_usuario,
         email: String(b.email || '').trim().toLowerCase(),
-        pais: b.pais || 'AR',
+        pais: b.pais || 'NI',
         zona_horaria: zonaHoraria,
-        telefono: b.telefono || '',
+        ...telefono,
         rol: 'jugador',
         activo: true,
         suspendido: false,

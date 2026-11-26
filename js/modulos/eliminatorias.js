@@ -321,11 +321,11 @@
         columnas +
         '<div class="bracket-col"><h3>Campeón</h3>' +
           '<div class="bracket-cruce" style="border-color:rgba(245,197,24,.5);text-align:center;padding:18px 8px">' +
-            icono('trophy', 30, 'dorado') +
-            '<div style="font-family:Rajdhani;font-size:18px;font-weight:700;margin-top:6px">' +
+            icono('trophy', 32, 'dorado') +
+            '<div style="font-family:var(--gl-font-sans);font-size:18px;font-weight:700;margin-top:6px">' +
               esc(campeon ? GL.nombreJugador(campeon) : 'Por definir') + '</div></div>' +
           '<div class="bracket-cruce" style="text-align:center"><small class="muted">Tercer lugar</small>' +
-            '<div style="font-family:Rajdhani;font-weight:700;color:var(--accent-gold)">' +
+            '<div style="font-family:var(--gl-font-sans);font-weight:700;color:var(--accent-gold)">' +
               esc(tercero ? GL.nombreJugador(tercero) : 'Por definir') + '</div></div>' +
         '</div>' +
       '</div>';
@@ -361,10 +361,10 @@
     if (c.extra && c.extra.estado !== 'pendiente') {
       const re = GL.resultado(c.extra);
       extraHtml = '<div style="font-size:10px;color:var(--accent-blue);margin-top:4px">' +
-        icono('zap', 11) + ' Partido extra: ' + re.gf + '-' + re.gc + '</div>';
+        icono('zap', 14) + ' Partido extra: ' + re.gf + '-' + re.gc + '</div>';
     } else if (c.necesitaExtra && GL.esAdmin() && !c.extra) {
       extraHtml = '<button type="button" class="btn sm mt" style="width:100%" data-generar-extra="' +
-        BASE[c.fase] + '|' + idx + '">' + icono('plus-circle', 13) + 'Crear partido extra</button>';
+        BASE[c.fase] + '|' + idx + '">' + icono('plus-circle', 14) + 'Crear partido extra</button>';
     } else if (c.necesitaExtra && c.extra) {
       extraHtml = '<div style="font-size:10px;color:var(--accent-gold);margin-top:4px">Partido extra pendiente de resultado.</div>';
     }
@@ -374,14 +374,14 @@
     if (GL.esAdmin()) {
       if (hayRondaPosterior) {
         btnEditar = '<button type="button" class="btn sm sec mt" style="width:100%;opacity:.5" data-editar-cruce-bloqueado="' +
-          BASE[c.fase] + '|' + idx + '">' + icono('lock', 13) + 'Edición bloqueada</button>';
+          BASE[c.fase] + '|' + idx + '">' + icono('lock', 14) + 'Edición bloqueada</button>';
       } else if (c.extra && c.extra.estado !== 'pendiente') {
         // Si el partido extra ya se jugó, bloquear edición de ida/vuelta
         btnEditar = '<button type="button" class="btn sm sec mt" style="width:100%;opacity:.5" data-editar-cruce-bloqueado="' +
-          BASE[c.fase] + '|' + idx + '">' + icono('lock', 13) + 'Extra resuelto — bloqueado</button>';
+          BASE[c.fase] + '|' + idx + '">' + icono('lock', 14) + 'Extra resuelto — bloqueado</button>';
       } else {
         btnEditar = '<button type="button" class="btn sm sec mt" style="width:100%" data-editar-cruce="' +
-          BASE[c.fase] + '|' + idx + '">' + icono('pencil', 13) + 'Editar marcador</button>';
+          BASE[c.fase] + '|' + idx + '">' + icono('pencil', 14) + 'Editar marcador</button>';
       }
     }
 
@@ -468,7 +468,7 @@
           '<label class="campo"><span>' + esc(GL.nombreJugador(c.a)) + ' (visita)</span>' +
             '<input class="input" type="number" min="0" max="30" step="1" id="ec-v-b" value="' + (c.vuelta.goles_visitante ?? 0) + '"></label>' +
         '</div>' +
-        '<div id="ec-preview" style="margin-top:12px;padding:10px;background:var(--bg-hover);border-radius:8px;font-family:Rajdhani;font-size:15px;text-align:center"></div>',
+        '<div id="ec-preview" style="margin-top:12px;padding:10px;background:var(--bg-hover);border-radius:8px;font-family:var(--gl-font-sans);font-size:15px;text-align:center"></div>',
       acciones:
         '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
         '<button type="button" class="btn" id="ec-ok">Guardar resultado</button>',

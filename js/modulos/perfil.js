@@ -15,8 +15,24 @@
         if (!GL.torneo()) { el.innerHTML = GL.vacio('No hay torneo activo todavía.', 'trophy', null); iniciarIconos(); return; }
         if (!Auth.jugador || (!GL.esAdmin() && !GL.grupoDeJugador(Auth.jugador.id))) {
           el.innerHTML = pendiente();
-        const btn = el.querySelector('[data-actualizar-nombre]');
-        if (btn) btn.addEventListener('click', () => editarPerfil(el, Auth.jugador || {}));
+          /* 2.2 — Si la cuenta Auth existe pero el perfil no se pudo completar
+             por el teléfono, se ofrece recuperación con otro número. */
+          const btnRec = el.querySelector('[data-recuperar-telefono]');
+          if (btnRec) btnRec.addEventListener('click', () => recuperarTelefono(el));
+          const btnRetry = el.querySelector('[data-reintentar-perfil]');
+          if (btnRetry) btnRetry.addEventListener('click', async () => {
+            btnRetry.disabled = true;
+            try {
+              await Auth.cargarPerfil(true);
+              await GL.cargarContexto(true);
+              Mod.render(el);
+            } catch (e) {
+              Auth._marcarErrorPerfil(e);
+              Mod.render(el);
+            }
+          });
+          const btn = el.querySelector('[data-actualizar-nombre]');
+          if (btn) btn.addEventListener('click', () => editarPerfil(el, Auth.jugador || {}));
           iniciarIconos(); return;
         }
         if (!Mod.jugadorId || !(Auth.jugador.rol === 'admin' && Mod.jugadorId !== Auth.jugador.id)) {
@@ -38,11 +54,11 @@
                 GL.jugadores().map(x => '<option value="' + x.id + '"' + (x.id === j.id ? ' selected' : '') + '>' +
                   esc(x.nombre_usuario) + '</option>').join('') + '</select></label>' : '') +
               (Mod.jugadorId === Auth.jugador.id ? '<button type="button" class="btn sec" data-editar>' +
-                icono('pencil', 15) + 'Editar perfil</button>' : '') +
+                icono('pencil', 16) + 'Editar perfil</button>' : '') +
               (Mod.jugadorId === Auth.jugador.id && window.OnboardingTour ? '<button type="button" class="btn sec" data-ver-tour>' +
-                icono('help-circle', 15) + 'Ver tour</button>' : '') +
+                icono('help-circle', 16) + 'Ver tour</button>' : '') +
               (Mod.jugadorId === Auth.jugador.id ? '<button type="button" class="btn peligro" data-eliminar-cuenta>' +
-                icono('trash-2', 15) + 'Eliminar mi cuenta</button>' : '') +
+                icono('trash-2', 16) + 'Eliminar mi cuenta</button>' : '') +
             '</div></div>' +
             (Mod.jugadorId === Auth.jugador.id && window.OnboardingTour
               ? OnboardingTour.htmlBarraPerfil(j) : '') +
@@ -53,8 +69,9 @@
                 '<span class="pais-celda">' + GL.banderaHTML(j.pais, 18) +
                   '<span class="codigo-pais">' + esc(j.pais || '—') + '</span></span>' +
                 '<span class="muted" style="font-size:12px" title="' + esc(GL.etiquetaZona(GL.zonaJugador(j))) + '">' + esc(GL.horarioJugador(j)) + '</span>' +
-                 ((j.telefono && (GL.esAdmin() || (Auth.usuario && j.user_id === Auth.usuario.id)))
+                 ((GL.tel.e164Jugador(j) && (GL.esAdmin() || (Auth.usuario && j.user_id === Auth.usuario.id)))
                   ? GL.linkWhatsapp(j, j.nombre_usuario) : '') +
+                estadoTelefonoHTML(j) +
                 (pos ? GL.badge('Posición ' + pos + ' · Grupo ' + GL.letraGrupo(grupo), 'gold', 'trophy') : '') +
                 (j.suspendido || j.activo === false ? GL.badge('Suspendido', 'red', 'triangle-alert') : GL.badge('Activo', 'green', 'circle-check')) +
               '</div></div></div></div>' +
@@ -81,12 +98,12 @@
             statCard('Puntos', 'award', fila.pts || 0, 'dorado') +
           '</div>' +
           '<div class="grid dos">' +
-            '<div class="card"><div class="card-titulo">' + icono('history', 19) + 'Historial de partidos</div>' +
+            '<div class="card"><div class="card-titulo">' + icono('history', 20) + 'Historial de partidos</div>' +
               '<div class="tabla-scroll"><table class="tabla"><thead><tr><th>J#</th><th class="izq">Rival</th><th>L/V</th><th>Resultado</th><th>Dif</th></tr></thead><tbody>' +
               historial(mios, j.id) + '</tbody></table></div></div>' +
             '<div>' +
-              '<div class="card"><div class="card-titulo">' + icono('calendar', 19) + 'Próximo partido</div>' + proximo(todos, j) + '</div>' +
-              '<div class="card mt"><div class="card-titulo">' + icono('swords', 19) + 'Head to head</div>' +
+              '<div class="card"><div class="card-titulo">' + icono('calendar', 20) + 'Próximo partido</div>' + proximo(todos, j) + '</div>' +
+              '<div class="card mt"><div class="card-titulo">' + icono('swords', 20) + 'Head to head</div>' +
                 '<label class="campo"><span>Elegí un rival del grupo</span><select class="input" id="h2h-rival">' +
                   '<option value="">Seleccionar…</option>' +
                   GL.jugadores(grupo && grupo.id).filter(x => x.id !== j.id).map(x =>
@@ -119,20 +136,126 @@
 
   function enlazar(el) { el.querySelectorAll('[data-login]').forEach(b => b.addEventListener('click', () => PantallaAuth.mostrar(() => Mod.render(el)))); }
 
+  /* Formato válido NO equivale a titularidad confirmada. Este distintivo hace
+     visible la diferencia sin escribir telefono_verificado desde el frontend. */
+  function estadoTelefonoHTML(j) {
+    const e164 = GL.tel.e164Jugador(j);
+    if (!e164) return '';
+    if (j.telefono_verificado === true) {
+      return GL.badge('Titularidad confirmada', 'green', 'shield-check');
+    }
+    if (j.telefono_valido_plan === true || GL.tel.esValido(e164, GL.tel.paisJugador(j))) {
+      return GL.badge('Formato válido · titularidad sin confirmar', 'neutral', 'circle-check');
+    }
+    return GL.badge('Teléfono en revisión', 'orange', 'triangle-alert');
+  }
+
   function pendiente() {
-    const nombre = (Auth.usuario.user_metadata && Auth.usuario.user_metadata.nombre_usuario) ||
-      (Auth.usuario.user_metadata && Auth.usuario.user_metadata.nombre) || Auth.usuario.email;
-    return '<div class="estado-vacio">' + icono('hourglass', 40) +
-      '<h2>Tu cuenta está pendiente de aprobación</h2>' +
-      '<p>Registraste el nombre <strong class="dorado">' + esc(nombre) + '</strong>. El administrador te asignará tu nombre oficial y tu grupo pronto.</p>' +
+    const meta = Auth.usuario.user_metadata || {};
+    const nombre = meta.nombre_usuario || meta.nombre || Auth.usuario.email;
+    if (Auth.perfilPendienteTelefono) {
+      const estado = Auth.perfilPendienteTelefono;
+      const conflicto = estado.motivo === 'telefono_duplicado';
+      const errorReal = estado.motivo === 'fallo_recuperacion' || estado.motivo === 'error_carga_perfil';
+      const titulo = conflicto
+        ? 'Tu cuenta existe, pero el teléfono está en uso'
+        : errorReal
+          ? 'No se pudo completar tu perfil'
+          : 'Tu cuenta existe, pero el perfil quedó pendiente';
+      const texto = conflicto
+        ? 'El teléfono guardado en tu cuenta ya pertenece a otro jugador. No se creó otra cuenta ni se modificó el perfil ajeno.'
+        : errorReal
+          ? 'La cuenta de autenticación existe, pero falló la carga o la recuperación del perfil. No se creó ningún perfil ajeno.'
+          : 'No pudimos completar tu perfil con los datos guardados en tu cuenta.';
+      return '<div class="estado-vacio">' + icono(errorReal ? 'circle-x' : 'triangle-alert', 40) +
+        '<h2>' + titulo + '</h2>' +
+        '<p>' + texto + '</p>' +
+        (estado.detalle ? '<p class="nota-pie">' + esc(estado.detalle) + '</p>' : '') +
+        '<p>Podés elegir otro teléfono para finalizar el registro sin crear una cuenta nueva.</p>' +
+        '<button type="button" class="btn" data-recuperar-telefono>' +
+          icono('phone', 16) + 'Completar con otro teléfono</button>' +
+          (errorReal
+            ? ' <button type="button" class="btn sec" data-reintentar-perfil>' +
+                icono('rotate-cw', 16) + 'Reintentar carga del perfil</button>'
+            : '') +
+        '</div>';
+    }
+    return '<div class="estado-vacio">' + icono('hourglass', 32) +
+      '<h2>Tu registro aún no está completo</h2>' +
+      '<p>Registraste el nombre <strong class="dorado">' + esc(nombre) + '</strong>. ' +
+      'Completá tus datos desde el formulario; tu perfil se crea automáticamente con el rol de jugador y el torneo activo.</p>' +
       '<button type="button" class="btn" data-actualizar-nombre>' + icono('pencil', 16) + 'Completar mi perfil</button>' +
       '</div>';
+  }
+
+  /* Recuperación segura: actualiza SOLO el metadata del usuario autenticado y
+     reintenta la creación del perfil. La titularidad nunca se escribe aquí. */
+  function recuperarTelefono(el) {
+    const meta = (Auth.usuario && Auth.usuario.user_metadata) || {};
+    const paisInicial = String(meta.pais_telefono || meta.pais || 'NI').toUpperCase();
+    const anterior = String(meta.telefono_e164 || '');
+    const m = GL.abrirModal({
+      titulo: 'Completar mi perfil',
+      cuerpo: '<p class="modal-texto">Tu cuenta de autenticación existe. Elegí un teléfono que no esté registrado por otro jugador para completar tu perfil. ' +
+        'No se creará otra cuenta ni se sobrescribirá ningún perfil ajeno.</p>' +
+        (anterior ? '<p class="nota-pie">Teléfono en conflicto: ' + esc(anterior) + '</p>' : '') +
+        '<label class="campo"><span>País del teléfono</span>' +
+          '<select class="input" id="rec-pais">' + GL.opcionesPais(paisInicial, true) + '</select></label>' +
+        '<label class="campo"><span>Nuevo teléfono</span>' +
+          '<div class="tel-wrap">' +
+            '<button type="button" class="tel-prefijo" id="rec-prefijo" aria-label="Código de país">' +
+              (GL.tel.prefijo(paisInicial) ? '+' + GL.tel.prefijo(paisInicial) : '+?') + '</button>' +
+            '<input class="input" type="tel" id="rec-tel" maxlength="24" placeholder="8108-5555">' +
+          '</div>' +
+          '<div class="campo-estado" id="rec-estado" aria-live="polite"></div></label>',
+      acciones: '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
+        '<button type="button" class="btn" id="rec-guardar">Guardar y completar</button>',
+      onAbrir(fondo, cerrar) {
+        const pais = fondo.querySelector('#rec-pais');
+        const prefijo = fondo.querySelector('#rec-prefijo');
+        const tel = fondo.querySelector('#rec-tel');
+        const estado = fondo.querySelector('#rec-estado');
+        const actualizar = () => {
+          prefijo.textContent = GL.tel.prefijo(pais.value)
+            ? '+' + GL.tel.prefijo(pais.value) : '+?';
+          if (!tel.value.trim()) { PantallaAuth.estado(estado, '', 'neutral', 'info'); return; }
+          const v = GL.tel.validar(tel.value.trim(), pais.value, false);
+          PantallaAuth.estado(estado, v.ok ? 'Formato válido: ' + v.e164 : v.mensaje,
+            v.ok ? 'bien' : 'mal', v.ok ? 'circle-check-big' : 'circle-x');
+        };
+        pais.addEventListener('change', actualizar);
+        tel.addEventListener('input', actualizar);
+        fondo.querySelector('#rec-guardar').addEventListener('click', async () => {
+          const boton = fondo.querySelector('#rec-guardar');
+          boton.disabled = true;
+          try {
+            await Auth.recuperarPerfilConTelefono(tel.value.trim(), pais.value);
+            cerrar();
+            await GL.cargarContexto(true);
+            GL.notificar('Perfil completado. Ya podés usar tu cuenta.', 'exito');
+            Mod.render(el);
+          } catch (e) {
+            console.error('[perfil] recuperación:', e);
+            estado.textContent = (e && e.message) || 'No se pudo completar el perfil.';
+            GL.notificar(estado.textContent, 'error');
+            boton.disabled = false;
+          }
+        });
+      }
+    });
+    iniciarIconos();
+    return m;
   }
 
   /* Editor de perfil: nombre, país, teléfono y foto con vista previa. */
   function editarPerfil(el, j) {
     const nombre = j.nombre_usuario ||
       (Auth.usuario && Auth.usuario.user_metadata && Auth.usuario.user_metadata.nombre_usuario) || '';
+    const paisTel = GL.tel.paisJugador(j) || j.pais || 'NI';
+    const e164Actual = GL.tel.e164Jugador(j);
+    const telInicial = e164Actual
+      ? (GL.tel.nacional(e164Actual, paisTel) || e164Actual)
+      : String(j.telefono || '');
     let archivo = null;
     let quitarFoto = false;
     const m = GL.abrirModal({
@@ -141,15 +264,26 @@
       cuerpo: '<div class="perfil-foto">' +
           GL.avatarHTML(j, 'avatar') +
           '<div><strong>' + esc(nombre) + '</strong><p class="nota-pie">JPG o PNG · máximo 2 MB</p></div>' +
-          '<div class="acciones"><label class="btn sec sm" for="avatar-file">' + icono('camera', 15) + 'Elegir foto</label>' +
+          '<div class="acciones"><label class="btn sec sm" for="avatar-file">' + icono('camera', 16) + 'Elegir foto</label>' +
           '<input type="file" id="avatar-file" accept="image/jpeg,image/png">' +
-          (j.avatar_url ? '<button type="button" class="btn peligro sm" id="quitar-foto">' + icono('trash-2', 15) + 'Quitar foto</button>' : '') +
+          (j.avatar_url ? '<button type="button" class="btn peligro sm" id="quitar-foto">' + icono('trash-2', 16) + 'Quitar foto</button>' : '') +
           '</div></div>' +
         '<div class="campo-row mt">' +
           '<label class="campo"><span>Nombre en FC Mobile</span><input class="input" id="perfil-nombre" maxlength="32" value="' + esc(nombre) + '"></label>' +
-          '<label class="campo"><span>País</span><select class="input" id="perfil-pais">' + GL.opcionesPais(j.pais, true) + '</select></label>' +
-          '<label class="campo"><span>Teléfono / WhatsApp</span><input class="input" type="tel" id="perfil-tel" maxlength="20" value="' + esc(j.telefono || '') + '" placeholder="9999-9999"></label>' +
+          '<label class="campo"><span>País</span><select class="input" id="perfil-pais">' +
+            GL.opcionesPais(j.pais || 'NI', false) + '</select></label>' +
+          '<label class="campo"><span>País del teléfono</span><select class="input" id="perfil-tel-pais">' +
+            GL.opcionesPais(paisTel, true) + '</select></label>' +
         '</div>' +
+        '<label class="campo"><span>Teléfono / WhatsApp</span>' +
+          '<div class="tel-wrap">' +
+            '<button type="button" class="tel-prefijo" id="perfil-tel-prefijo" aria-label="Código de país">' +
+              (GL.tel.prefijo(paisTel) ? '+' + GL.tel.prefijo(paisTel) : '+?') + '</button>' +
+            '<input class="input" type="tel" id="perfil-tel" maxlength="24" value="' + esc(telInicial) + '" placeholder="8108-5555">' +
+          '</div>' +
+          '<div class="campo-estado" id="perfil-tel-estado" aria-live="polite"></div>' +
+          '<small style="color:var(--text-secondary);font-size:11px">Validar el formato no confirma la titularidad del número.</small>' +
+        '</label>' +
         '<label class="campo"><span>Ciudad o zona horaria</span><select class="input" id="perfil-zona" required>' +
           GL.opcionesZonaHoraria(j.zona_horaria, j.pais || (Auth.jugador && Auth.jugador.pais)) +
         '</select></label>' +
@@ -192,9 +326,62 @@
         const pais = fondo.querySelector('#perfil-pais');
         const zona = fondo.querySelector('#perfil-zona');
         const horario = fondo.querySelector('#perfil-horario');
-        pais.addEventListener('change', () => GL.actualizarZona(zona, pais.value, horario));
+        const tel = fondo.querySelector('#perfil-tel');
+        const telPais = fondo.querySelector('#perfil-tel-pais');
+        const telPrefijo = fondo.querySelector('#perfil-tel-prefijo');
+        const telEstado = fondo.querySelector('#perfil-tel-estado');
+        let paisAnterior = telPais.value;
+
+        const actualizarPrefijo = () => {
+          const pref = GL.tel.prefijo(telPais.value);
+          telPrefijo.textContent = pref ? '+' + pref : '+?';
+        };
+        const validarTel = () => {
+          const valor = tel.value.trim();
+          if (!valor) {
+            PantallaAuth.estado(telEstado, e164Actual ? 'Si dejás el campo vacío se quitará el teléfono.' : '', 'neutral', 'info');
+            return { ok: true, e164: '' };
+          }
+          const v = GL.tel.validar(valor, telPais.value, false);
+          if (!v.ok) {
+            PantallaAuth.estado(telEstado, v.mensaje + ' Revisá el país del teléfono.', 'mal', 'circle-x');
+          } else {
+            PantallaAuth.estado(telEstado,
+              'Formato válido: ' + v.e164 + '. La titularidad no se modifica desde el perfil.',
+              'bien', 'circle-check-big');
+          }
+          return v;
+        };
+
+        pais.addEventListener('change', () => {
+          GL.actualizarZona(zona, pais.value, horario);
+          if (!telPais.value || telPais.value === paisAnterior) {
+            telPais.value = pais.value || 'NI';
+            paisAnterior = telPais.value;
+            actualizarPrefijo();
+            validarTel();
+          }
+        });
+        telPais.addEventListener('change', () => {
+          paisAnterior = telPais.value;
+          actualizarPrefijo();
+          validarTel();
+        });
+        telPrefijo.addEventListener('click', () => {
+          const opciones = Array.from(telPais.options).map(x => x.value).filter(Boolean);
+          const indice = opciones.indexOf(telPais.value);
+          telPais.value = opciones[(indice + 1 + opciones.length) % opciones.length] || opciones[0];
+          telPais.dispatchEvent(new Event('change'));
+        });
+        tel.addEventListener('input', validarTel);
+        tel.addEventListener('blur', () => {
+          const v = GL.tel.validar(tel.value.trim(), telPais.value, false);
+          if (v.ok && v.nacional) tel.value = v.nacional;
+        });
         zona.addEventListener('change', () => GL.actualizarZona(zona, pais.value, horario, true));
         GL.actualizarZona(zona, pais.value, horario, true);
+        actualizarPrefijo();
+        if (telInicial) validarTel();
         fondo.querySelector('#perfil-guardar').addEventListener('click', async () => {
           const boton = fondo.querySelector('#perfil-guardar');
           const telRaw = fondo.querySelector('#perfil-tel').value.trim();
@@ -204,8 +391,8 @@
           if (!zonaVal) {
             GL.notificar('Elegí tu ciudad o zona horaria para ver los horarios correctos.', 'advertencia'); return;
           }
-          // Validar teléfono contra el país seleccionado
-          const v = GL.tel.validar(telRaw, paisVal);
+          // Validar teléfono contra el país del teléfono (puede diferir del país del jugador).
+          const v = GL.tel.validar(telRaw, telPais.value, false);
           if (!v.ok) {
             GL.notificar(v.mensaje, 'advertencia'); return;
           }
@@ -215,21 +402,20 @@
             const cambios = {
               nombre_usuario: fondo.querySelector('#perfil-nombre').value,
               pais: paisVal,
-              zona_horaria: zonaVal,
-              telefono: telRaw ? GL.tel.normalizar(telRaw, paisVal) : '',
-              // 1.2.0: campos separados; `telefono` se mantiene por compatibilidad.
-              telefono_e164: telRaw ? GL.tel.e164(telRaw, paisVal) : '',
-              telefono_nacional: telRaw ? GL.tel.nacional(telRaw, paisVal) : '',
-              pais_telefono: paisVal,
-              telefono_verificado: !!(telRaw && GL.tel.esValido(telRaw, paisVal))
+              zona_horaria: zonaVal
             };
-            if (!Auth.jugador) {
-              await Auth.actualizarNombreJuego(cambios.nombre_usuario, zonaVal);
-            } else {
-              await Auth.actualizarPerfil(cambios);
-              if (archivo) await Auth.subirAvatar(archivo);
-              else if (quitarFoto) await Auth.eliminarAvatar();
+            // Si el número no cambió, no se escriben campos telefónicos: así se
+            // conserva el teléfono existente al editar solo nombre o zona horaria.
+            const telCambios = GL.tel.cambiosSiNuevos(telRaw, telPais.value, j);
+            if (telCambios.__error) {
+              GL.notificar(telCambios.__error.mensaje, 'advertencia');
+              boton.disabled = false;
+              return;
             }
+            Object.assign(cambios, telCambios);
+            await Auth.actualizarPerfil(cambios);
+            if (archivo) await Auth.subirAvatar(archivo);
+            else if (quitarFoto) await Auth.eliminarAvatar();
             cerrar();
             GL.notificar('Perfil actualizado.', 'exito');
             Mod.render(el);
@@ -335,7 +521,7 @@
     return '<div class="card proximo-partido" style="padding:14px;border-color:rgba(245,197,24,.45)">' +
       '<div class="flex" style="justify-content:space-between"><span class="dorado mono">Jornada ' + p.jornada + '</span>' +
         GL.badge(local ? 'Local' : 'Visitante', 'gold', local ? 'home' : 'plane') + '</div>' +
-      '<div style="font-family:Rajdhani;font-size:21px;font-weight:700;margin:8px 0">vs ' + esc(GL.nombreJugador(rival && rival.id)) + '</div>' +
+      '<div style="font-family:var(--gl-font-sans);font-size:21px;font-weight:700;margin:8px 0">vs ' + esc(GL.nombreJugador(rival && rival.id)) + '</div>' +
       '<div class="muted" style="font-size:12px">' + esc(GL.horarioJugador(j)) + ' · ' +
         esc(GL.etiquetaZona(GL.zonaJugador(j))) + '</div></div>';
   }

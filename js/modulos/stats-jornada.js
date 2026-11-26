@@ -114,14 +114,14 @@
     const marcador = mejorPartido ? GL.resultado(mejorPartido) : null;
     const golesReales = mejorPartido ? GL.golesReales(mejorPartido) : { gf: 0, gc: 0 };
     const cardMejorPartido = mejorPartido
-      ? '<div class="card"><div class="card-titulo">' + icono('star', 19) + 'Mejor partido de la jornada</div>' +
+      ? '<div class="card"><div class="card-titulo">' + icono('star', 20) + 'Mejor partido de la jornada</div>' +
           '<div class="center" style="padding:16px 0">' +
-            '<div style="font-family:Rajdhani;font-size:17px">' + esc(GL.nombreJugador(mejorPartido.local_id)) +
+            '<div style="font-family:var(--gl-font-sans);font-size:17px">' + esc(GL.nombreJugador(mejorPartido.local_id)) +
             ' <span class="dorado">' + esc(marcador.texto) + '</span> ' + esc(GL.nombreJugador(mejorPartido.visitante_id)) + '</div>' +
-            '<div class="num dorado" style="font-size:38px;font-family:Rajdhani;font-weight:700;margin-top:6px">' +
+            '<div class="num dorado" style="font-size:38px;font-family:var(--gl-font-sans);font-weight:700;margin-top:6px">' +
               (golesReales.gf + golesReales.gc) + ' goles</div>' +
           '</div></div>'
-      : '<div class="card"><div class="card-titulo">' + icono('star', 19) + 'Mejor partido de la jornada</div>' +
+      : '<div class="card"><div class="card-titulo">' + icono('star', 20) + 'Mejor partido de la jornada</div>' +
           GL.vacio('Todavía no hay partidos jugados en esta jornada.', 'swords', null) + '</div>';
     return '<div class="grid tres">' +
       metrica('Más porterías rasgadas', 'zap', top(s, 'gf'), 'gf', '', x => 'prom. ' + x.promedio.toFixed(1)) +
@@ -131,7 +131,7 @@
       cardMejorPartido +
       metrica('Mejor jugador de la jornada', 'award', top(s, 'score'), 'score', ' pts', x => x.gf + ' goles · ' + x.vallas + ' vallas') +
       '</div>' +
-      '<div class="card mt"><div class="card-titulo">' + icono('activity', 19) + 'Detalle por jugador</div>' +
+      '<div class="card mt"><div class="card-titulo">' + icono('activity', 20) + 'Detalle por jugador</div>' +
         '<div class="tabla-wrap"><table class="tabla"><thead><tr><th class="izq">Jugador</th><th>PJ</th><th>GF</th><th>GC</th><th>Vallas</th><th>Pos %</th><th>Pase %</th></tr></thead><tbody>' +
         s.sort((a, b) => b.score - a.score).map((x, i) =>
           '<tr style="animation-delay:' + (i * .03) + 's"><td class="izq"><div class="jugador-celda">' +

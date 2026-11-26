@@ -1,0 +1,182 @@
+{
+  "modo": "despues",
+  "capturas": [
+    {
+      "nombre": "despues-escritorio",
+      "ruta": "docs/capturas-fase-3.4/despues-escritorio.png"
+    },
+    {
+      "nombre": "despues-movil",
+      "ruta": "docs/capturas-fase-3.4/despues-movil.png"
+    },
+    {
+      "nombre": "despues-con-datos",
+      "ruta": "docs/capturas-fase-3.4/despues-con-datos.png"
+    },
+    {
+      "nombre": "despues-vacio",
+      "ruta": "docs/capturas-fase-3.4/despues-vacio.png"
+    },
+    {
+      "nombre": "despues-cargando",
+      "ruta": "docs/capturas-fase-3.4/despues-cargando.png"
+    },
+    {
+      "nombre": "despues-error",
+      "ruta": "docs/capturas-fase-3.4/despues-error.png"
+    }
+  ],
+  "responsive": [
+    {
+      "width": 320,
+      "ancho": 320,
+      "scrollWidth": 320,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 7,
+      "anchoMaximo": 308,
+      "solapaBarra": false,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 375,
+      "ancho": 375,
+      "scrollWidth": 375,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 4,
+      "anchoMaximo": 363,
+      "solapaBarra": false,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 390,
+      "ancho": 390,
+      "scrollWidth": 390,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 4,
+      "anchoMaximo": 378,
+      "solapaBarra": false,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 430,
+      "ancho": 430,
+      "scrollWidth": 430,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 4,
+      "anchoMaximo": 418,
+      "solapaBarra": false,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 768,
+      "ancho": 768,
+      "scrollWidth": 768,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 4,
+      "anchoMaximo": 746,
+      "solapaBarra": false,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 1024,
+      "ancho": 1024,
+      "scrollWidth": 1024,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 2,
+      "anchoMaximo": 1002,
+      "solapaBarra": false,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 1366,
+      "ancho": 1366,
+      "scrollWidth": 1366,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 2,
+      "anchoMaximo": 1344,
+      "solapaBarra": false,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 1920,
+      "ancho": 1920,
+      "scrollWidth": 1920,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 2,
+      "anchoMaximo": 1658,
+      "solapaBarra": false,
+      "desbordesInternos": [],
+      "traslapes": 0
+    }
+  ],
+  "interacciones": {
+    "total": 37,
+    "destinos": [
+      "fixture",
+      "administracion",
+      "resultados",
+      "jornadas",
+      "estadisticas-globales",
+      "tabla",
+      "mensajes",
+      "auditoria"
+    ],
+    "primerDestino": "fixture",
+    "navego": "fixture",
+    "acciones": {
+      "guia": true,
+      "refrescar": true
+    },
+    "refrescoOK": true,
+    "mostroSkeleton": true,
+    "guiaClic": true,
+    "erroresConsola": []
+  },
+  "estados": {
+    "con-datos": {
+      "estado": "con datos",
+      "tieneSkeleton": false,
+      "tieneEstadoVacio": false,
+      "esError": false
+    },
+    "vacio": {
+      "estado": "sin torneo",
+      "tieneSkeleton": false,
+      "tieneEstadoVacio": true,
+      "esError": false
+    },
+    "cargando": {
+      "estado": "cargando",
+      "tieneSkeleton": true,
+      "tieneEstadoVacio": false,
+      "esError": false
+    },
+    "error": {
+      "estado": "error",
+      "tieneSkeleton": false,
+      "tieneEstadoVacio": true,
+      "esError": true
+    }
+  },
+  "foco": {
+    "etiqueta": "button",
+    "clase": "btn",
+    "outlineColor": "rgb(255, 107, 122)",
+    "outlineWidth": "2px"
+  }
+}

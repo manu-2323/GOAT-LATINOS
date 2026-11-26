@@ -254,10 +254,10 @@
           '<div class="seccion-acciones">' +
             (sinLeer > 0
               ? '<button type="button" class="btn sec" id="notif-leer-todo">' +
-                  icono('check-check', 15) + 'Marcar todas leídas</button>'
+                  icono('check-check', 16) + 'Marcar todas leídas</button>'
               : '') +
             '<button type="button" class="btn sec" id="notif-eliminar-todas">' +
-              icono('trash-2', 15) + 'Limpiar leídas</button>' +
+              icono('trash-2', 16) + 'Limpiar leídas</button>' +
           '</div>' +
         '</div>' +
 
@@ -287,7 +287,7 @@
 
         /* Aviso Realtime */
         '<div class="notif-realtime-estado" id="notif-realtime-est">' +
-          icono('radio', 12) +
+          icono('radio', 14) +
           '<span>Actualización en tiempo real ' + (Mod._realtime ? 'activa' : 'inactiva') + '</span>' +
         '</div>';
 
@@ -418,7 +418,7 @@
           ? '<div class="notif-panel-acciones">' +
               '<span class="notif-panel-cnt">' + sinLeer + ' sin leer</span>' +
               '<button type="button" class="notif-panel-link" id="notif-p-leer-todo">' +
-                icono('check-check', 13) + 'Marcar leídas</button>' +
+                icono('check-check', 14) + 'Marcar leídas</button>' +
             '</div>'
           : '<div class="notif-panel-acciones"><span class="notif-panel-cnt verde-txt">Todo al día</span></div>') +
         (ultimas.length
@@ -427,7 +427,7 @@
               '<p>Sin notificaciones aún.</p></div>') +
         '<div class="notif-panel-pie">' +
           '<a href="#notificaciones" class="notif-panel-link" id="notif-panel-ver-todas">' +
-            icono('arrow-right', 13) + 'Ver todas</a>' +
+            icono('arrow-right', 14) + 'Ver todas</a>' +
         '</div>';
 
       iniciarIconos();
