@@ -14,7 +14,7 @@ const OnboardingTour = (() => {
       ico: 'trophy',
       titulo: '¡Bienvenido a GOATS LATINOS!',
       cuerpo: 'Sos parte de una de las ligas de FC Mobile más organizadas de Latinoamérica. ' +
-              'Este sistema reemplaza el trabajo manual: aquí están las tablas, el fixture, ' +
+              'Este sistema reemplaza el trabajo manual: aquí están las tablas, el cuadro de partidos, ' +
               'las estadísticas y los mensajes de WhatsApp. Todo en un lugar.',
       accion: null
     },
@@ -59,10 +59,10 @@ const OnboardingTour = (() => {
       id: 'fixture',
       ico: 'calendar',
       titulo: 'Cómo consultar tus partidos',
-      cuerpo: 'En la sección Fixture encontrás el calendario completo de las 22 jornadas. ' +
+      cuerpo: 'En Cuadro de partidos encontrás la organización completa de las 22 jornadas. ' +
               'Usá el filtro "Solo mis partidos" para ver únicamente los que te corresponden. ' +
               'El jugador de la izquierda siempre es quien crea la sala en FC Mobile.',
-      accion: { label: 'Ver el fixture', hash: 'fixture' }
+      accion: { label: 'Ver el cuadro', hash: 'fixture' }
     },
     {
       id: 'reglamento',

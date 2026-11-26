@@ -30,7 +30,7 @@ test('navegación y estados: sin pantallas en blanco', async ({ page }) => {
     !!document.querySelector('#vista .ini-pantalla'), null, { timeout: 30000 });
   const titulos = {
     inicio: 'Panel principal', tabla: 'Tabla de Posiciones', calendario: 'Calendario y programación',
-    fixture: 'Calendario de la liga', estadisticas: 'Estadísticas de la jornada',
+    fixture: 'Cuadro de partidos', estadisticas: 'Estadísticas de la jornada',
     'estadisticas-globales': 'Estadísticas Globales', eliminatorias: 'Eliminatorias',
     resultados: 'Carga de resultados', jornadas: 'Jornadas', administracion: 'Jugadores',
     mensajes: 'Generador de mensajes', auditoria: 'Auditoría',
@@ -45,6 +45,14 @@ test('navegación y estados: sin pantallas en blanco', async ({ page }) => {
       return texto.length > 10 && texto.toLowerCase().includes(titulo.toLowerCase());
     }, [ruta, titulos[ruta]], { timeout: 30000 });
   }
+});
+
+test('navegación visible: “Cuadro de partidos” sustituye a “Fixture”', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('#sidebar');
+  const texto = await page.locator('#sidebar').textContent();
+  expect(texto).toContain('Cuadro de partidos');
+  expect(texto).not.toContain('Fixture');
 });
 
 test('accesibilidad: sin violaciones críticas', async ({ page }) => {

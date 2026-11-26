@@ -82,7 +82,7 @@ code{background:#EEF2F7;padding:1pt 3pt;border-radius:3pt;font-size:8.5pt}
 <li><strong>Entrar:</strong> en la pantalla de acceso introduce tu correo y contraseña. Si es tu primera vez, completa el tour de bienvenida.</li>
 <li><strong>Perfil:</strong> escribe tu nombre de FC Mobile, país, ciudad o zona horaria y teléfono. El formato del teléfono se adapta a tu país; en Nicaragua se muestra <code>8108-5555</code>. Sube una foto cuadrada: se recorta y comprime automáticamente.</li>
 <li><strong>Tabla:</strong> consulta tu posición. Dorado = puntos y posiciones destacadas; verde = clasificación; rojo = zona de descenso.</li>
-<li><strong>Calendario y fixture:</strong> consulta fechas, horarios y partidos. Usa «Solo mis partidos» para filtrar. El enlace de WhatsApp abre un chat; no confirma que el jugador tenga cuenta.</li>
+<li><strong>Calendario y cuadro de partidos:</strong> consulta fechas, horarios y partidos. Usa «Solo mis partidos» para filtrar. El enlace de WhatsApp abre un chat; no confirma que el jugador tenga cuenta.</li>
 <li><strong>Estadísticas y eliminatorias:</strong> revisa tus números y el bracket de la copa.</li>
 <li><strong>Notificaciones:</strong> marca como leídas las que ya revisaste.</li>
 </ol>

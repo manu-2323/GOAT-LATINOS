@@ -514,7 +514,7 @@
       kpi('flame',          'Más goles a favor',   k.maxGFJ ? k.maxGFJ.nombre_usuario : '—',
           k.maxGF ? k.maxGF.gf + ' GF' : '', GL.tema.marcaTexto) +
       (k.sinJugar > 0
-        ? kpi('alert-triangle', 'Sin partidos aún', k.sinJugar + ' jugadores', 'Pendiente de fixture', GL.tema.marca)
+        ? kpi('alert-triangle', 'Sin partidos aún', k.sinJugar + ' jugadores', 'Pendiente de programación', GL.tema.marca)
         : kpi('check-circle',   'Participación', '100%', 'Todos han jugado', GL.tema.exito));
 
     iniciarIconos();

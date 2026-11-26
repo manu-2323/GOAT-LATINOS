@@ -34,7 +34,7 @@ async function captura(ruta, nombre, ancho, alto) {
   await pagina.evaluate(h => { location.hash = h; }, ruta);
   const titulos = {
     'dashboard-admin': 'Centro de control', tabla: 'Tabla de Posiciones',
-    calendario: 'Calendario y programación', fixture: 'Calendario de la liga',
+    calendario: 'Calendario y programación', fixture: 'Cuadro de partidos',
     estadisticas: 'Estadísticas de la jornada', 'estadisticas-globales': 'Estadísticas Globales',
     eliminatorias: 'Eliminatorias', resultados: 'Carga de resultados',
     jornadas: 'Jornadas', administracion: 'Jugadores', mensajes: 'Generador de mensajes',

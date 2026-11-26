@@ -158,7 +158,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 2. Entrá con **Acceso de administrador** usando uno de los dos correos autorizados y la clave compartida.
 3. Administración → Configuración: revisá nombre, temporada y jornadas (22).
 4. Administración → Jugadores: agregá a los 12 jugadores de cada grupo (o esperá a que se registren).
-5. Fixture → Generar fixture (exactamente 12 por grupo).
+5. Cuadro de partidos → Generar cuadro de partidos (exactamente 12 por grupo).
 6. Jornadas → cargá el **Horario** de inicio y límite de cada jornada y abrila. Configuración →
    revisá el reglamento. Mensajes → revisá la vista previa; si falta un dato, los botones quedan bloqueados.
 7. Resultados → cargar marcadores (manual o con captura + Gemini). La tabla se recalcula sola.
@@ -171,7 +171,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Viewport** base `width=device-width, initial-scale=1.0` y cache-busting de CSS/JS.
 - **Tabla**: en menos de 480 px se muestran `# | Jugador | J | Pts | Dif`, con la bandera dentro
   del nombre; un botón despliega G, E, P y goles. Pestañas de grupo a ancho completo.
-- **Fixture**: partido en card vertical (local, marcador, visitante) y selector de jornada como
+- **Cuadro de partidos**: partido en card vertical (local, marcador, visitante) y selector de jornada como
   desplegable grande.
 - **Resultados**: botón de captura de 44 px, estadísticas en dos columnas y modal que cabe en 360 px.
 - **Administración**: tablas con scroll horizontal y acciones en menú desplegable.
@@ -184,7 +184,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Login inicial**: al arrancar, si no hay sesión válida se muestra la pantalla de acceso antes de
   cargar cualquier vista. No existe modo invitado.
 - **Bloqueo de navegación**: `#hash`, eventos de autenticación y cierre de sesión no pueden renderizar
-  tabla, fixture ni estadísticas sin `Auth.usuario`. Al cerrar sesión vuelve el login.
+  tabla, cuadro de partidos ni estadísticas sin `Auth.usuario`. Al cerrar sesión vuelve el login.
 - **Registro**: el overlay solo se cierra si Supabase devuelve sesión. Si el correo requiere
   confirmación, permanece el formulario con el mensaje correspondiente.
 - **1.0.11**: el nombre se valida con `gl_nombre_disponible`; antes fallaba con `42501` porque
@@ -208,7 +208,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
   en `public.partidos`, por eso se muestra el horario estimado de la jornada, no una fecha falsa.
 - **Conversión real**: `Intl.DateTimeFormat` convierte ese instante a la zona de cada jugador,
   respetando cambios estacionales (Tijuana y Santiago cambian; Ciudad de México y Buenos Aires no).
-- **Vistas afectadas**: fixture y “Partidos de hoy” muestran la hora de local y visitante;
+- **Vistas afectadas**: cuadro de partidos y “Partidos de hoy” muestran la hora de local y visitante;
   administración muestra la zona junto al horario; mensajes de WhatsApp agrupan por zona real.
 - **Backend**: la columna existe en `public.jugadores`; el alta desde administración envía la
   zona y la Edge Function la valida con `Intl` antes de insertar. La vista pública
@@ -309,7 +309,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Suspensiones/expulsiones**: partidos pendientes se resuelven `1-0` y **no** suman valla invicta.
 - **Clasificación**: `pts = max(0, PG*3 + PE - sanciones)`, orden por puntos → diferencia → goles a favor.
 - **Playoffs**: se guardan en `partidos` con jornada 23-30; el recálculo ignora jornadas mayores a `total_jornadas`.
-- **Fixture**: requiere exactamente 12 jugadores por grupo y 22 jornadas. No se regenera si ya hay resultados.
+- **Cuadro de partidos**: requiere exactamente 12 jugadores por grupo y 22 jornadas. No se regenera si ya hay resultados.
 - **Cambio de grupo**: solo durante los primeros 7 días del torneo; la asignación inicial de pendientes sigue disponible.
 - **Confirmaciones**: acciones destructivas usan modal; el resto de acciones confirman con toast.
 - Todas las vistas muestran skeleton mientras cargan y reinicializan Lucide después de cada render.

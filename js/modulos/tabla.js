@@ -16,7 +16,7 @@
         if (!GL.torneo()) { el.innerHTML = GL.vacio('No hay torneo activo todavía.', 'trophy', null); iniciarIconos(); return; }
         const grupos = GL.grupos();
         if (!grupos.length) {
-          el.innerHTML = GL.vacio('Todavía no hay grupos configurados. El administrador debe crear el torneo y el fixture.');
+          el.innerHTML = GL.vacio('Todavía no hay grupos configurados. El administrador debe crear el torneo y el cuadro de partidos.');
           iniciarIconos(); return;
         }
         if (!Mod.grupoId || !grupos.some(g => g.id === Mod.grupoId)) Mod.grupoId = grupos[0].id;
@@ -75,7 +75,7 @@
     const yo = Auth.jugador && Auth.jugador.id;
     const total = datos.length;
     if (!datos.length) {
-      return GL.vacio('Aún no hay clasificación para este grupo. El administrador debe generar el fixture y cargar resultados.',
+      return GL.vacio('Aún no hay clasificación para este grupo. El administrador debe generar el cuadro de partidos y cargar resultados.',
         'table-2', null) + '<div id="tabla-export" class="oculto"></div>';
     }
 

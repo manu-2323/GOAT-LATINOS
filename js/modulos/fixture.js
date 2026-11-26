@@ -1,11 +1,23 @@
 /* =====================================================================
-   MÓDULO 2 — Fixture round-robin (12 jugadores · 22 jornadas)
+   MÓDULO 2 — Cuadro de partidos (round-robin · 12 jugadores · 22 jornadas)
+   =====================================================================
+   Vista estructural del torneo: organiza los partidos reales por jornada,
+   grupo y estado. La fecha pertenece a la jornada, nunca al partido: cuando
+   no existe se muestra "Sin programación" sin inventar horarios.
    ===================================================================== */
 (function () {
+  const FILTROS = [
+    { id: 'todos',          label: 'Todos' },
+    { id: 'pendientes',     label: 'Pendientes' },
+    { id: 'disputados',     label: 'Disputados' },
+    { id: 'sin-programar',  label: 'Sin programación' }
+  ];
+
   const Mod = {
-    titulo: 'Fixture',
+    titulo: 'Cuadro de partidos',
     grupoId: null,
-    jornada: 1,
+    jornada: 'todas',
+    filtro: 'todos',
     soloMios: false,
 
     setGrupo(id) { Mod.grupoId = id; },
@@ -14,47 +26,44 @@
       el.innerHTML = GL.skeleton(6);
       try {
         await GL.cargarContexto(true);
+        const torneo = GL.torneo();
+        if (!torneo) {
+          el.innerHTML = GL.vacio('No hay torneo activo todavía.', 'trophy', null);
+          iniciarIconos();
+          return;
+        }
         const grupos = GL.grupos();
-        if (!GL.torneo()) { el.innerHTML = GL.vacio('No hay torneo activo todavía.', 'trophy', null); iniciarIconos(); return; }
-        if (!grupos.length) { el.innerHTML = GL.vacio('No hay grupos configurados.'); iniciarIconos(); return; }
-        if (!Mod.grupoId || !grupos.some(g => g.id === Mod.grupoId)) Mod.grupoId = grupos[0].id;
-        const total = (GL.torneo() && Number(GL.torneo().total_jornadas)) || 22;
-        if (Mod.jornada > total) Mod.jornada = total;
-        const todos = await GL.partidos({ torneo_id: GL.torneo().id });
-        const partidos = todos.filter(p => p.grupo_id === Mod.grupoId && Number(p.jornada) === Mod.jornada);
+        if (!grupos.length) {
+          el.innerHTML = GL.vacio('No hay grupos configurados.', 'users', null);
+          iniciarIconos();
+          return;
+        }
+        const miGrupo = GL.grupoDeJugador(Auth.jugador && Auth.jugador.id);
+        if (!Mod.grupoId || !grupos.some(g => g.id === Mod.grupoId)) {
+          Mod.grupoId = (miGrupo && miGrupo.id) || grupos[0].id;
+        }
 
-        el.innerHTML =
-          '<div class="seccion-head"><div class="seccion-titulo"><h2>Calendario de la liga</h2>' +
-            '<p>Ida y vuelta · 12 jugadores por grupo · El local crea el partido en FC Mobile</p></div>' +
-            '<div class="seccion-acciones">' + (GL.esAdmin() ?
-              '<button type="button" class="btn sm" data-generar>' + icono('sparkles', 16) + 'Generar calendario</button>' : '') +
-            '</div></div>' +
-          '<div class="tabs tabs-grupos">' + grupos.map(g =>
-            '<button type="button" class="tab' + (g.id === Mod.grupoId ? ' activo' : '') + '" data-grupo="' + g.id + '">' +
-            'Grupo ' + GL.letraGrupo(g) + '</button>').join('') + '</div>' +
-          '<div class="chips" style="margin-bottom:14px">' +
-            (Auth.jugador ? '<label class="toggle"><input type="checkbox" id="solo-mios"' + (Mod.soloMios ? ' checked' : '') + '>' + icono('filter', 14) + ' Solo mis partidos</label>' : '') +
-            '<span class="badge neutral">' + todos.length + ' partidos cargados</span>' +
-          '</div>' +
-          '<label class="selector-jornada"><span>Jornada</span>' +
-            '<select class="input" id="selector-jornada">' + Array.from({ length: total }, (_, i) => i + 1).map(n =>
-              '<option value="' + n + '"' + (n === Mod.jornada ? ' selected' : '') + '>Jornada ' + n + '</option>').join('') +
-            '</select></label>' +
-          '<div class="jornada-scroller">' + Array.from({ length: total }, (_, i) => i + 1).map(n =>
-            '<button type="button" class="jornada-btn' + (n === Mod.jornada ? ' activo' : '') + '" data-jornada="' + n + '">J' + n + '</button>').join('') + '</div>' +
-          '<div id="fixture-lista"></div>';
+        const total = Number(torneo.total_jornadas) || CONFIG.JORNADAS_FASE_REGULAR || 22;
+        const todos = await GL.partidos({ torneo_id: torneo.id });
+        const { partidos, duplicados } = deduplicar(
+          todos.filter(p => p.grupo_id === Mod.grupoId)
+        );
+        const jornadas = (GL.ctx.jornadas || [])
+          .filter(j => j.grupo_id === Mod.grupoId && Number(j.numero) <= total)
+          .map(j => Object.assign({}, j, { numero: Number(j.numero) }))
+          .sort((a, b) => a.numero - b.numero);
+        const mapa = {};
+        jornadas.forEach(j => { mapa[j.numero] = j; });
 
-        const lista = el.querySelector('#fixture-lista');
-        lista.innerHTML = htmlPartidos(partidos);
-        el.querySelectorAll('[data-grupo]').forEach(b => b.addEventListener('click', () => { Mod.grupoId = b.dataset.grupo; Mod.render(el); }));
-        el.querySelectorAll('[data-jornada]').forEach(b => b.addEventListener('click', () => { Mod.jornada = Number(b.dataset.jornada); Mod.render(el); }));
-        const selJornada = el.querySelector('#selector-jornada');
-        if (selJornada) selJornada.addEventListener('change', () => { Mod.jornada = Number(selJornada.value); Mod.render(el); });
-        const chk = el.querySelector('#solo-mios');
-        if (chk) chk.addEventListener('change', () => { Mod.soloMios = chk.checked; Mod.render(el); });
-        const gen = el.querySelector('[data-generar]');
-        if (gen) gen.addEventListener('click', () => Mod.generar(el));
-      } catch (e) { console.error(e); el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'el fixture'), null, 'el fixture'); }
+        const datos = construirDatos({
+          torneo, grupos, todos, partidos, duplicados, jornadas, mapa, total
+        });
+        el.innerHTML = htmlVista(datos);
+        enlazarVista(el, datos);
+      } catch (e) {
+        console.error('[cuadro de partidos]', e);
+        el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'el cuadro de partidos'), null, 'el cuadro de partidos');
+      }
       iniciarIconos();
     },
 
@@ -63,15 +72,14 @@
       const torneo = GL.torneo();
       if (!torneo) { GL.notificar('No hay torneo activo.', 'error'); return; }
 
-      // ── Pre-validación en cliente ──────────────────────────────────────────
       const grupos = GL.grupos();
-      const ctx    = GL.ctx;
+      const ctx = GL.ctx;
 
       const conteos = grupos.map(g => {
         const ids = new Set((ctx.miembros || [])
           .filter(m => m.grupo_id === g.id)
           .map(m => m.jugador_id));
-        const activos = ctx.jugadores.filter(j => j.activo !== false && ids.has(j.id));
+        const activos = (ctx.jugadores || []).filter(j => j.activo !== false && ids.has(j.id));
         return { g, n: activos.length, jugadores: activos };
       });
       const mal = conteos.filter(c => c.n !== 12);
@@ -84,33 +92,312 @@
         return;
       }
 
-      // Bloquear si ya hay resultados cargados
       const existentes = await GL.partidos({ torneo_id: torneo.id });
       const conResultado = existentes.filter(p =>
         Number(p.jornada) <= 22 && p.estado !== 'pendiente');
       if (conResultado.length) {
         GL.notificar(
           'Ya hay ' + conResultado.length + ' resultado(s) cargado(s). ' +
-          'No se puede regenerar el calendario. Creá una nueva temporada para empezar de cero.',
+          'No se puede regenerar el cuadro de partidos. Creá una nueva temporada para empezar de cero.',
           'error'
         );
         return;
       }
 
-      // ── Previsualización antes de confirmar ───────────────────────────────
       await mostrarPrevisualizacion(conteos, existentes.length, torneo, el);
     }
   };
-  /* ── Pantalla de previsualización antes de generar ──────────────────────── */
+
+  /* --------------------------- Datos --------------------------- */
+
+  function instante(valor) {
+    if (!valor) return null;
+    if (valor instanceof Date) return isNaN(valor.getTime()) ? null : valor;
+    const texto = String(valor);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+      return GL.momentoZona(texto, '12:00', CONFIG.ZONA_REFERENCIA) ||
+             new Date(texto + 'T12:00:00Z');
+    }
+    const d = new Date(texto);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function fechaJornada(j) {
+    if (!j) return null;
+    return instante(j.fecha_inicio) || instante(j.hora_limite) || instante(j.fecha) || null;
+  }
+
+  function textoInstante(d) {
+    if (!d) return 'Sin fecha asignada';
+    const p = GL.partesEnZona(d, CONFIG.ZONA_REFERENCIA);
+    const dos = n => String(n).padStart(2, '0');
+    return dos(p.day) + '/' + dos(p.month) + '/' + p.year + ' ' +
+           dos(p.hour) + ':' + dos(p.minute) + ' (' + GL.etiquetaZona(CONFIG.ZONA_REFERENCIA) + ')';
+  }
+
+  function deduplicar(lista) {
+    const vistos = new Set();
+    const partidos = [];
+    const duplicados = [];
+    lista.forEach(p => {
+      const clave = [p.jornada, p.local_id, p.visitante_id].join('|');
+      if (vistos.has(clave)) { duplicados.push(p); return; }
+      vistos.add(clave);
+      partidos.push(p);
+    });
+    return { partidos, duplicados };
+  }
+
+  function construirDatos(datos) {
+    const yo = Auth.jugador && Auth.jugador.id;
+    const porJornada = {};
+    datos.partidos.forEach(p => {
+      const n = Number(p.jornada);
+      (porJornada[n] = porJornada[n] || []).push(p);
+    });
+
+    const proyectados = [];
+    datos.jornadas.forEach(j => {
+      const lista = porJornada[j.numero] || [];
+      if (!lista.length) return;
+      const fecha = fechaJornada(j);
+      const visibles = lista.filter(p => aplicaFiltro(p, fecha, yo));
+      if (visibles.length) {
+        proyectados.push(Object.assign({}, j, {
+          fecha,
+          partidos: visibles.sort((a, b) => Number(a.id || 0) - Number(b.id || 0)),
+          pendientes: visibles.filter(p => p.estado === 'pendiente').length,
+          disputados: visibles.filter(p => p.estado !== 'pendiente').length
+        }));
+      }
+    });
+
+    /* Jornadas con partidos pero sin fila en jornadas: se agrupan igual, sin fecha. */
+    Object.keys(porJornada).forEach(clave => {
+      const numero = Number(clave);
+      if (datos.mapa[numero]) return;
+      const fecha = null;
+      const visibles = porJornada[numero].filter(p => aplicaFiltro(p, fecha, yo));
+      if (!visibles.length) return;
+      proyectados.push({
+        numero,
+        estado: 'abierta',
+        fecha,
+        partidos: visibles,
+        pendientes: visibles.filter(p => p.estado === 'pendiente').length,
+        disputados: visibles.filter(p => p.estado !== 'pendiente').length,
+        sinFila: true
+      });
+    });
+
+    proyectados.sort((a, b) => a.numero - b.numero);
+
+    const pendientes = datos.partidos.filter(p => p.estado === 'pendiente');
+    const sinFecha = pendientes.filter(p => !fechaJornada(datos.mapa[Number(p.jornada)]));
+
+    return Object.assign({}, datos, {
+      yo,
+      grupo: GL.grupo(Mod.grupoId),
+      proyectados,
+      totalPendientes: pendientes.length,
+      totalDisputados: datos.partidos.length - pendientes.length,
+      totalSinFecha: sinFecha.length,
+      totalVisibles: proyectados.reduce((n, j) => n + j.partidos.length, 0)
+    });
+  }
+
+  function aplicaFiltro(p, fecha, yo) {
+    if (Mod.soloMios && yo && p.local_id !== yo && p.visitante_id !== yo) return false;
+    if (Mod.jornada !== 'todas' && Number(p.jornada) !== Number(Mod.jornada)) return false;
+    if (Mod.filtro === 'pendientes') return p.estado === 'pendiente';
+    if (Mod.filtro === 'disputados') return p.estado !== 'pendiente';
+    if (Mod.filtro === 'sin-programar') return p.estado === 'pendiente' && !fecha;
+    return true;
+  }
+
+  /* --------------------------- Vista --------------------------- */
+
+  function htmlVista(d) {
+    const letra = d.grupo ? GL.letraGrupo(d.grupo) : '—';
+    return '<div class="seccion-head"><div class="seccion-titulo">' +
+        '<h2>Cuadro de partidos</h2>' +
+        '<p>Grupo ' + esc(letra) + ' · Temporada ' + esc(d.torneo.temporada || '—') +
+        ' · ' + d.total + ' jornadas · Ida y vuelta</p></div>' +
+      '<div class="seccion-acciones">' + (GL.esAdmin()
+        ? '<button type="button" class="btn sm" data-generar>' +
+            icono('sparkles', 16) + 'Generar cuadro de partidos</button>'
+        : '') + '</div></div>' +
+
+      '<div class="grid cuatro fx-resumen">' +
+        metrica('calendar-range', d.partidos.length, 'Partidos del grupo', 'blue') +
+        metrica('clock', d.totalPendientes, 'Pendientes de resultado', 'orange') +
+        metrica('circle-check', d.totalDisputados, 'Disputados', 'green') +
+        metrica('calendar-x', d.totalSinFecha, 'Sin programación', 'red') +
+      '</div>' +
+
+      '<div class="tabs tabs-grupos">' + d.grupos.map(g =>
+        '<button type="button" class="tab' + (g.id === Mod.grupoId ? ' activo' : '') +
+        '" data-grupo="' + esc(g.id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</button>').join('') + '</div>' +
+
+      '<section class="card tight fx-controles" aria-label="Filtros del cuadro de partidos">' +
+        '<div class="fx-filtros">' +
+          FILTROS.map(f =>
+            '<button type="button" class="chip' + (Mod.filtro === f.id ? ' activo' : '') +
+            '" data-fx-filtro="' + f.id + '">' + esc(f.label) + '</button>').join('') +
+          (Mod.filtro !== 'todos' || Mod.jornada !== 'todas' || Mod.soloMios
+            ? '<button type="button" class="chip" data-fx-reset>' +
+                icono('rotate-ccw', 14) + 'Limpiar filtros</button>'
+            : '') +
+        '</div>' +
+        '<div class="fx-selectores">' +
+          '<label class="selector-jornada"><span>Jornada</span>' +
+            '<select class="input" id="selector-jornada">' +
+              '<option value="todas"' + (Mod.jornada === 'todas' ? ' selected' : '') + '>Todas</option>' +
+              Array.from({ length: d.total }, (_, i) => i + 1).map(n =>
+                '<option value="' + n + '"' + (Number(Mod.jornada) === n ? ' selected' : '') +
+                '>Jornada ' + n + '</option>').join('') +
+            '</select></label>' +
+          (Auth.jugador
+            ? '<label class="toggle"><input type="checkbox" id="solo-mios"' +
+                (Mod.soloMios ? ' checked' : '') + '>' + icono('filter', 14) +
+                ' Solo mis partidos</label>'
+            : '') +
+        '</div>' +
+        '<div class="jornada-scroller" aria-label="Acceso rápido a jornadas">' +
+          '<button type="button" class="jornada-btn' + (Mod.jornada === 'todas' ? ' activo' : '') +
+          '" data-jornada="todas">Todas</button>' +
+          Array.from({ length: d.total }, (_, i) => i + 1).map(n =>
+            '<button type="button" class="jornada-btn' + (Number(Mod.jornada) === n ? ' activo' : '') +
+            '" data-jornada="' + n + '">J' + n + '</button>').join('') +
+        '</div>' +
+      '</section>' +
+
+      (d.duplicados.length
+        ? '<div class="cal-aviso fx-alerta">' + icono('triangle-alert', 16) +
+            '<span>Se detectaron ' + d.duplicados.length +
+            ' partido(s) repetido(s) en esta jornada/grupo. Se muestran una sola vez; ' +
+            'revisá la carga antes de cerrar la jornada.</span></div>'
+        : '') +
+
+      (d.proyectados.length
+        ? '<div class="fx-jornadas">' + d.proyectados.map(j => htmlJornada(j, d)).join('') + '</div>'
+        : GL.vacio('No hay encuentros con estos filtros.', 'filter',
+            '<button type="button" class="btn sm sec" data-fx-reset>' +
+            icono('rotate-ccw', 14) + 'Limpiar filtros</button>')) +
+
+      '<p class="nota-pie">' + esc(GL.notaHorarios()) +
+        ' La fecha mostrada pertenece a la jornada; en ' + CONFIG.NOMBRE_LIGA +
+        ' no existe una fecha confirmada por partido.</p>';
+  }
+
+  function metrica(ico, valor, etiqueta, clase) {
+    return '<div class="card tight cal-metrica ' + clase + '">' +
+      '<div class="metrica"><span class="ico">' + icono(ico, 20) + '</span>' +
+      '<div><div class="valor">' + esc(valor) + '</div>' +
+      '<div class="label">' + esc(etiqueta) + '</div></div></div></div>';
+  }
+
+  function htmlJornada(j, d) {
+    const when = j.fecha ? textoInstante(j.fecha) : 'Sin programación';
+    const programacion = j.fecha
+      ? GL.badge('Programada', 'blue', 'calendar-check')
+      : GL.badge('Sin programación', 'orange', 'calendar-x');
+    return '<section class="card fx-jornada" id="fx-j' + j.numero + '">' +
+      '<div class="fx-jornada-cab"><div>' +
+        '<span class="badge-jornada">J' + j.numero + '</span>' +
+        '<h3>Jornada ' + j.numero + '</h3>' +
+        '<p>' + icono('calendar-days', 14) + ' ' + esc(when) + '</p>' +
+      '</div><div class="chips">' + programacion +
+        GL.badge(j.pendientes + ' pendiente(s)', 'orange', 'clock') +
+        GL.badge(j.disputados + ' disputado(s)', 'green', 'circle-check') +
+      '</div></div>' +
+      '<div class="partidos-lista">' + j.partidos.map(p => htmlPartido(p, j, d)).join('') + '</div>' +
+      (j.sinFila
+        ? '<p class="nota-pie">Esta jornada tiene partidos pero todavía no tiene fila en jornadas.</p>'
+        : '') +
+      '</section>';
+  }
+
+  function htmlPartido(p, jornada, d) {
+    const local = GL.jugador(p.local_id) || {};
+    const visita = GL.jugador(p.visitante_id) || {};
+    const r = GL.resultado(p);
+    const waLocal = GL.linkWhatsapp(local, local.nombre_usuario);
+    const waVisita = GL.linkWhatsapp(visita, visita.nombre_usuario);
+    const contacto = (waLocal || waVisita)
+      ? '<div class="horario-linea" style="justify-content:space-between;flex-wrap:wrap">' +
+          (waLocal || '<span></span>') + (waVisita || '<span></span>') + '</div>'
+      : '';
+
+    return '<article class="partido-card partido-card-fixture fx-partido">' +
+      '<div class="fx-partido-cab">' +
+        GL.badge(r.estado.label, r.estado.color, r.estado.icono) +
+        (jornada.fecha ? GL.badge('Jornada programada', 'blue', 'calendar-check')
+                       : GL.badge('Pendiente de programación', 'orange', 'calendar-x')) +
+      '</div>' +
+      '<div class="equipo-row local">' +
+        '<div class="equipo">' + icono('home', 16) +
+          '<span>' + esc(GL.nombreJugador(p.local_id)) + '</span>' +
+          GL.banderaHTML(local.pais, 15) + '</div></div>' +
+      '<div class="marcador-centro">' +
+        '<div class="marcador ' + (r.pendiente ? '' : 'jugado') + '">' + r.texto + '</div>' +
+      '</div>' +
+      '<div class="equipo-row visita">' +
+        '<div class="equipo visita">' + GL.banderaHTML(visita.pais, 15) +
+          '<span>' + esc(GL.nombreJugador(p.visitante_id)) + '</span>' +
+          icono('plane', 16) + '</div></div>' +
+      '<div class="detalles-partido">' +
+        '<div class="horario-linea">' + icono('clock', 14) +
+          '<span>Local: ' + esc(GL.nombreJugador(p.local_id)) + ' · ' + esc(GL.horarioJugador(local)) + '</span></div>' +
+        '<div class="horario-linea">' + icono('clock', 14) +
+          '<span>Visitante: ' + esc(GL.nombreJugador(p.visitante_id)) + ' · ' + esc(GL.horarioJugador(visita)) + '</span></div>' +
+        '<div class="horario-linea">' + icono('calendar-days', 14) +
+          '<span>Jornada: ' + esc(jornada.fecha ? textoInstante(jornada.fecha) : 'Sin fecha asignada') + '</span></div>' +
+        contacto +
+      '</div></article>';
+  }
+
+  function enlazarVista(el, d) {
+    el.querySelectorAll('[data-grupo]').forEach(b => b.addEventListener('click', () => {
+      Mod.grupoId = b.dataset.grupo;
+      Mod.jornada = 'todas';
+      Mod.render(el);
+    }));
+    el.querySelectorAll('[data-jornada]').forEach(b => b.addEventListener('click', () => {
+      Mod.jornada = b.dataset.jornada === 'todas' ? 'todas' : Number(b.dataset.jornada);
+      Mod.render(el);
+    }));
+    el.querySelectorAll('[data-fx-filtro]').forEach(b => b.addEventListener('click', () => {
+      Mod.filtro = b.dataset.fxFiltro;
+      Mod.render(el);
+    }));
+    const selector = el.querySelector('#selector-jornada');
+    if (selector) selector.addEventListener('change', () => {
+      Mod.jornada = selector.value === 'todas' ? 'todas' : Number(selector.value);
+      Mod.render(el);
+    });
+    const chk = el.querySelector('#solo-mios');
+    if (chk) chk.addEventListener('change', () => { Mod.soloMios = chk.checked; Mod.render(el); });
+    const reset = el.querySelector('[data-fx-reset]');
+    if (reset) reset.addEventListener('click', () => {
+      Mod.filtro = 'todos';
+      Mod.jornada = 'todas';
+      Mod.soloMios = false;
+      Mod.render(el);
+    });
+    const gen = el.querySelector('[data-generar]');
+    if (gen) gen.addEventListener('click', () => Mod.generar(el));
+  }
+
+  /* --------------------------- Generación --------------------------- */
+
   function mostrarPrevisualizacion(conteos, pendientesExistentes, torneo, el) {
     return new Promise(resolve => {
-      // Simular el fixture en memoria para mostrarlo antes de confirmar
       const previews = conteos.map(({ g, jugadores }) => {
         const ids = jugadores.map(j => j.id);
-        const rondas = roundRobin(ids); // 11 rondas de ida
-        // Jornada 1 (ida) y jornada 12 (vuelta) como muestra
+        const rondas = roundRobin(ids);
         const j1 = rondas[0] || [];
-        const j12 = j1.map(([a, b]) => [b, a]); // vuelta invertida
+        const j12 = j1.map(([a, b]) => [b, a]);
         return { g, jugadores, j1, j12, totalPartidos: rondas.length * j1.length * 2 };
       });
 
@@ -130,8 +417,7 @@
           '<div style="font-weight:600;font-family:var(--gl-font-sans);font-size:15px;margin-bottom:8px;color:var(--accent-gold)">' +
             icono('users', 14) + ' Grupo ' + letra + ' — ' + jugadores.length + ' jugadores · ' + totalPartidos + ' partidos · 22 jornadas</div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-            htmlJornada(j1, 1) +
-            htmlJornada(j12, 12) +
+            htmlJornada(j1, 1) + htmlJornada(j12, 12) +
           '</div>' +
           '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">' +
             icono('info', 14) + ' Jornadas 1–11: ida · Jornadas 12–22: vuelta con equipos invertidos' +
@@ -142,7 +428,7 @@
         ? '<div style="background:rgba(245,197,24,.12);border:1px solid var(--accent-gold);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px">' +
             icono('triangle-alert', 14) +
             ' <strong>Advertencia:</strong> ya existen <strong>' + pendientesExistentes +
-            ' partidos pendientes</strong>. Se eliminarán y se reemplazarán por el nuevo calendario.' +
+            ' partidos pendientes</strong>. Se eliminarán y se reemplazarán por el nuevo cuadro de partidos.' +
           '</div>'
         : '';
 
@@ -157,12 +443,10 @@
         '</div>';
 
       GL.abrirModal({
-        titulo: 'Previsualización del calendario',
+        titulo: 'Previsualización del cuadro de partidos',
         ancho: 'lg',
         cuerpo:
-          infoReglas +
-          advertencia +
-          previews.map(htmlGrupo).join('') +
+          infoReglas + advertencia + previews.map(htmlGrupo).join('') +
           '<p style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:8px">' +
             'Se muestran las jornadas 1 y 12 como muestra. La generación completa la realiza PostgreSQL de forma validada.' +
           '</p>',
@@ -187,29 +471,27 @@
   }
 
   async function ejecutarGeneracion(torneo, el) {
-    GL.notificar('Generando calendario…', 'info', 'loader-circle');
+    GL.notificar('Generando cuadro de partidos…', 'info', 'loader-circle');
     try {
-      const { data, error } = await sb.rpc('gl_generar_fixture', {
-        p_torneo_id: torneo.id
-      });
+      const { data, error } = await sb.rpc('gl_generar_fixture', { p_torneo_id: torneo.id });
       if (error) throw new Error(error.message);
       const resultado = data || {};
       if (resultado.ok === false) {
-        GL.notificar(resultado.mensaje || 'No se pudo generar el calendario.', 'error');
+        GL.notificar(resultado.mensaje || 'No se pudo generar el cuadro de partidos.', 'error');
         return;
       }
-      // Mostrar detalle de grupos si está disponible
       const detalle = Array.isArray(resultado.detalle_grupos)
         ? ' (' + resultado.detalle_grupos.map(d => d.grupo + ': ' + d.partidos + ' partidos').join(' · ') + ')'
         : '';
       GL.invalidar();
       await GL.cargarContexto(true);
-      GL.notificar((resultado.mensaje || 'Calendario generado correctamente.') + detalle, 'exito', 'calendar-check');
-      Mod.jornada = 1;
+      GL.notificar((resultado.mensaje || 'Cuadro de partidos generado correctamente.') + detalle,
+        'exito', 'calendar-check');
+      Mod.jornada = 'todas';
       Mod.render(el);
     } catch (e) {
       console.error('gl_generar_fixture:', e);
-      GL.notificar(GL.mensaje(e, 'guardar', 'el fixture'), 'error');
+      GL.notificar(GL.mensaje(e, 'guardar', 'el cuadro de partidos'), 'error');
     }
   }
 
@@ -229,45 +511,6 @@
       arr.splice(1, 0, arr.pop());
     }
     return rondas;
-  }
-
-  function htmlPartidos(partidos) {
-    if (!partidos.length) return GL.vacio('No hay partidos en esta jornada. Generá el calendario desde el botón superior.',
-      'calendar-x', null);
-    const yo = Auth.jugador && Auth.jugador.id;
-    const visibles = partidos.filter(p => !Mod.soloMios || p.local_id === yo || p.visitante_id === yo);
-    if (!visibles.length) return GL.vacio('No tenés partidos en esta jornada.', 'filter', null);
-    return '<div class="partidos-lista">' + visibles.map((p, i) => {
-      const r = GL.resultado(p);
-      const local = GL.jugador(p.local_id) || {};
-      const visita = GL.jugador(p.visitante_id) || {};
-      const horarioLocal = GL.horarioJugador(local);
-      const horarioVisita = GL.horarioJugador(visita);
-      const waLocal = GL.linkWhatsapp(local, local.nombre_usuario);
-      const waVisita = GL.linkWhatsapp(visita, visita.nombre_usuario);
-      const contacto = (waLocal || waVisita)
-        ? '<div class="horario-linea" style="justify-content:space-between;flex-wrap:wrap">' +
-            (waLocal || '<span></span>') + (waVisita || '<span></span>') + '</div>'
-        : '';
-      return '<div class="partido-card partido-card-fixture" style="animation-delay:' + (i * .04) + 's">' +
-        '<div class="equipo-row local">' +
-          '<div class="equipo">' + icono('home', 16) +
-            '<span>' + esc(GL.nombreJugador(p.local_id)) + '</span>' + GL.banderaHTML(local.pais, 15) + '</div></div>' +
-        '<div class="marcador-centro">' +
-          '<div class="marcador ' + (r.pendiente ? '' : 'jugado') + '">' + r.texto + '</div>' +
-          '<div class="estado-mini" style="justify-content:center;margin-top:4px">' + icono(r.estado.icono, 12) + r.estado.label + '</div></div>' +
-        '<div class="equipo-row visita">' +
-          '<div class="equipo visita">' + GL.banderaHTML(visita.pais, 15) +
-            '<span>' + esc(GL.nombreJugador(p.visitante_id)) + '</span>' + icono('plane', 16) + '</div></div>' +
-        '<div class="detalles-partido">' +
-          '<div class="horario-linea">' + icono('clock', 14) +
-            '<span>' + esc(GL.nombreJugador(p.local_id)) + ': ' + esc(horarioLocal) + '</span></div>' +
-          '<div class="horario-linea">' + icono('clock', 14) +
-            '<span>' + esc(GL.nombreJugador(p.visitante_id)) + ': ' + esc(horarioVisita) + '</span></div>' +
-          contacto +
-        '</div></div>';
-    }).join('') + '</div>' +
-      '<p class="nota-pie">' + esc(GL.notaHorarios()) + '</p>';
   }
 
   Modulos.fixture = Mod;

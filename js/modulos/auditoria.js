@@ -27,7 +27,7 @@
     eliminatoria_cambio:    { ico: 'git-merge',        color: 'blue',    label: 'Eliminatoria modificada' },
     clasificacion_manual:   { ico: 'bar-chart-2',      color: 'blue',    label: 'Clasificación manual'    },
     config_modificada:      { ico: 'settings-2',       color: 'orange',  label: 'Configuración editada'   },
-    fixture_generado:       { ico: 'calendar',         color: 'green',   label: 'Fixture generado'        },
+    fixture_generado:       { ico: 'calendar',         color: 'green',   label: 'Cuadro de partidos generado' },
     grupo_modificado:       { ico: 'layers',           color: 'blue',    label: 'Grupo modificado'        },
   };
 

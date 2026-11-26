@@ -1190,7 +1190,7 @@
       '</div>' +
       '<div id="nt-panel-aleatorio" style="display:' + (modoManual ? 'none' : 'block') + '">' +
         avisoRandom +
-        '<button type="button" class="btn" id="nt-generar-fixture">' + icono('shuffle', 16) + 'Generar calendario aleatorio</button>' +
+        '<button type="button" class="btn" id="nt-generar-fixture">' + icono('shuffle', 16) + 'Generar cuadro de partidos</button>' +
       '</div>' +
       '<div id="nt-panel-manual" style="display:' + (modoManual ? 'block' : 'none') + '">' +
         '<div class="campo-row">' +

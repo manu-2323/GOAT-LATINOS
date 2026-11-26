@@ -207,7 +207,7 @@
         '<div class="ini-accesos">' +
           acceso('tabla', 'layout-list', 'Tabla de posiciones', 'Clasificación del torneo') +
           acceso('calendario', 'calendar-days', 'Calendario', 'Fechas y horarios') +
-          acceso('fixture', 'calendar', 'Fixture', 'Cruces y jornadas') +
+          acceso('fixture', 'calendar', 'Cuadro de partidos', 'Cruces y jornadas') +
           acceso('estadisticas', 'bar-chart-2', 'Estadísticas', 'Números de la jornada') +
         '</div>' +
       '</section>' +
@@ -335,7 +335,7 @@
           '<div class="ini-accesos">' +
             acceso('administracion', 'users', 'Jugadores y equipos', 'Alta, grupos y disciplina') +
             acceso('jornadas', 'flag', 'Jornadas', 'Fechas y cierre') +
-            acceso('fixture', 'calendar', 'Fixture', 'Calendario de partidos') +
+            acceso('fixture', 'calendar', 'Cuadro de partidos', 'Organización del torneo') +
             acceso('resultados', 'clipboard-check', 'Resultados', 'Carga y correcciones') +
             acceso('dashboard-admin', 'layout-dashboard', 'Centro de control', 'Vista completa del torneo') +
           '</div>' +

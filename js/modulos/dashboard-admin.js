@@ -164,7 +164,7 @@
 
                 '<section class="card da-panel" aria-labelledby="da-proximos-titulo">' +
                   panelCab('da-proximos-titulo', 'calendar-days', 'Próximos encuentros',
-                    'Partidos pendientes del fixture', 'fixture', 'Ver fixture') +
+                    'Partidos pendientes del cuadro', 'fixture', 'Ver cuadro') +
                   (proximos.length
                     ? '<ul class="da-lista da-lista-partidos">' + proximos.map(filaProximo).join('') + '</ul>'
                     : placeholder('No hay partidos programados', 'Los encuentros pendientes aparecerán en esta sección.', 'calendar')) +
