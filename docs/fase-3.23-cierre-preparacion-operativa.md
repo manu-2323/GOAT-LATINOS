@@ -107,7 +107,7 @@ La corrección no se declara resuelta solo porque el comando terminó bien: se c
 
 | Prueba | Resultado exacto |
 |---|---|
-| Suite Vitest tras la publicación del código | **18 archivos, 220 pruebas, `EXIT=0`** (219 antes del ajuste de cache-busting; se agregó 1 prueba nueva) |
+| Suite Vitest previa al push | **18 archivos, 220 pruebas, `EXIT=0`** (219 antes del ajuste de cache-busting; se agregó 1 prueba nueva) |
 | `tests/fase-3.23.test.js` | 8 + 1 pruebas (D.12, textos, migración, cache-busting) |
 | `tests/fase-3.23-sql.test.js` | integración del arnés aislado |
 | `node scripts/fase-3.23-db-check.mjs` | **`RESUMEN: 49/49 verificaciones correctas; 0 fallo(s).`, `DB_EXIT=0`** |
@@ -121,11 +121,12 @@ El arnés usa PostgreSQL 19.0 (PGlite 0.6.0) y datos sintéticos; nunca conecta 
 
 ## 7. Publicación
 
-**Commits:** *pendiente de completar tras el push*.  
-**GitHub Actions:** *pendiente de completar tras el push*.  
-**GitHub Pages:** *pendiente de completar tras el push*.
+- **Commit de implementación y documentación:** `14e499d9fac636faf9d5d0f8138a8617768cfcbe` — `FASE 3.23: corregir cierre de jornada, publicar migracion y guia manual`. Push directo a `main`; `HEAD` local y `origin/main` coinciden en ese commit.
+- **Cierre de verificación:** este informe se actualiza en un segundo commit (sin `amend`, sin `rebase` y sin ramas auxiliares) para registrar el resultado del workflow y de Pages.
+- **GitHub Actions:** run `45910782169`, `pages build and deployment`, #52, rama `main`, `head_sha=14e499d9fac636faf9d5d0f8138a8617768cfcbe`; `status=completed`, `conclusion=success`, actualizado `2026-11-26T23:25:23Z`. Detalle: https://github.com/manu-2323/GOAT-LATINOS/actions/runs/45910782169
+- **GitHub Pages:** https://manu-2323.github.io/GOAT-LATINOS/ sirve el `index.html` del commit publicado: `css/tokens-3.1.css?v=3.23.0`, `css/estilos.css?v=3.23.0`, `config.js/gl.js/menu.js?v=1.3.6`, `auth.js?v=1.3.6` y `onboarding.js?v=1.2.4`. El informe quedó accesible en https://manu-2323.github.io/GOAT-LATINOS/docs/fase-3.23-cierre-preparacion-operativa.html (GitHub Pages convierte el `.md` y lo sirve como `.html`; la ruta con extensión `.md` devuelve 404).
 
-No se crearon ramas auxiliares, tags ni reescrituras de historial. El push se realiza directamente sobre `main`.
+No se crearon ramas auxiliares, tags ni reescrituras de historial. El push se realizó directamente sobre `main`.
 
 ---
 
