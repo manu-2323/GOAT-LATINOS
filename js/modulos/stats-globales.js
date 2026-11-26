@@ -43,13 +43,6 @@
     return canvas;
   }
 
-  /* ── Paleta de colores por posición ── */
-  const PALETA = [
-    '#f5c518','#00d4aa','#4fc3f7','#ff8c00','#ce93d8',
-    '#ef9a9a','#80cbc4','#ffe082','#a5d6a7','#90caf9',
-    '#ffcc80','#f48fb1','#b39ddb','#80deea','#c5e1a5'
-  ];
-
   /* ── Opciones base Chart.js ── */
   const OPTS_BASE = {
     responsive    : true,
@@ -58,14 +51,14 @@
     plugins: {
       legend: {
         position: 'bottom',
-        labels  : { color: '#d1d5db', font: { size: 11, family: 'Rajdhani, sans-serif' }, padding: 12, boxWidth: 12 }
+        labels  : { color: GL.tema.texto2, font: { size: 12, family: GL.tema.fuente }, padding: 12, boxWidth: 12 }
       },
       tooltip: {
-        backgroundColor: '#1a2235',
-        borderColor    : '#2d3748',
+        backgroundColor: GL.tema.superficie,
+        borderColor    : GL.tema.bordeFuerte,
         borderWidth    : 1,
-        titleColor     : '#f5c518',
-        bodyColor      : '#d1d5db',
+        titleColor     : GL.tema.advertencia,
+        bodyColor      : GL.tema.texto,
         padding        : 10,
         callbacks       : {}
       }
@@ -75,8 +68,8 @@
 
   function escalesOscuras(eje) {
     return {
-      grid  : { color: 'rgba(255,255,255,.07)' },
-      ticks : { color: '#9ca3af', font: { size: 10, family: 'Rajdhani, sans-serif' } },
+      grid  : { color: GL.tema.borde },
+      ticks : { color: GL.tema.texto2, font: { size: 12, family: GL.tema.fuente } },
       ...eje
     };
   }
@@ -102,9 +95,9 @@
     const total = datos.length;
     const colores = top.map((_, i) => {
       const pos = i + 1;
-      if (pos <= 6) return '#00d4aa';
-      if (pos > total - 3) return '#ff4757';
-      return '#ff8c00';
+      if (pos <= 6) return GL.tema.exito;
+      if (pos > total - 3) return GL.tema.marca;
+      return GL.tema.advertencia;
     });
     const labels = top.map(d => {
       const j = GL.jugador(d.jugador_id);
@@ -126,9 +119,9 @@
       data: {
         labels,
         datasets: [
-          { label: 'Victorias', data: pgDatos, backgroundColor: '#00d4aa', stack: 'partidos', borderRadius: 2 },
-          { label: 'Empates',   data: peDatos, backgroundColor: '#ff8c00', stack: 'partidos', borderRadius: 2 },
-          { label: 'Derrotas',  data: ppDatos, backgroundColor: '#ff4757', stack: 'partidos', borderRadius: 2 },
+          { label: 'Victorias', data: pgDatos, backgroundColor: GL.tema.exito, stack: 'partidos', borderRadius: 2 },
+          { label: 'Empates',   data: peDatos, backgroundColor: GL.tema.advertencia, stack: 'partidos', borderRadius: 2 },
+          { label: 'Derrotas',  data: ppDatos, backgroundColor: GL.tema.marca, stack: 'partidos', borderRadius: 2 },
           { label: 'Puntos',    data: ptsDatos, backgroundColor: colores, borderRadius: 4, type: 'bar', yAxisID: 'yPts' }
         ]
       },
@@ -184,10 +177,10 @@
       data: {
         labels,
         datasets: [
-          { label: 'Goles a favor',  data: gfDatos,  backgroundColor: '#00d4aa', borderRadius: 4 },
-          { label: 'Goles en contra',data: gcDatos,  backgroundColor: '#ff4757', borderRadius: 4 },
-          { label: 'Diferencia',     data: difDatos, type: 'line', borderColor: '#f5c518',
-            backgroundColor: 'rgba(245,197,24,.12)', pointBackgroundColor: '#f5c518',
+          { label: 'Goles a favor',  data: gfDatos,  backgroundColor: GL.tema.exito, borderRadius: 4 },
+          { label: 'Goles en contra',data: gcDatos,  backgroundColor: GL.tema.marca, borderRadius: 4 },
+          { label: 'Diferencia',     data: difDatos, type: 'line', borderColor: GL.tema.advertencia,
+            backgroundColor: GL.tema.alfa(GL.tema.advertencia, 0.12), pointBackgroundColor: GL.tema.advertencia,
             pointRadius: 4, tension: 0.3, fill: true, yAxisID: 'yDif' }
         ]
       },
@@ -251,8 +244,8 @@
         labels  : ['Victorias', 'Empates', 'Derrotas'],
         datasets: [{
           data            : [totalPG, totalPE, totalPP],
-          backgroundColor : ['#00d4aa', '#ff8c00', '#ff4757'],
-          borderColor     : '#0a0e1a',
+          backgroundColor : [GL.tema.exito, GL.tema.advertencia, GL.tema.marca],
+          borderColor     : GL.tema.bg,
           borderWidth     : 3,
           hoverOffset     : 8
         }]
@@ -327,18 +320,18 @@
           {
             label          : '% Victorias',
             data           : efectDatos,
-            borderColor    : '#00d4aa',
-            backgroundColor: 'rgba(0,212,170,.15)',
-            pointBackgroundColor: '#00d4aa',
+            borderColor    : GL.tema.exito,
+            backgroundColor: GL.tema.alfa(GL.tema.exito, 0.15),
+            pointBackgroundColor: GL.tema.exito,
             pointRadius    : 4,
             tension        : 0.2
           },
           {
             label          : '% Puntos máx',
             data           : ptsDatos,
-            borderColor    : '#f5c518',
-            backgroundColor: 'rgba(245,197,24,.1)',
-            pointBackgroundColor: '#f5c518',
+            borderColor    : GL.tema.advertencia,
+            backgroundColor: GL.tema.alfa(GL.tema.advertencia, 0.1),
+            pointBackgroundColor: GL.tema.advertencia,
             pointRadius    : 4,
             tension        : 0.2
           }
@@ -349,10 +342,10 @@
         scales: {
           r: {
             min: 0, max: 100,
-            ticks: { color: '#6b7280', font: { size: 9 }, stepSize: 25 },
-            grid : { color: 'rgba(255,255,255,.08)' },
-            pointLabels: { color: '#d1d5db', font: { size: 10, family: 'Rajdhani, sans-serif' } },
-            angleLines  : { color: 'rgba(255,255,255,.06)' }
+            ticks: { color: GL.tema.texto3, font: { size: 12 }, stepSize: 25 },
+            grid : { color: GL.tema.borde },
+            pointLabels: { color: GL.tema.texto2, font: { size: 12, family: GL.tema.fuente } },
+            angleLines  : { color: GL.tema.borde }
           }
         }
       }
@@ -452,7 +445,7 @@
       if (grid) {
         grid.innerHTML =
           '<div class="sg-vacio-grande" style="grid-column:1/-1" role="status">' +
-            icono('bar-chart-2', 40) +
+            icono('bar-chart-2', 32) +
             '<h3>Sin datos para este grupo</h3>' +
             '<p>El administrador debe cargar resultados de al menos una jornada.</p>' +
           '</div>';
@@ -510,23 +503,23 @@
     if (!wrap) return;
     const kpi = (ico, lbl, val, sub, color) =>
       '<div class="sg-kpi">' +
-        '<div class="sg-kpi-ico" style="color:' + (color || 'var(--accent)') + '">' + icono(ico, 22) + '</div>' +
+        '<div class="sg-kpi-ico" style="color:' + (color || GL.tema.marcaTexto) + '">' + icono(ico, 24) + '</div>' +
         '<div class="sg-kpi-val">' + esc(String(val)) + '</div>' +
         '<div class="sg-kpi-lbl">' + esc(lbl) + '</div>' +
         (sub ? '<div class="sg-kpi-sub">' + esc(sub) + '</div>' : '') +
       '</div>';
 
     wrap.innerHTML =
-      kpi('calendar-check', 'Partidos jugados',   k.totalPJ,  '', '#4fc3f7') +
-      kpi('target',         'Goles totales (GF)',  k.totalGF,  'Prom: ' + k.promGol + ' por partido', '#00d4aa') +
-      kpi('shield',         'Goles en contra (GC)',k.totalGC,  '', '#ff4757') +
+      kpi('calendar-check', 'Partidos jugados',   k.totalPJ,  '', GL.tema.info) +
+      kpi('target',         'Goles totales (GF)',  k.totalGF,  'Prom: ' + k.promGol + ' por partido', GL.tema.exito) +
+      kpi('shield',         'Goles en contra (GC)',k.totalGC,  '', GL.tema.marca) +
       kpi('trophy',         'Líder',               k.liderJ ? k.liderJ.nombre_usuario : '—',
-          k.lider ? k.lider.pts + ' pts' : '', '#f5c518') +
+          k.lider ? k.lider.pts + ' pts' : '', GL.tema.advertencia) +
       kpi('flame',          'Más goles a favor',   k.maxGFJ ? k.maxGFJ.nombre_usuario : '—',
-          k.maxGF ? k.maxGF.gf + ' GF' : '', '#ff8c00') +
+          k.maxGF ? k.maxGF.gf + ' GF' : '', GL.tema.marcaTexto) +
       (k.sinJugar > 0
-        ? kpi('alert-triangle', 'Sin partidos aún', k.sinJugar + ' jugadores', 'Pendiente de fixture', '#ff4757')
-        : kpi('check-circle',   'Participación', '100%', 'Todos han jugado', '#00d4aa'));
+        ? kpi('alert-triangle', 'Sin partidos aún', k.sinJugar + ' jugadores', 'Pendiente de fixture', GL.tema.marca)
+        : kpi('check-circle',   'Participación', '100%', 'Todos han jugado', GL.tema.exito));
 
     iniciarIconos();
   }

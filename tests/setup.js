@@ -7,7 +7,7 @@ window.libphonenumber = libphonenumber;
 window.matchMedia = window.matchMedia || (() => ({ matches: false, addListener() {}, removeListener() {} }));
 
 const raiz = resolve(process.cwd());
-const codigo = ['js/core/config.js', 'js/core/gl.js', 'js/core/ui-estados.js']
+const codigo = ['js/core/config.js', 'js/core/gl.js', 'js/core/ui-estados.js', 'js/core/supabase.js']
   .map(archivo => readFileSync(resolve(raiz, archivo), 'utf8'))
   .join('\n');
 window.eval(codigo);

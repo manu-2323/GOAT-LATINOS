@@ -23,23 +23,67 @@
           el.innerHTML = GL.vacio('No hay jornadas abiertas. Abrí una desde Administración → Jornadas.', 'lock', null);
           iniciarIconos(); return;
         }
-        const pendientes = (await GL.partidos({ torneo_id: GL.torneo().id, jornada: jn }))
-          .filter(p => p.estado === 'pendiente');
+        const partidosJornada = await GL.partidos({ torneo_id: GL.torneo().id, jornada: jn });
+        const pendientes = partidosJornada.filter(p => p.estado === 'pendiente');
+        const jugados = partidosJornada.length - pendientes.length;
+        const progreso = partidosJornada.length ? Math.round((jugados / partidosJornada.length) * 100) : 0;
+        const totalJornadas = Number((GL.torneo() && GL.torneo().total_jornadas) || 22);
         if (Mod.partidoId && !pendientes.some(p => p.id === Mod.partidoId)) Mod.partidoId = null;
         if (!Mod.partidoId && pendientes.length) Mod.partidoId = pendientes[0].id;
 
+        const gruposPendientes = [...new Set(pendientes.map(p => p.grupo_id))].map(id => {
+          const g = GL.grupo(id);
+          return '<option value="' + esc(id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</option>';
+        }).join('');
+
         el.innerHTML =
-          '<div class="seccion-head"><div class="seccion-titulo"><h2>Carga de resultados</h2>' +
-            '<p>Jornada ' + jn + ' · Validá el marcador antes de guardar. El cálculo de tabla es automático.</p></div>' +
-            '<div class="seccion-acciones">' + GL.badge(jn + ' / ' + ((GL.torneo()&&GL.torneo().total_jornadas)||22), 'gold', 'flag') + '</div></div>' +
-          '<div class="tabs">' +
-            '<button type="button" class="tab' + (Mod.modo === 'manual' ? ' activo' : '') + '" data-modo="manual">' + icono('keyboard', 16) + 'Ingreso manual</button>' +
-            '<button type="button" class="tab' + (Mod.modo === 'ia' ? ' activo' : '') + '" data-modo="ia">' + icono('scan-eye', 16) + 'Análisis de captura (IA)</button>' +
-          '</div>' +
-          '<div class="grid dos resultado-grid">' +
-            '<div class="card"><div class="card-titulo">' + icono('list-checks', 19) + 'Partidos pendientes</div>' +
-              '<div id="lista-pendientes">' + htmlLista(pendientes) + '</div></div>' +
-            '<div id="panel-resultado"></div>' +
+          '<div class="r7-pantalla" data-resultados>' +
+            '<header class="r7-hero">' +
+              '<div class="r7-hero-copy">' +
+                '<span class="r7-eyebrow">' + icono('clipboard-check', 14) + 'Dirección del torneo · Resultados</span>' +
+                '<h1 class="r7-titulo">Carga de resultados</h1>' +
+                '<p class="r7-bajada">Jornada ' + jn + ' · Validá el marcador antes de guardar. El cálculo de tabla es automático.</p>' +
+              '</div>' +
+              '<div class="r7-hero-acciones">' +
+                GL.badge(jn + ' / ' + totalJornadas, 'gold', 'flag') +
+                GL.badge(partidosJornada.length + ' partidos', 'neutral', 'calendar-days') +
+              '</div>' +
+            '</header>' +
+            '<section class="r7-kpis" aria-label="Progreso de la jornada">' +
+              r7Kpi(pendientes.length, 'Pendientes', 'Partidos sin resultado', 'clock', true, progreso) +
+              r7Kpi(jugados, 'Cargados', 'Resultados ya registrados', 'check-circle-2') +
+              r7Kpi(partidosJornada.length, 'Total', 'Partidos de la jornada', 'calendar-days') +
+              r7Kpi(progreso + '%', 'Progreso', 'Jornada en curso', 'chart-no-axes-column') +
+            '</section>' +
+            '<div class="r7-tabs" role="tablist" aria-label="Modo de carga">' +
+              '<button type="button" class="r7-tab' + (Mod.modo === 'manual' ? ' activo' : '') + '" data-modo="manual" role="tab" aria-selected="' + (Mod.modo === 'manual') + '">' +
+                icono('keyboard', 16) + 'Ingreso manual</button>' +
+              '<button type="button" class="r7-tab' + (Mod.modo === 'ia' ? ' activo' : '') + '" data-modo="ia" role="tab" aria-selected="' + (Mod.modo === 'ia') + '">' +
+                icono('scan-eye', 16) + 'Análisis de captura (IA)</button>' +
+            '</div>' +
+            '<div class="r7-layout">' +
+              '<section class="r7-panel r7-lista-panel" aria-labelledby="r7-lista-titulo">' +
+                '<div class="r7-panel-cab"><div><h2 id="r7-lista-titulo">' + icono('list-checks', 18) + 'Partidos pendientes</h2>' +
+                  '<p>Seleccioná un encuentro para cargar su resultado.</p></div>' +
+                  '<span id="r7-contador" aria-live="polite">' + pendientes.length + (pendientes.length === 1 ? ' partido' : ' partidos') + '</span></div>' +
+                '<div class="r7-filtros">' +
+                  '<label class="r7-campo"><span>Buscar partido</span>' +
+                    '<span class="r7-input-ico">' + icono('search', 16) +
+                      '<input class="input" id="r7-buscar" type="search" placeholder="Ej: jugador o equipo" autocomplete="off" aria-label="Buscar partidos pendientes">' +
+                    '</span></label>' +
+                  '<label class="r7-campo"><span>Grupo</span>' +
+                    '<select class="input" id="r7-grupo" aria-label="Filtrar partidos por grupo">' +
+                      '<option value="">Todos los grupos</option>' + gruposPendientes +
+                    '</select></label>' +
+                  '<button type="button" class="btn sec r7-limpiar" data-r7-limpiar>' + icono('rotate-ccw', 16) + 'Limpiar</button>' +
+                '</div>' +
+                '<div id="lista-pendientes" class="r7-lista">' + htmlLista(pendientes) + '</div>' +
+                '<div class="r7-estado-vacio" id="r7-sin-resultados" hidden>' + icono('search-x', 28) +
+                  '<strong>Sin coincidencias</strong><span>Probá con otro nombre o quitá el filtro de grupo.</span>' +
+                  '<button type="button" class="btn sec sm" data-r7-limpiar>' + icono('rotate-ccw', 15) + 'Limpiar filtros</button></div>' +
+              '</section>' +
+              '<section class="r7-panel r7-editor-panel" aria-label="Editor de resultado"><div id="panel-resultado"></div></section>' +
+            '</div>' +
           '</div>';
 
         const panel = el.querySelector('#panel-resultado');
@@ -47,7 +91,7 @@
           const p = pendientes.find(x => x.id === Mod.partidoId);
           panel.innerHTML = !p ? GL.vacio('No hay partidos pendientes en esta jornada.', 'check-check', null)
             : (Mod.modo === 'manual' ? htmlManual(p) : htmlIA(p));
-          enlazarPanel(panel, p);
+          enlazarPanel(panel, p, pintarPanel);
           iniciarIconos();
         };
         pintarPanel();
@@ -60,59 +104,135 @@
           el.querySelectorAll('[data-partido]').forEach(x => x.classList.toggle('activo', x === b));
           pintarPanel();
         }));
+        enlazarFiltros(el);
       } catch (e) { console.error(e); el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'los resultados'), null, 'los resultados'); }
       iniciarIconos();
     }
   };
 
+  function r7Kpi(valor, etiqueta, nota, ico, principal, progreso) {
+    return '<article class="r7-kpi' + (principal ? ' principal' : '') + '">' +
+      '<span class="r7-kpi-ico">' + icono(ico, 20) + '</span>' +
+      '<span class="r7-kpi-copy">' +
+        '<strong class="r7-kpi-valor">' + esc(valor) + '</strong>' +
+        '<span class="r7-kpi-label">' + esc(etiqueta) + '</span>' +
+        '<span class="r7-kpi-nota">' + esc(nota) + '</span>' +
+      '</span>' +
+      (principal
+        ? '<span class="r7-kpi-bar" role="progressbar" aria-valuenow="' + Number(progreso || 0) +
+          '" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso de la jornada">' +
+          '<span style="width:' + Number(progreso || 0) + '%"></span></span>'
+        : '') +
+    '</article>';
+  }
+
   function htmlLista(pendientes) {
-    if (!pendientes.length) return '<p class="vacio-mensaje">Todos los partidos de la jornada ya tienen resultado.</p>';
-    return '<div style="display:flex;flex-direction:column;gap:7px;max-height:520px;overflow:auto">' +
-      pendientes.map(p => {
-        const cerrada = esCerrada(p);
-        return '<button type="button" class="partido-card' + (p.id === Mod.partidoId ? ' activo' : '') + '" data-partido="' + p.id + '"' +
-          ' style="width:100%;text-align:left;' + (p.id === Mod.partidoId ? 'border-color:var(--accent-gold);background:rgba(245,197,24,.05)' : '') + '">' +
-          '<div style="flex:1;min-width:0"><div style="font-size:9px;color:var(--text-muted)">J' + p.jornada + ' · Grupo ' +
-            GL.letraGrupo(GL.grupo(p.grupo_id)) + '</div>' +
-            '<div style="font-family:Rajdhani;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
-            esc(GL.nombreJugador(p.local_id)) + ' vs ' + esc(GL.nombreJugador(p.visitante_id)) + '</div></div>' +
-          (cerrada ? GL.badge('Cerrada', 'red') : icono('chevron-right', 16)) + '</button>';
-      }).join('') + '</div>';
+    if (!pendientes.length) {
+      return '<div class="r7-vacio">' + icono('check-check', 28) +
+        '<strong>Todos los partidos tienen resultado</strong>' +
+        '<span>No hay encuentros pendientes en esta jornada.</span></div>';
+    }
+    return '<div class="r7-lista-items">' + pendientes.map(p => {
+      const cerrada = esCerrada(p);
+      const local = esc(GL.nombreJugador(p.local_id));
+      const visita = esc(GL.nombreJugador(p.visitante_id));
+      const grupo = esc(GL.letraGrupo(GL.grupo(p.grupo_id)));
+      return '<button type="button" class="partido-card r7-partido' + (p.id === Mod.partidoId ? ' activo' : '') + '"' +
+        ' data-partido="' + esc(p.id) + '" data-r7-nombre="' + esc(local + ' ' + visita) + '"' +
+        ' data-r7-grupo="' + esc(p.grupo_id) + '"' +
+        (p.id === Mod.partidoId ? ' aria-current="true"' : '') + '>' +
+          '<span class="r7-partido-top"><span class="r7-partido-jornada">J' + Number(p.jornada) + ' · Grupo ' + grupo + '</span>' +
+            (cerrada ? GL.badge('Cerrada', 'red', 'lock') : GL.badge('Pendiente', 'neutral', 'clock')) + '</span>' +
+          '<span class="r7-partido-nombres">' + local + ' <span>vs</span> ' + visita + '</span>' +
+          '<span class="r7-partido-foot"><span>Resultado pendiente</span>' + icono('chevron-right', 16) + '</span>' +
+        '</button>';
+    }).join('') + '</div>';
+  }
+
+  /* Filtros locales de solo presentación sobre los partidos ya cargados. */
+  function enlazarFiltros(cont) {
+    const buscar = cont.querySelector('#r7-buscar');
+    const grupo = cont.querySelector('#r7-grupo');
+    const lista = cont.querySelector('#lista-pendientes');
+    if (!buscar || !grupo || !lista) return;
+    const contador = cont.querySelector('#r7-contador');
+    const sinResultados = cont.querySelector('#r7-sin-resultados');
+    const tarjetas = [...lista.querySelectorAll('.r7-partido')];
+    const total = tarjetas.length;
+    const normalizar = texto => String(texto || '').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    const aplicar = () => {
+      const texto = normalizar(buscar.value.trim());
+      const grupoId = grupo.value;
+      let visibles = 0;
+      tarjetas.forEach(tarjeta => {
+        const coincideTexto = !texto || normalizar(tarjeta.dataset.r7Nombre).includes(texto);
+        const coincideGrupo = !grupoId || tarjeta.dataset.r7Grupo === grupoId;
+        const mostrar = coincideTexto && coincideGrupo;
+        tarjeta.hidden = !mostrar;
+        if (mostrar) visibles++;
+      });
+      if (contador) {
+        contador.textContent = visibles + (visibles === 1 ? ' partido' : ' partidos') +
+          (visibles !== total ? ' de ' + total : '');
+      }
+      if (sinResultados) sinResultados.hidden = !(total > 0 && visibles === 0);
+    };
+
+    [buscar, grupo].forEach(el =>
+      el.addEventListener(el === buscar ? 'input' : 'change', aplicar));
+    cont.querySelectorAll('[data-r7-limpiar]').forEach(b => b.addEventListener('click', () => {
+      buscar.value = ''; grupo.value = '';
+      aplicar();
+      buscar.focus();
+    }));
+    aplicar();
   }
 
   function htmlManual(p) {
     const cerrada = esCerrada(p);
-    return '<div class="card"><div class="card-titulo">' + icono('clipboard-check', 20) + 'Resultado manual</div>' +
-      (cerrada ? '<div class="badge red" style="margin-bottom:12px">' + icono('lock', 14) + 'Jornada cerrada — no se puede editar</div>' : '') +
-      '<div class="campo-row">' +
-        '<label class="campo"><span>Local · ' + esc(GL.nombreJugador(p.local_id)) + '</span>' +
-          '<input class="input" type="number" min="0" max="99" id="g-local" value="' + (p.goles_local || 0) + '"' + (cerrada ? ' disabled' : '') + '></label>' +
-        '<label class="campo"><span>Visitante · ' + esc(GL.nombreJugador(p.visitante_id)) + '</span>' +
-          '<input class="input" type="number" min="0" max="99" id="g-visita" value="' + (p.goles_visitante || 0) + '"' + (cerrada ? ' disabled' : '') + '></label>' +
+    const local = esc(GL.nombreJugador(p.local_id));
+    const visita = esc(GL.nombreJugador(p.visitante_id));
+    return '<div class="r7-forma">' +
+      '<div class="r7-forma-cab"><div><span class="r7-forma-eyebrow">' + icono('keyboard', 14) + 'Modo manual</span>' +
+        '<h3>Resultado del encuentro</h3></div>' +
+        (cerrada ? GL.badge('Jornada cerrada', 'red', 'lock') : GL.badge('Editable', 'green', 'pencil')) + '</div>' +
+      (cerrada ? '<p class="r7-aviso">' + icono('info', 14) + 'Esta jornada está cerrada; no se puede editar el resultado.</p>' : '') +
+      '<div class="r7-marcador">' +
+        '<div class="r7-equipo"><span class="r7-equipo-rol">Local</span>' +
+          '<strong class="r7-equipo-nombre">' + local + '</strong>' +
+          '<input class="input" type="number" min="0" max="99" id="g-local" value="' + (p.goles_local || 0) + '"' + (cerrada ? ' disabled' : '') + ' aria-label="Goles del local"></div>' +
+        '<span class="r7-vs" aria-hidden="true">VS</span>' +
+        '<div class="r7-equipo"><span class="r7-equipo-rol">Visitante</span>' +
+          '<strong class="r7-equipo-nombre">' + visita + '</strong>' +
+          '<input class="input" type="number" min="0" max="99" id="g-visita" value="' + (p.goles_visitante || 0) + '"' + (cerrada ? ' disabled' : '') + ' aria-label="Goles del visitante"></div>' +
       '</div>' +
-      '<label class="campo"><span>Estado del partido</span><select class="input" id="estado"' + (cerrada ? ' disabled' : '') + '>' +
-        Object.entries(ESTADOS_PARTIDO).filter(([k]) => k !== 'pendiente').map(([k, v]) =>
-          '<option value="' + k + '"' + (p.estado === k ? ' selected' : '') + '>' + v.label + '</option>').join('') +
-      '</select></label>' +
-      '<details class=\"mt\"><summary style=\"cursor:pointer;color:var(--text-secondary);font-size:12px\">' + icono('chart-no-axes-column', 14) + ' Estadísticas avanzadas (opcional)</summary>' +
-        '<div class=\"campo-stats-grid mt\">' + camposStats(p, cerrada) + '</div></details>' +
-      // Captura obligatoria en ingreso manual
+      '<label class="r7-campo"><span>Estado del partido</span>' +
+        '<select class="input" id="estado"' + (cerrada ? ' disabled' : '') + '>' +
+          Object.entries(ESTADOS_PARTIDO).filter(([k]) => k !== 'pendiente').map(([k, v]) =>
+            '<option value="' + k + '"' + (p.estado === k ? ' selected' : '') + '>' + v.label + '</option>').join('') +
+        '</select></label>' +
+      '<details class="r7-detalles"><summary>' + icono('chart-no-axes-column', 14) + ' Estadísticas avanzadas (opcional)</summary>' +
+        '<div class="r7-stats-grid">' + camposStats(p, cerrada) + '</div></details>' +
       (!cerrada ? (
-        '<div class=\"campo mt\">' +
-          '<span style=\"font-size:12px;color:var(--text-secondary)\">' + icono('image', 14) + ' Captura del partido' +
-            (p.captura_url ? ' <span class=\"badge green\" style=\"font-size:11px\">Ya tiene captura</span>' : ' <span class=\"badge red\" style=\"font-size:11px\">Obligatoria</span>') +
-          '</span>' +
-          '<div class=\"dropzone mini\" id=\"dropzone-manual\" style=\"margin-top:6px;padding:12px;border:1px dashed var(--border);border-radius:var(--radius);text-align:center;cursor:pointer\">' +
-            (Mod.archivo
-              ? icono('image-check', 20) + ' <span style=\"font-size:12px\">' + esc(Mod.archivo.name) + '</span>'
-              : icono('upload', 20) + ' <span style=\"font-size:12px\">Clic para adjuntar JPG/PNG (máx. 5 MB)</span>') +
+        '<div class="r7-captura">' +
+          '<div class="r7-captura-cab"><span>' + icono('image', 14) + ' Captura del partido</span>' +
+            (p.captura_url ? GL.badge('Ya tiene captura', 'green', 'check-circle-2') : GL.badge('Obligatoria', 'red', 'image')) +
           '</div>' +
-          '<input type=\"file\" id=\"archivo-manual\" accept=\"image/jpeg,image/png\" class=\"oculto\">' +
+          '<div class="dropzone mini r7-dropzone" id="dropzone-manual">' +
+            (Mod.archivo
+              ? icono('image-check', 20) + ' <span class="r7-dropzone-texto">' + esc(Mod.archivo.name) + '</span>'
+              : icono('upload', 20) + ' <span class="r7-dropzone-texto">Clic para adjuntar JPG/PNG (máx. 5 MB)</span>') +
+          '</div>' +
+          '<input type="file" id="archivo-manual" accept="image/jpeg,image/png" class="oculto">' +
         '</div>'
       ) : '') +
-      '<div class=\"barra-acciones mt\" style=\"display:flex;gap:9px;justify-content:flex-end\">' +
-        '<button type=\"button\" class=\"btn\" id=\"guardar\"' + (cerrada ? ' disabled' : '') + '>' + icono('save', 17) + 'Confirmar y Guardar</button>' +
-      '</div></div>';
+      '<div class="r7-acciones">' +
+        '<button type="button" class="btn" id="guardar"' + (cerrada ? ' disabled' : '') + '>' +
+          icono('save', 18) + 'Confirmar y Guardar</button>' +
+      '</div>' +
+    '</div>';
   }
 
   function camposStats(p, cerrada, datos) {
@@ -124,49 +244,67 @@
       ['posesion_visitante', 'Posesión visita %'], ['pase_visitante', 'Precisión pase visita %']
     ];
     return campos.map(([k, label]) =>
-      '<label class="campo campo-stats"><span>' + label + '</span>' +
-      '<input class="input" type="number" min="0" max="100" id="' + k + '" value="' +
-      (d[k] !== undefined ? d[k] : (p[k] !== undefined ? p[k] : '')) + '"' + (cerrada ? ' disabled' : '') + '>' +
-      icono('pencil', 13) + '</label>').join('');
+      '<label class="r7-campo r7-stat"><span>' + label + '</span>' +
+        '<span class="r7-input-ico">' +
+          '<input class="input" type="number" min="0" max="100" id="' + k + '" value="' +
+          (d[k] !== undefined ? d[k] : (p[k] !== undefined ? p[k] : '')) + '"' + (cerrada ? ' disabled' : '') + '>' +
+          icono('pencil', 14) +
+        '</span></label>').join('');
   }
 
   function htmlIA(p) {
     if (esCerrada(p)) {
-      return '<div class="card"><div class="card-titulo">' + icono('lock', 19) + 'Jornada cerrada</div>' +
-        '<p class="muted">No se pueden cargar resultados de una jornada cerrada. Reabrí la jornada desde Administración si necesitás corregirla.</p></div>';
+      return '<div class="r7-forma"><div class="r7-forma-cab"><div>' +
+        '<span class="r7-forma-eyebrow">' + icono('scan-eye', 14) + 'Modo IA</span><h3>Jornada cerrada</h3></div>' +
+        GL.badge('Sin edición', 'red', 'lock') + '</div>' +
+        '<p class="r7-aviso">No se pueden cargar resultados de una jornada cerrada. Reabrí la jornada desde Administración si necesitás corregirla.</p></div>';
     }
     if (Mod.analizando) {
-      return '<div class="card center"><div class="analizando" style="justify-content:center">' +
-        '<span class="spinner"></span>Analizando captura con Gemini AI...</div>' +
-        '<p class="muted mt">Extrayendo marcador y estadísticas de la captura.</p></div>';
+      return '<div class="r7-forma"><div class="r7-forma-cab"><div>' +
+        '<span class="r7-forma-eyebrow">' + icono('scan-eye', 14) + 'Modo IA</span><h3>Analizando captura</h3></div>' +
+        GL.badge('Procesando', 'neutral', 'loader-circle') + '</div>' +
+        '<div class="r7-analizando"><span class="spinner"></span>' +
+        '<strong>Analizando captura con Gemini AI…</strong>' +
+        '<span>Extrayendo marcador y estadísticas visibles. Podés revisar los datos antes de guardar.</span></div></div>';
     }
     if (Mod.datosIA) {
       const d = Mod.datosIA;
-      return '<div class="card"><div class="card-titulo">' + icono('sparkles', 19) + 'Datos detectados <span class="badge gold">Revisá antes de guardar</span></div>' +
-        '<div class="campo-row">' +
-          '<label class="campo"><span>Goles local · ' + esc(GL.nombreJugador(p.local_id)) + '</span><input class="input" type="number" min="0" id="g-local" value="' + (d.goles_local || 0) + '"></label>' +
-          '<label class="campo"><span>Goles visitante · ' + esc(GL.nombreJugador(p.visitante_id)) + '</span><input class="input" type="number" min="0" id="g-visita" value="' + (d.goles_visitante || 0) + '"></label>' +
+      return '<div class="r7-forma"><div class="r7-forma-cab"><div>' +
+        '<span class="r7-forma-eyebrow">' + icono('sparkles', 14) + 'Modo IA</span><h3>Datos detectados</h3></div>' +
+        GL.badge('Revisá antes de guardar', 'gold', 'triangle-alert') + '</div>' +
+        '<div class="r7-marcador r7-marcador-ia">' +
+          '<div class="r7-equipo"><span class="r7-equipo-rol">Local</span>' +
+            '<strong class="r7-equipo-nombre">' + esc(GL.nombreJugador(p.local_id)) + '</strong>' +
+            '<input class="input" type="number" min="0" id="g-local" value="' + (d.goles_local || 0) + '" aria-label="Goles del local"></div>' +
+          '<span class="r7-vs" aria-hidden="true">VS</span>' +
+          '<div class="r7-equipo"><span class="r7-equipo-rol">Visitante</span>' +
+            '<strong class="r7-equipo-nombre">' + esc(GL.nombreJugador(p.visitante_id)) + '</strong>' +
+            '<input class="input" type="number" min="0" id="g-visita" value="' + (d.goles_visitante || 0) + '" aria-label="Goles del visitante"></div>' +
         '</div>' +
-        '<div class="campo-stats-grid">' + camposStats(p, false, d) + '</div>' +
-        '<div class="barra-acciones mt" style="display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap">' +
+        '<details class="r7-detalles" open><summary>' + icono('chart-no-axes-column', 14) + ' Estadísticas detectadas</summary>' +
+          '<div class="r7-stats-grid">' + camposStats(p, false, d) + '</div></details>' +
+        '<div class="r7-acciones">' +
           '<button type="button" class="btn sec" id="re-hacer">' + icono('rotate-ccw', 16) + 'Otra captura</button>' +
-          '<button type="button" class="btn" id="guardar">' + icono('save', 17) + 'Confirmar y Guardar</button>' +
+          '<button type="button" class="btn" id="guardar">' + icono('save', 18) + 'Confirmar y Guardar</button>' +
         '</div></div>';
     }
-    return '<div class="card"><div class="card-titulo">' + icono('upload-cloud', 19) + 'Análisis de captura</div>' +
-      '<p class="muted" style="font-size:12px;margin-bottom:12px">Subí una captura de la pantalla de resultados de FC Mobile. El sistema extrae los datos y vos los confirmás.</p>' +
-      (esCerrada(p) ? '<div class="badge red" style="margin-bottom:12px">Jornada cerrada</div>' : '') +
-      '<div class="dropzone" id="dropzone">' + icono('image-plus', 34) +
-        '<strong>Arrastrá la captura aquí</strong><p>o hacé clic para elegir un archivo · JPG/PNG máx. 5 MB</p>' +
+    return '<div class="r7-forma"><div class="r7-forma-cab"><div>' +
+      '<span class="r7-forma-eyebrow">' + icono('scan-eye', 14) + 'Modo IA</span><h3>Análisis de captura</h3></div>' +
+      GL.badge('Asistido', 'neutral', 'image-plus') + '</div>' +
+      '<p class="r7-bajada r7-bajada-forma">Subí una captura de la pantalla de resultados de FC Mobile. El sistema extrae los datos y vos los confirmás.</p>' +
+      '<div class="dropzone r7-dropzone r7-dropzone-grande" id="dropzone">' + icono('image-plus', 32) +
+        '<strong>Arrastrá la captura aquí</strong>' +
+        '<span>o hacé clic para elegir un archivo · JPG/PNG máx. 5 MB</span>' +
         (Mod.archivo ? '<img id="preview" alt="Vista previa de la captura" src="' + URL.createObjectURL(Mod.archivo) + '">' : '') +
       '</div>' +
-      '<button type="button" class="btn-secundario block mt" id="elegir-captura">' + icono('upload', 16) + 'Seleccionar captura</button>' +
       '<input type="file" id="archivo" accept="image/jpeg,image/png" class="oculto">' +
-      /* 1.2.0: el botón de IA siempre está visible; se habilita al elegir foto. */
-      '<button type="button" class="btn-primario block mt" id="analizar" ' + (Mod.archivo ? '' : 'disabled aria-disabled="true"') + '>' +
-        icono('scan-eye', 17) + 'Analizar captura con IA</button>' +
-      (Mod.archivo ? '' : '<p class="muted" style="font-size:11px;margin-top:6px">Elige una captura para activar el análisis automático.</p>') +
-      '</div>';
+      '<div class="r7-acciones r7-acciones-ia">' +
+        '<button type="button" class="btn sec" id="elegir-captura">' + icono('upload', 16) + 'Seleccionar captura</button>' +
+        '<button type="button" class="btn" id="analizar" ' + (Mod.archivo ? '' : 'disabled aria-disabled="true"') + '>' +
+          icono('scan-eye', 18) + 'Analizar captura con IA</button>' +
+      '</div>' +
+      (Mod.archivo ? '' : '<p class="r7-pista">Elegí una captura para activar el análisis automático.</p>') +
+    '</div>';
   }
 
   function esCerrada(p) {
@@ -174,7 +312,7 @@
     return !!(j && j.estado === 'cerrada');
   }
 
-  function enlazarPanel(panel, p) {
+  function enlazarPanel(panel, p, actualizarPanel) {
     const g = s => panel.querySelector(s);
 
     // Dropzone de captura en modo manual
@@ -188,12 +326,12 @@
         e.preventDefault();
         dropzoneManual.style.borderColor = 'var(--border)';
         const f = e.dataTransfer.files[0];
-        if (f && ['image/jpeg', 'image/png'].includes(f.type)) { Mod.archivo = f; pintarPanel(); }
+        if (f && ['image/jpeg', 'image/png'].includes(f.type)) { Mod.archivo = f; actualizarPanel(); }
         else GL.notificar('Solo se aceptan JPG o PNG.', 'advertencia');
       });
       archivoManual.addEventListener('change', () => {
         const f = archivoManual.files[0];
-        if (f) { Mod.archivo = f; pintarPanel(); }
+        if (f) { Mod.archivo = f; actualizarPanel(); }
       });
     }
 
@@ -400,7 +538,7 @@
     } catch (e) {
       console.error(e);
       GL.notificar(GL.mensaje(e, 'guardar', 'los resultados'), 'error');
-      if (btn) { btn.disabled = false; btn.innerHTML = icono('save', 17) + 'Confirmar y Guardar'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = icono('save', 18) + 'Confirmar y Guardar'; }
     }
   }
 

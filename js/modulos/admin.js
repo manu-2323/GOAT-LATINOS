@@ -1,6 +1,7 @@
 /* =====================================================================
    MÓDULO 7 — Panel de administración (validado en cada carga)
-   A: Jugadores  B: Jornadas  C: Disciplina  D: Administradores  E: Configuración
+   A: Jugadores  A2: Equipos (grupos reales)  B: Jornadas
+   C: Disciplina  D: Administradores  E: Configuración
    ===================================================================== */
 (function () {
   const MAX_JORNADAS = 30; // Rango permitido para el total de jornadas (1..30)
@@ -36,6 +37,7 @@
           '<div class="tabs tabs-admin">' +
             tabBtn('resumen',    'layout-dashboard', 'Resumen') +
             tabBtn('jugadores',  'users',            'Jugadores') +
+            tabBtn('equipos',    'shield',           'Equipos') +
             tabBtn('jornadas',   'flag',             'Jornadas') +
             tabBtn('disciplina', 'gavel',            'Disciplina') +
             (superAdmin ? tabBtn('admins', 'shield-check', 'Admins') : '') +
@@ -113,6 +115,7 @@
     cont.innerHTML =
       Mod.tab === 'resumen'    ? htmlResumen(superAdmin) :
       Mod.tab === 'jugadores'  ? htmlJugadores() :
+      Mod.tab === 'equipos'    ? htmlEquipos() :
       Mod.tab === 'jornadas'   ? htmlJornadas() :
       Mod.tab === 'disciplina' ? htmlDisciplina() :
       Mod.tab === 'admins'     ? htmlAdmins() :
@@ -145,7 +148,7 @@
   function htmlAccionesTorneo() {
     const t = GL.torneo() || {};
     return '<div class="card mt">' +
-      '<div class="card-titulo">' + icono('trophy', 19) + 'Arrancar desde cero</div>' +
+      '<div class="card-titulo">' + icono('trophy', 20) + 'Arrancar desde cero</div>' +
       '<p class="muted" style="font-size:12px">' +
         (t.id
           ? 'Torneo actual: <strong>' + esc(t.nombre || CONFIG.NOMBRE_LIGA) + '</strong> · ' +
@@ -219,7 +222,7 @@
 
     const htmlAlertas = alertas.length
       ? '<div class="card mt">' +
-          '<div class="card-titulo">' + icono('bell-ring', 19) + 'Atención requerida' +
+          '<div class="card-titulo">' + icono('bell-ring', 20) + 'Atención requerida' +
             '<span class="badge red">' + alertas.length + '</span>' +
           '</div>' +
           alertas.map(a =>
@@ -227,18 +230,18 @@
               icono(a.ico, 15) +
               '<span>' + a.msg + '</span>' +
               '<button type="button" class="btn sm sec alerta-ir" data-tab-ir="' + a.tab + '">' +
-                icono('arrow-right', 13) + 'Ver' +
+                icono('arrow-right', 14) + 'Ver' +
               '</button>' +
             '</div>'
           ).join('') +
         '</div>'
       : '<div class="card mt"><div class="alerta-item alerta-ok">' +
-          icono('circle-check', 15) + '<span>Todo en orden. No hay alertas pendientes.</span>' +
+          icono('circle-check', 16) + '<span>Todo en orden. No hay alertas pendientes.</span>' +
         '</div></div>';
 
     const htmlJornada =
       '<div class="card">' +
-        '<div class="card-titulo">' + icono('flag', 19) + 'Estado de la temporada</div>' +
+        '<div class="card-titulo">' + icono('flag', 20) + 'Estado de la temporada</div>' +
         '<div class="temporada-progreso">' +
           '<div class="temporada-barra"><span style="width:' + pct + '%"></span></div>' +
           '<div class="temporada-labels">' +
@@ -247,19 +250,19 @@
           '</div>' +
         '</div>' +
         '<div class="temporada-detalle">' +
-          '<div class="temporada-stat">' + icono('check-circle', 13) + jornadasCerradas + ' jornadas cerradas</div>' +
-          '<div class="temporada-stat">' + icono('unlock', 13) + jornadasAbiertas.length + ' abierta' + (jornadasAbiertas.length !== 1 ? 's' : '') + '</div>' +
-          '<div class="temporada-stat">' + icono('calendar-days', 13) + (total - jornada.numero) + ' por jugar</div>' +
+          '<div class="temporada-stat">' + icono('check-circle', 14) + jornadasCerradas + ' jornadas cerradas</div>' +
+          '<div class="temporada-stat">' + icono('unlock', 14) + jornadasAbiertas.length + ' abierta' + (jornadasAbiertas.length !== 1 ? 's' : '') + '</div>' +
+          '<div class="temporada-stat">' + icono('calendar-days', 14) + (total - jornada.numero) + ' por jugar</div>' +
         '</div>' +
         '<div class="jornada-progreso-wrap">' +
-          '<div class="jornada-progreso-titulo">' + icono('activity', 13) + 'Jornada ' + jornada.numero + ' — ' + jugados + '/' + partidosJornada.length + ' partidos</div>' +
+          '<div class="jornada-progreso-titulo">' + icono('activity', 14) + 'Jornada ' + jornada.numero + ' — ' + jugados + '/' + partidosJornada.length + ' partidos</div>' +
           '<div class="temporada-barra"><span style="width:' + pctJornada + '%"></span></div>' +
         '</div>' +
       '</div>';
 
     const htmlRecientes = recientes.length
       ? '<div class="card mt">' +
-          '<div class="card-titulo">' + icono('activity', 19) + 'Actividad reciente</div>' +
+          '<div class="card-titulo">' + icono('activity', 20) + 'Actividad reciente</div>' +
           '<ul class="actividad-lista">' +
           recientes.map(p => {
             const r = GL.resultado(p);
@@ -278,7 +281,7 @@
 
     const htmlAccionesRapidas =
       '<div class="card mt">' +
-        '<div class="card-titulo">' + icono('zap', 19) + 'Acciones rápidas</div>' +
+        '<div class="card-titulo">' + icono('zap', 20) + 'Acciones rápidas</div>' +
         '<div class="acciones-rapidas-grid">' +
           accionRapida('jugadores', 'user-plus',   'Agregar jugador',  'Registrá un nuevo participante') +
           accionRapida('jornadas',  'flag',         'Gestionar jornadas','Abrí, cerrá y revisá partidos') +
@@ -291,7 +294,7 @@
       '<div class="grid dos mt">' +
         htmlJornada +
         '<div class="card">' +
-          '<div class="card-titulo">' + icono('bar-chart-2', 19) + 'Resumen del torneo</div>' +
+          '<div class="card-titulo">' + icono('bar-chart-2', 20) + 'Resumen del torneo</div>' +
           '<div class="kpi-grid">' +
             tarjetaKpi(totalJugadores, 'Jugadores',   'users',         'var(--accent-primary)') +
             tarjetaKpi(grupos.length,  'Grupos',       'layout-grid',   'var(--accent-secondary,#8e44ad)') +
@@ -317,14 +320,48 @@
   }
 
   /* ---------------- A. Jugadores ---------------- */
+  function j5Kpi(valor, etiqueta, nota, ico) {
+    return '<article class="j5-kpi">' +
+      '<span class="j5-kpi-ico">' + icono(ico, 20) + '</span>' +
+      '<span class="j5-kpi-copy">' +
+        '<strong class="j5-kpi-valor">' + esc(valor) + '</strong>' +
+        '<span class="j5-kpi-label">' + esc(etiqueta) + '</span>' +
+        '<span class="j5-kpi-nota">' + esc(nota) + '</span>' +
+      '</span></article>';
+  }
+
+  function j5Requerido() {
+    return '<span class="j5-req" aria-hidden="true">*</span><span class="sr-only"> (obligatorio)</span>';
+  }
+
+  function j5FormIntro(texto) {
+    return '<div class="j5-form-intro">' + icono('info', 18) +
+      '<div><strong>Datos del jugador</strong>' +
+      '<p>' + esc(texto) + '</p>' +
+      '<span>Los campos marcados con <b aria-hidden="true">*</b> son obligatorios.</span></div></div>';
+  }
+
   function htmlJugadores() {
     const jugadores = GL.jugadores();
     const primeraSemana = esPrimeraSemana();
-    const filas = jugadores.map(j => {
+    const total = jugadores.length;
+    const sinGrupo = GL.jugadoresSinGrupo().length;
+    const inactivos = (GL.ctx.jugadores || []).filter(j => j.activo === false).length;
+    const conAlerta = jugadores.filter(j => GL.faltas(j.id) >= 3).length;
+
+    const opcionesGrupo = GL.grupos().map(g =>
+      '<option value="' + esc(g.id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</option>').join('');
+
+    const filas = jugadores.map((j, indice) => {
       const g = GL.grupoDeJugador(j.id);
       const faltas = GL.faltas(j.id);
       const expulsado = j.activo === false || j.rol === 'expulsado';
+      const estado = expulsado ? 'expulsado' : (j.suspendido ? 'suspendido' : 'activo');
+      const estadoTexto = expulsado ? 'Expulsado' : (j.suspendido ? 'Suspendido' : 'Activo');
+      const rolTexto = j.rol === 'admin' ? (j.super_admin ? 'Principal' : 'Admin') : 'Jugador';
+      const grupoTexto = g ? 'Grupo ' + GL.letraGrupo(g) : 'Sin asignar';
       const acciones = iconBtn('editar-' + j.id, 'pencil', 'Editar jugador') +
+        iconBtn('telefono-' + j.id, 'phone', 'Confirmar teléfono / titularidad') +
         (g ? (primeraSemana ? iconBtn('grupo-' + j.id, 'users', 'Cambiar de grupo') : '')
            : iconBtn('asignar-' + j.id, 'user-plus', 'Asignar grupo')) +
         iconBtn('sancion-' + j.id, 'triangle-alert', 'Aplicar sanción') +
@@ -332,23 +369,28 @@
         (j.rol === 'admin'
           ? ''
           : accionBtn('eliminar-' + j.id, 'trash-2', 'Eliminar jugador'));
-      const accionesMovil = accionBtn('editar-' + j.id, 'pencil', 'Editar jugador') +
-        (g ? (primeraSemana ? accionBtn('grupo-' + j.id, 'users', 'Cambiar de grupo') : '')
-           : accionBtn('asignar-' + j.id, 'user-plus', 'Asignar grupo')) +
-        accionBtn('sancion-' + j.id, 'triangle-alert', 'Aplicar sanción') +
-        accionBtn('suspender-' + j.id, 'user-x', 'Suspender / expulsar');
-      return '<tr class="' + (faltas >= 3 ? 'fila-alerta' : '') + '" style="animation-delay:' + (jugadores.indexOf(j) * .03) + 's">' +
-        '<td class="izq"><div class="jugador-celda">' + GL.avatarHTML(j, 'avatar-sm') +
-          '<span>' + esc(j.nombre_usuario) + (faltas >= 3 ? ' ' + icono('octagon-alert', 14, 'rojo-txt') + '<span class="sr-only" title="Veto próximo torneo">Veto próximo torneo</span>' : '') + '</span></div></td>' +
-        '<td><span class="pais-celda" title="' + esc(GL.nombrePais(j.pais)) + '">' + GL.banderaHTML(j.pais, 16) +
-          '<span class="codigo-pais">' + esc(j.pais || '—') + '</span></span></td>' +
-        '<td class="izq"><span class="muted" style="font-size:11px" title="' + esc(GL.etiquetaZona(GL.zonaJugador(j))) + '">' + esc(GL.horarioJugador(j)) + '</span></td>' +
-        '<td>' + GL.linkWhatsapp(j.telefono, j.nombre_usuario) + '</td>' +
-        '<td>' + (g ? 'Grupo ' + GL.letraGrupo(g) : 'Sin asignar') + '</td>' +
-        '<td>' + GL.badge(j.rol === 'admin' ? (j.super_admin ? 'Principal' : 'Admin') : 'Jugador', j.rol === 'admin' ? 'gold' : 'neutral') + '</td>' +
-        '<td>' + (expulsado ? GL.badge('Expulsado', 'red') : j.suspendido ? GL.badge('Suspendido', 'orange') : GL.badge('Activo', 'green')) + '</td>' +
-        '<td class="num ' + (faltas >= 3 ? 'rojo-txt' : '') + '">' + faltas + '</td>' +
-        '<td class="col-acciones">' +
+
+      return '<tr class="j5-fila ' + (faltas >= 3 ? 'fila-alerta' : '') + '" ' +
+          'data-j5-id="' + esc(j.id) + '" ' +
+          'data-j5-nombre="' + esc(j.nombre_usuario) + '" ' +
+          'data-j5-grupo="' + esc(g ? g.id : '') + '" ' +
+          'data-j5-estado="' + estado + '" ' +
+          'style="animation-delay:' + (indice * .03) + 's">' +
+        '<td class="izq j5-celda-nombre" data-label="Jugador"><div class="jugador-celda">' +
+          GL.avatarHTML(j, 'avatar-sm') +
+          '<span class="j5-nombre-celda"><span class="j5-nombre">' + esc(j.nombre_usuario) +
+            (faltas >= 3 ? ' ' + icono('octagon-alert', 14, 'rojo-txt') + '<span class="sr-only">Veto próximo torneo</span>' : '') +
+          '</span></span></div></td>' +
+        '<td data-label="País"><span class="pais-celda" title="' + esc(GL.nombrePais(j.pais)) + '">' +
+          GL.banderaHTML(j.pais, 16) + '<span class="codigo-pais">' + esc(j.pais || '—') + '</span></span></td>' +
+        '<td class="izq" data-label="Horario"><span class="j5-horario" title="' + esc(GL.etiquetaZona(GL.zonaJugador(j))) + '">' +
+          esc(GL.horarioJugador(j)) + '</span></td>' +
+        '<td data-label="Contacto">' + GL.linkWhatsapp(j, j.nombre_usuario) + '</td>' +
+        '<td data-label="Grupo"><span class="j5-grupo">' + esc(grupoTexto) + '</span></td>' +
+        '<td data-label="Rol">' + GL.badge(rolTexto, j.rol === 'admin' ? 'gold' : 'neutral') + '</td>' +
+        '<td data-label="Estado">' + GL.badge(estadoTexto, estado === 'expulsado' ? 'red' : estado === 'suspendido' ? 'orange' : 'green') + '</td>' +
+        '<td class="num ' + (faltas >= 3 ? 'rojo-txt' : '') + '" data-label="Faltas">' + faltas + '</td>' +
+        '<td class="col-acciones" data-label="Acciones">' +
           '<div class="acciones-tabla acciones-escritorio">' + acciones + '</div>' +
           '<div class="acciones-movil">' +
             '<button type="button" class="btn-icon btn-menu-acciones" ' +
@@ -361,11 +403,134 @@
           '</div>' +
         '</td></tr>';
     }).join('');
-    return '<div class="seccion-head"><div class="seccion-titulo"><h2>Gestión de jugadores</h2>' +
-      '<p>' + jugadores.length + ' jugadores en el torneo' + (primeraSemana ? ' · Cambio de grupo disponible (primera semana)' : '') + '</p></div>' +
-      '<div class="seccion-acciones"><button type="button" class="btn sm" data-agregar>' + icono('user-plus', 16) + 'Agregar jugador</button></div></div>' +
-      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th class="izq">Nombre</th><th>País</th><th>Horario</th><th>Contacto</th><th>Grupo</th><th>Rol</th><th>Estado</th><th>Faltas</th><th>Acciones</th></tr></thead><tbody>' +
-      (filas || '<tr><td colspan="9" class="vacio-mensaje">No hay jugadores cargados.</td></tr>') + '</tbody></table></div>';
+
+    const filaVacia = '<tr class="j5-fila-vacia"><td colspan="9" class="vacio-mensaje">' +
+      '<div class="j5-estado-vacio">' + icono('users', 30) +
+      '<strong>Sin jugadores en el torneo</strong>' +
+      '<span>Agregá el primer jugador para comenzar a organizar el plantel.</span></div></td></tr>';
+    const filaSinResultados = '<tr class="j5-fila-sin-resultados" hidden><td colspan="9" class="vacio-mensaje">' +
+      '<div class="j5-estado-vacio">' + icono('search-x', 30) +
+      '<strong>Sin coincidencias</strong>' +
+      '<span>Probá con otro nombre o quitá los filtros activos.</span>' +
+      '<button type="button" class="btn sec sm" data-j5-limpiar>' + icono('rotate-ccw', 15) + 'Limpiar filtros</button>' +
+      '</div></td></tr>';
+
+    return '<div class="j5-pantalla" data-jugadores>' +
+      '<header class="j5-hero">' +
+        '<div class="j5-hero-copy">' +
+          '<span class="j5-eyebrow">' + icono('shield', 14) + 'Administración · Plantel</span>' +
+          '<h1 class="j5-titulo">Jugadores</h1>' +
+          '<p class="j5-bajada">Consultá, organizá y mantené el plantel del torneo activo.</p>' +
+        '</div>' +
+        '<div class="j5-hero-acciones">' +
+          '<span class="j5-contexto">' + icono('trophy', 14) +
+            esc((GL.torneo() && GL.torneo().nombre) || CONFIG.NOMBRE_LIGA) + '</span>' +
+          '<button type="button" class="btn" data-agregar>' + icono('user-plus', 16) + 'Agregar jugador</button>' +
+        '</div>' +
+      '</header>' +
+
+      '<section class="j5-kpis" aria-label="Indicadores del plantel">' +
+        j5Kpi(total, 'En plantel', 'Visibles en el listado', 'users') +
+        j5Kpi(sinGrupo, 'Sin grupo', 'Pendientes de asignación', 'user-round-plus') +
+        j5Kpi(conAlerta, 'Con alerta', 'Tres o más faltas', 'octagon-alert') +
+        j5Kpi(inactivos, 'Inactivos', 'Fuera del listado activo', 'user-x') +
+      '</section>' +
+
+      '<section class="j5-filtros" aria-label="Buscar y filtrar jugadores">' +
+        '<div class="j5-filtros-cab"><h2>' + icono('list-filter', 16) + 'Buscar y filtrar</h2>' +
+          '<span id="j5-contador" aria-live="polite">' + total + (total === 1 ? ' jugador' : ' jugadores') + '</span></div>' +
+        '<div class="j5-filtros-grid">' +
+          '<label class="j5-campo"><span>Buscar por nombre</span>' +
+            '<span class="j5-input-ico">' + icono('search', 16) +
+              '<input class="input" id="j5-buscar" type="search" placeholder="Ej: CR7" ' +
+              'autocomplete="off" aria-label="Buscar jugadores por nombre">' +
+            '</span></label>' +
+          '<label class="j5-campo"><span>Grupo</span>' +
+            '<select class="input" id="j5-grupo" aria-label="Filtrar por grupo">' +
+              '<option value="">Todos los grupos</option>' + opcionesGrupo +
+              (sinGrupo ? '<option value="__sin">Sin asignar</option>' : '') +
+            '</select></label>' +
+          '<label class="j5-campo"><span>Estado</span>' +
+            '<select class="input" id="j5-estado" aria-label="Filtrar por estado">' +
+              '<option value="">Todos los estados</option>' +
+              '<option value="activo">Activo</option>' +
+              '<option value="suspendido">Suspendido</option>' +
+              '<option value="expulsado">Expulsado</option>' +
+            '</select></label>' +
+          '<button type="button" class="btn sec j5-limpiar" data-j5-limpiar>' +
+            icono('rotate-ccw', 16) + 'Limpiar</button>' +
+        '</div>' +
+        '<p class="j5-filtros-nota">' + icono('info', 14) +
+          'Los filtros actúan sobre la lista ya cargada; no modifican el torneo.</p>' +
+      '</section>' +
+
+      '<section class="j5-panel">' +
+        '<div class="j5-panel-cab">' +
+          '<div><h2>Plantel del torneo</h2>' +
+            '<p>' + (primeraSemana ? 'Cambio de grupo disponible durante la primera semana.' :
+              'Gestioná roles, contacto, grupo y disciplina de cada jugador.') + '</p></div>' +
+          GL.badge(total + (total === 1 ? ' activo' : ' activos'), 'neutral', 'users') +
+        '</div>' +
+        '<div class="tabla-wrap j5-tabla-wrap">' +
+          '<table class="tabla j5-tabla">' +
+            '<caption class="sr-only">Listado de jugadores del torneo activo</caption>' +
+            '<thead><tr><th class="izq">Nombre</th><th>País</th><th>Horario</th><th>Contacto</th>' +
+            '<th>Grupo</th><th>Rol</th><th>Estado</th><th>Faltas</th><th>Acciones</th></tr></thead>' +
+            '<tbody id="j5-body">' + (filas || filaVacia) + filaSinResultados + '</tbody>' +
+          '</table>' +
+        '</div>' +
+      '</section>' +
+    '</div>';
+  }
+
+  /* Filtros locales de solo presentación: reutilizan la lista ya cargada. */
+  function enlazarFiltrosJugadores(cont) {
+    const buscar = cont.querySelector('#j5-buscar');
+    const grupo = cont.querySelector('#j5-grupo');
+    const estado = cont.querySelector('#j5-estado');
+    const contador = cont.querySelector('#j5-contador');
+    const cuerpo = cont.querySelector('#j5-body');
+    if (!buscar || !grupo || !estado || !cuerpo) return;
+
+    const filas = [...cuerpo.querySelectorAll('tr.j5-fila')];
+    const filaVacia = cuerpo.querySelector('.j5-fila-vacia');
+    const filaSinResultados = cuerpo.querySelector('.j5-fila-sin-resultados');
+    const total = filas.length;
+    const normalizar = texto => String(texto || '').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    const aplicar = () => {
+      const texto = normalizar(buscar.value.trim());
+      const grupoValor = grupo.value;
+      const estadoValor = estado.value;
+      let visibles = 0;
+
+      filas.forEach(fila => {
+        const coincideTexto = !texto || normalizar(fila.dataset.j5Nombre).includes(texto);
+        const coincideGrupo = !grupoValor ||
+          (grupoValor === '__sin' ? !fila.dataset.j5Grupo : fila.dataset.j5Grupo === grupoValor);
+        const coincideEstado = !estadoValor || fila.dataset.j5Estado === estadoValor;
+        const mostrar = coincideTexto && coincideGrupo && coincideEstado;
+        fila.hidden = !mostrar;
+        if (mostrar) visibles++;
+      });
+
+      if (contador) {
+        contador.textContent = visibles + (visibles === 1 ? ' jugador' : ' jugadores') +
+          (visibles !== total ? ' de ' + total : '');
+      }
+      if (filaVacia) filaVacia.hidden = total > 0;
+      if (filaSinResultados) filaSinResultados.hidden = !(total > 0 && visibles === 0);
+    };
+
+    [buscar, grupo, estado].forEach(el =>
+      el.addEventListener(el === buscar ? 'input' : 'change', aplicar));
+    cont.querySelectorAll('[data-j5-limpiar]').forEach(b => b.addEventListener('click', () => {
+      buscar.value = ''; grupo.value = ''; estado.value = '';
+      aplicar();
+      buscar.focus();
+    }));
+    aplicar();
   }
   /* ── Menú flotante / bottom sheet ── */
   function abrirMenuAcciones(ancla, titulo, items, jugador, root, esMobile) {
@@ -380,6 +545,7 @@
       const j     = GL.jugador(id);
       if (!j) return;
       if (tipo === 'editar')   modalEditar(j, root);
+      if (tipo === 'telefono') modalConfirmarTelefono(j, root);
       if (tipo === 'grupo')    modalGrupo(j, root);
       if (tipo === 'asignar')  modalGrupo(j, root, true);
       if (tipo === 'sancion')  modalSancion(j, root);
@@ -407,7 +573,7 @@
       const sheet = document.createElement('div');
       sheet.className = 'menu-bottom-sheet';
       sheet.innerHTML =
-        '<div class="menu-bottom-sheet-titulo">' + icono('user', 15) + esc(titulo) + '</div>' +
+        '<div class="menu-bottom-sheet-titulo">' + icono('user', 16) + esc(titulo) + '</div>' +
         botonesHTML;
       document.body.appendChild(fondo);
       document.body.appendChild(sheet);
@@ -486,6 +652,241 @@
     const inicio = Date.parse(t.created_at);
     if (!Number.isFinite(inicio)) return false;
     return (Date.now() - inicio) <= 7 * 24 * 3600 * 1000;
+  }
+
+  /* ---------------- A2. Equipos (grupos reales del torneo) ---------------- */
+  function e6Miembros(g) {
+    return (GL.ctx.miembros || []).filter(m => m.grupo_id === g.id);
+  }
+
+  function e6Kpi(valor, etiqueta, nota, ico) {
+    return '<article class="e6-kpi">' +
+      '<span class="e6-kpi-ico">' + icono(ico, 20) + '</span>' +
+      '<span class="e6-kpi-copy">' +
+        '<strong class="e6-kpi-valor">' + esc(valor) + '</strong>' +
+        '<span class="e6-kpi-label">' + esc(etiqueta) + '</span>' +
+        '<span class="e6-kpi-nota">' + esc(nota) + '</span>' +
+      '</span></article>';
+  }
+
+  function e6Estado(j) {
+    if (j.activo === false || j.rol === 'expulsado') return { texto: 'Expulsado', tono: 'red' };
+    if (j.suspendido) return { texto: 'Suspendido', tono: 'orange' };
+    return { texto: 'Activo', tono: 'green' };
+  }
+
+  function e6MiembroHTML(j) {
+    const estado = e6Estado(j);
+    return '<li class="e6-miembro">' +
+      GL.avatarHTML(j, 'avatar-sm') +
+      '<span class="e6-miembro-copy"><strong>' + esc(j.nombre_usuario) + '</strong>' +
+        '<small>' + esc(GL.nombrePais(j.pais)) + ' · ' + esc(estado.texto) + '</small></span>' +
+      '<span class="e6-miembro-acciones acciones-escritorio">' +
+        '<span class="acciones-tabla">' + iconBtn('editar-' + j.id, 'pencil', 'Editar jugador') + '</span>' +
+      '</span>' +
+      '<span class="e6-miembro-acciones acciones-movil">' +
+        '<button type="button" class="btn-icon btn-menu-acciones" ' +
+          'data-jugador-id="' + esc(j.id) + '" data-jugador-nombre="' + esc(j.nombre_usuario) + '" ' +
+          'aria-label="Acciones de ' + esc(j.nombre_usuario) + '" ' +
+          'aria-haspopup="true" aria-expanded="false">' + icono('ellipsis', 18) + '</button>' +
+      '</span></li>';
+  }
+
+  function e6FichaHTML(m) {
+    const j = GL.jugador(m.jugador_id);
+    if (j) return e6MiembroHTML(j);
+    const idCorto = String(m.jugador_id || '').slice(0, 8);
+    return '<li class="e6-miembro">' +
+      '<span class="avatar-sm" aria-hidden="true">?</span>' +
+      '<span class="e6-miembro-copy"><strong>Jugador ' + esc(idCorto) + '</strong>' +
+        '<small>Relación registrada · detalle no disponible</small></span>' +
+    '</li>';
+  }
+
+  function e6Tarjeta(g, esperados) {
+    const miembros = e6Miembros(g);
+    const cantidad = miembros.length;
+    const completo = cantidad >= esperados;
+    const pct = esperados > 0 ? Math.min(100, Math.round((cantidad / esperados) * 100)) : 0;
+    const cobertura = cantidad === 0 ? 'sin-jugadores' : (completo ? 'completo' : 'incompleto');
+    const estadoTexto = cantidad === 0 ? 'Sin jugadores' : (completo ? 'Completo' : 'Incompleto');
+    const estadoTono = cantidad === 0 ? 'neutral' : (completo ? 'green' : 'orange');
+    const partidosG = Mod.partidosCache.filter(p => p.grupo_id === g.id);
+    const jugados = partidosG.filter(p => p.estado !== 'pendiente').length;
+    const pendientes = partidosG.length - jugados;
+    const fichas = miembros.map(m => GL.jugador(m.jugador_id)).filter(Boolean);
+    const suspendidos = fichas.filter(j => j.activo === false || j.suspendido || j.rol === 'expulsado').length;
+    const letra = esc(GL.letraGrupo(g));
+    const panelId = 'e6-jugadores-' + esc(g.id);
+
+    return '<article class="e6-card" data-e6-id="' + esc(g.id) + '" ' +
+        'data-e6-nombre="' + esc((g.nombre || '') + ' grupo ' + letra) + '" ' +
+        'data-e6-cobertura="' + cobertura + '" data-e6-jugadores="' + cantidad + '">' +
+      '<header class="e6-card-cabeza">' +
+        '<span class="e6-escudo" aria-hidden="true">' + icono('shield', 24) + '</span>' +
+        '<span class="e6-identidad"><h3 class="e6-nombre">' + esc(g.nombre || ('Grupo ' + letra)) + '</h3>' +
+          '<span class="e6-subtitulo">Grupo ' + letra + ' · Equipo del torneo</span></span>' +
+        GL.badge(estadoTexto, estadoTono) +
+      '</header>' +
+      '<div class="e6-metrica">' +
+        '<strong>' + cantidad + '<span>/' + esperados + '</span></strong>' +
+        '<span>Jugadores asignados</span>' +
+      '</div>' +
+      '<div class="e6-progreso" role="img" aria-label="' + cantidad + ' de ' + esperados + ' jugadores asignados">' +
+        '<span style="width:' + pct + '%"></span></div>' +
+      '<div class="e6-card-stats">' +
+        '<span>' + icono('check-circle-2', 14) + jugados + ' partidos jugados</span>' +
+        '<span>' + icono('clock', 14) + pendientes + ' pendientes</span>' +
+        (suspendidos ? '<span>' + icono('triangle-alert', 14) + suspendidos + ' sin disponibilidad</span>' : '') +
+      '</div>' +
+      '<div class="e6-card-acciones">' +
+        '<button type="button" class="btn sec sm" data-e6-ver="' + esc(g.id) + '" ' +
+          'aria-expanded="false" aria-controls="' + panelId + '">' +
+          icono('users', 16) + 'Ver jugadores</button>' +
+        '<button type="button" class="btn sec sm" data-tab-ir="jugadores">' +
+          icono('list', 16) + 'Ver plantel</button>' +
+      '</div>' +
+      '<div class="e6-jugadores" id="' + panelId + '" hidden>' +
+        '<div class="e6-jugadores-cab"><strong>Jugadores asignados</strong>' +
+          '<span>' + cantidad + '</span></div>' +
+        (cantidad
+          ? '<ul class="e6-lista-jugadores">' + miembros.map(e6FichaHTML).join('') + '</ul>'
+          : '<p class="e6-lista-vacia">' + icono('user-round-plus', 16) +
+            'Este equipo todavía no tiene jugadores asignados.</p>') +
+      '</div>' +
+    '</article>';
+  }
+
+  function htmlEquipos() {
+    const grupos = GL.grupos();
+    const esperados = Number((GL.torneo() && GL.torneo().jugadores_por_grupo) || 12);
+    const asignados = grupos.reduce((n, g) => n + e6Miembros(g).length, 0);
+    const sinGrupo = GL.jugadoresSinGrupo().length;
+    const completos = grupos.filter(g => e6Miembros(g).length >= esperados).length;
+    const torneo = GL.torneo() || {};
+    const detalleJugadores = !(GL.ctx.jugadores || []).length && (GL.ctx.miembros || []).length
+      ? ' Los nombres de jugadores no están disponibles en este momento; se muestran las relaciones registradas.'
+      : '';
+
+    const kpis = e6Kpi(grupos.length, 'Equipos', 'Grupos del torneo activo', 'shield') +
+      e6Kpi(asignados, 'Jugadores asignados', 'Vinculados a un equipo', 'users') +
+      e6Kpi(sinGrupo, 'Sin equipo', 'Pendientes de asignación', 'user-round-plus') +
+      e6Kpi(completos, 'Completos', 'Con la cantidad esperada', 'circle-check-big');
+
+    return '<div class="e6-pantalla" data-equipos>' +
+      '<header class="e6-hero">' +
+        '<div class="e6-hero-copy">' +
+          '<span class="e6-eyebrow">' + icono('shield', 14) + 'Administración · Equipos</span>' +
+          '<h1 class="e6-titulo">Equipos</h1>' +
+          '<p class="e6-bajada">Los equipos de la temporada son los grupos ya creados con el torneo activo.</p>' +
+        '</div>' +
+        '<div class="e6-hero-acciones">' +
+          '<span class="e6-contexto">' + icono('trophy', 14) + esc(torneo.nombre || CONFIG.NOMBRE_LIGA) + '</span>' +
+          '<span class="e6-contexto">' + icono('users', 14) + esperados + ' jugadores por equipo</span>' +
+        '</div>' +
+      '</header>' +
+      '<p class="e6-nota">' + icono('info', 14) +
+        ' Los equipos se generan al crear el torneo. Esta vista consulta la relación con los jugadores; no crea, elimina ni cambia grupos.' +
+        detalleJugadores +
+      '</p>' +
+      '<section class="e6-kpis" aria-label="Indicadores de equipos">' + kpis + '</section>' +
+      (grupos.length
+        ? '<section class="e6-filtros" aria-label="Buscar y filtrar equipos">' +
+            '<div class="e6-filtros-cab"><h2>' + icono('list-filter', 16) + 'Buscar y filtrar</h2>' +
+              '<span id="e6-contador" aria-live="polite">' + grupos.length +
+                (grupos.length === 1 ? ' equipo' : ' equipos') + '</span></div>' +
+            '<div class="e6-filtros-grid">' +
+              '<label class="e6-campo"><span>Buscar equipo</span>' +
+                '<span class="e6-input-ico">' + icono('search', 16) +
+                  '<input class="input" id="e6-buscar" type="search" placeholder="Ej: Grupo A" ' +
+                  'autocomplete="off" aria-label="Buscar equipos por nombre">' +
+                '</span></label>' +
+              '<label class="e6-campo"><span>Cobertura</span>' +
+                '<select class="input" id="e6-cobertura" aria-label="Filtrar equipos por cobertura">' +
+                  '<option value="">Todas las coberturas</option>' +
+                  '<option value="completo">Completos</option>' +
+                  '<option value="incompleto">Incompletos</option>' +
+                  '<option value="sin-jugadores">Sin jugadores</option>' +
+                '</select></label>' +
+              '<button type="button" class="btn sec e6-limpiar" data-e6-limpiar>' +
+                icono('rotate-ccw', 16) + 'Limpiar</button>' +
+            '</div>' +
+            '<p class="e6-filtros-nota">' + icono('info', 14) +
+              ' Los filtros actúan sobre los equipos ya cargados; no modifican el torneo.</p>' +
+          '</section>' +
+          '<section class="e6-panel">' +
+            '<div class="e6-panel-cab"><div><h2>Equipos del torneo</h2>' +
+              '<p>Cobertura real del plantel y partidos ya registrados por equipo.</p></div>' +
+              GL.badge(grupos.length + (grupos.length === 1 ? ' equipo' : ' equipos'), 'neutral', 'shield') +
+            '</div>' +
+            '<div class="e6-grid" id="e6-lista">' + grupos.map(g => e6Tarjeta(g, esperados)).join('') + '</div>' +
+            '<div class="e6-estado-vacio" id="e6-sin-resultados" hidden>' + icono('search-x', 30) +
+              '<strong>Sin coincidencias</strong>' +
+              '<span>Probá con otro nombre o quitá los filtros activos.</span>' +
+              '<button type="button" class="btn sec sm" data-e6-limpiar>' +
+                icono('rotate-ccw', 15) + 'Limpiar filtros</button></div>' +
+          '</section>'
+        : '<section class="e6-panel"><div class="e6-estado-vacio" id="e6-vacio">' +
+            icono('shield', 30) + '<strong>Sin equipos registrados</strong>' +
+            '<span>El torneo activo no tiene grupos cargados.</span>' +
+            '<button type="button" class="btn sec sm" data-tab-ir="config">' +
+              icono('settings-2', 15) + 'Ir a configuración</button></div></section>') +
+    '</div>';
+  }
+
+  /* Filtros locales de solo presentación sobre los grupos ya cargados. */
+  function enlazarFiltrosEquipos(cont) {
+    const buscar = cont.querySelector('#e6-buscar');
+    const cobertura = cont.querySelector('#e6-cobertura');
+    const contador = cont.querySelector('#e6-contador');
+    const lista = cont.querySelector('#e6-lista');
+    if (!buscar || !cobertura || !lista) return;
+
+    const tarjetas = [...lista.querySelectorAll('.e6-card')];
+    const sinResultados = cont.querySelector('#e6-sin-resultados');
+    const total = tarjetas.length;
+    const normalizar = texto => String(texto || '').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    const aplicar = () => {
+      const texto = normalizar(buscar.value.trim());
+      const estado = cobertura.value;
+      let visibles = 0;
+      tarjetas.forEach(tarjeta => {
+        const coincideTexto = !texto || normalizar(tarjeta.dataset.e6Nombre).includes(texto);
+        const coincideCobertura = !estado || tarjeta.dataset.e6Cobertura === estado;
+        const mostrar = coincideTexto && coincideCobertura;
+        tarjeta.hidden = !mostrar;
+        if (mostrar) visibles++;
+      });
+      if (contador) {
+        contador.textContent = visibles + (visibles === 1 ? ' equipo' : ' equipos') +
+          (visibles !== total ? ' de ' + total : '');
+      }
+      if (sinResultados) sinResultados.hidden = !(total > 0 && visibles === 0);
+    };
+
+    [buscar, cobertura].forEach(el =>
+      el.addEventListener(el === buscar ? 'input' : 'change', aplicar));
+    cont.querySelectorAll('[data-e6-limpiar]').forEach(b => b.addEventListener('click', () => {
+      buscar.value = ''; cobertura.value = '';
+      aplicar();
+      buscar.focus();
+    }));
+    aplicar();
+  }
+
+  function enlazarEquipos(cont) {
+    cont.querySelectorAll('[data-e6-ver]').forEach(btn => btn.addEventListener('click', () => {
+      const tarjeta = btn.closest('.e6-card');
+      const panel = tarjeta && tarjeta.querySelector('.e6-jugadores');
+      if (!panel) return;
+      const abierto = btn.getAttribute('aria-expanded') === 'true';
+      panel.hidden = abierto;
+      btn.setAttribute('aria-expanded', String(!abierto));
+      btn.innerHTML = icono('users', 16) + (abierto ? 'Ver jugadores' : 'Ocultar jugadores');
+      iniciarIconos();
+    }));
   }
 
   /* ---------------- B. Jornadas ---------------- */
@@ -567,18 +968,18 @@
     return '<div class="seccion-head"><div class="seccion-titulo"><h2>Administradores</h2>' +
       '<p>Designá a quién puede cargar resultados, jornadas y mensajes</p></div></div>' +
       '<div class="grid dos">' +
-        '<div class="card"><div class="card-titulo">' + icono('shield-check', 19) + 'Rol asignado</div>' +
+        '<div class="card"><div class="card-titulo">' + icono('shield-check', 20) + 'Rol asignado</div>' +
           '<div class="tabla-wrap"><table class="tabla"><thead><tr><th class="izq">Nombre</th><th class="izq">Correo</th><th>Rol</th><th>Estado</th><th>Acción</th></tr></thead><tbody>' +
           (filas || '<tr><td colspan="5" class="vacio-mensaje">No hay administradores cargados.</td></tr>') +
           '</tbody></table></div></div>' +
-        '<div class="card"><div class="card-titulo">' + icono('user-plus', 19) + 'Añadir administrador</div>' +
+        '<div class="card"><div class="card-titulo">' + icono('user-plus', 20) + 'Añadir administrador</div>' +
           '<p class="muted" style="font-size:12px">Si el correo ya tiene cuenta, conserva su contraseña. Si no, se crea con la clave de administrador configurada en el servidor.</p>' +
           '<label class="campo mt"><span>Correo electrónico</span><input class="input" type="email" id="adm-email" autocomplete="email" placeholder="jugador@correo.com" required></label>' +
           '<label class="campo"><span>Nombre en el juego (opcional)</span><input class="input" id="adm-nombre" maxlength="32" placeholder="Ej. GOAT_ADMIN"></label>' +
           '<button type="button" class="btn block" id="adm-agregar">' + icono('shield-plus', 16) + 'Designar administrador</button>' +
           '<p class="nota-pie">La clave de administrador no se guarda en el navegador: se valida en el servidor.</p>' +
         '</div>' +
-        '<div class="card"><div class="card-titulo">' + icono('key-round', 19) + 'Clave de administrador</div>' +
+        '<div class="card"><div class="card-titulo">' + icono('key-round', 20) + 'Clave de administrador</div>' +
           '<p class="muted" style="font-size:12px">Solo el administrador principal puede consultarla para compartirla de forma privada con otros administradores.</p>' +
           '<button type="button" class="btn sec block mt" data-ver-clave>' + icono('eye', 16) + 'Ver clave de administrador</button>' +
           '<p class="nota-pie">La clave se obtiene del servidor únicamente con tu sesión de administrador principal.</p>' +
@@ -589,7 +990,7 @@
   function htmlConfig() {
     const t = GL.torneo() || {};
     return htmlAccionesTorneo() +
-      '<div class="card mt"><div class="card-titulo">' + icono('settings-2', 19) + 'Datos generales del torneo</div>' +
+      '<div class="card mt"><div class="card-titulo">' + icono('settings-2', 20) + 'Datos generales del torneo</div>' +
         '<label class="campo"><span>Nombre</span><input class="input" id="cfg-nombre" value="' + esc(t.nombre || '') + '"></label>' +
         '<label class="campo"><span>Temporada</span><input class="input" id="cfg-temporada" value="' + esc(t.temporada || '') + '"></label>' +
         '<label class="campo"><span>Total de jornadas (1..' + MAX_JORNADAS + ')</span>' +
@@ -611,12 +1012,43 @@
   /* ---------------- Nueva Temporada (pasos numerados) ---------------- */
 
   function telefonoLegible(j) {
-    const n = GL.tel.normalizar(String((j && j.telefono) || ''), (j && j.pais) || '');
-    if (!n) return 'Sin teléfono';
-    const pref = GL.tel.prefijo((j && j.pais) || '');
-    const local = pref && n.startsWith(pref) ? n.slice(pref.length) : n;
-    const partes = local.match(/.{1,4}/g) || [local];
-    return (pref ? '+' + pref + ' ' : '+') + partes.join(' ');
+    const e164 = GL.tel.e164Jugador(j);
+    if (!e164) return 'Sin teléfono';
+    return GL.tel.formatear(e164, GL.tel.paisJugador(j)) || e164;
+  }
+
+  /* Etiqueta corta del prefijo según el país seleccionado en cada formulario. */
+  function hintTel(paisVal) {
+    const cfg = PAISES[String(paisVal || '').toUpperCase()];
+    if (!cfg) return '';
+    const longs = GL.tel.longitudes(paisVal);
+    return '+' + cfg.prefijo + ' · ' + (longs.length === 1
+      ? longs[0] + ' dígitos'
+      : longs.join('/') + ' dígitos');
+  }
+
+  /* El prefijo y la validación siguen siempre al país del TELÉFONO, que puede
+     diferir del país del jugador. El botón rota países para no separarlos. */
+  function enlazarCampoTelefono(cont, opciones) {
+    const selPais = cont.querySelector(opciones.pais);
+    const input = cont.querySelector(opciones.tel);
+    const boton = cont.querySelector(opciones.prefijo);
+    const etiqueta = opciones.hint ? cont.querySelector(opciones.hint) : null;
+    if (!selPais || !input || !boton) return;
+    const actualizar = () => {
+      const iso = selPais.value || 'NI';
+      boton.textContent = GL.tel.prefijo(iso) ? '+' + GL.tel.prefijo(iso) : '+?';
+      boton.dataset.iso = iso;
+      if (etiqueta) etiqueta.textContent = hintTel(iso);
+    };
+    selPais.addEventListener('change', actualizar);
+    boton.addEventListener('click', () => {
+      const opcs = Array.from(selPais.options).map(x => x.value).filter(Boolean);
+      const i = opcs.indexOf(selPais.value);
+      selPais.value = opcs[(i + 1 + opcs.length) % opcs.length] || opcs[0];
+      selPais.dispatchEvent(new Event('change'));
+    });
+    actualizar();
   }
 
   function pasoHTML(numero, titulo, ico, cuerpo) {
@@ -721,7 +1153,14 @@
       '</div>' +
       '<div class="campo-row">' +
         '<label class="campo"><span>País</span><select class="input" id="nt-jug-pais">' + GL.opcionesPais('NI', true) + '</select></label>' +
-        '<label class="campo"><span>Teléfono</span><input class="input" id="nt-jug-tel" inputmode="numeric" placeholder="Solo dígitos"></label>' +
+        '<label class="campo"><span>País del teléfono</span><select class="input" id="nt-jug-tel-pais">' + GL.opcionesPais('NI', false) + '</select></label>' +
+        '<label class="campo"><span>Teléfono / WhatsApp (obligatorio)' +
+          '<small id="nt-jug-tel-hint" style="color:var(--text-secondary)">' + hintTel('NI') + '</small></span>' +
+          '<div class="tel-wrap">' +
+            '<button type="button" class="tel-prefijo" id="nt-jug-tel-prefijo" aria-label="Código de país">+505</button>' +
+            '<input class="input" id="nt-jug-tel" inputmode="numeric" placeholder="8108-5555" required>' +
+          '</div>' +
+        '</label>' +
         '<label class="campo"><span>Grupo</span><select class="input" id="nt-jug-grupo">' +
           (grupos.length
             ? grupos.map(g => '<option value="' + esc(g.id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</option>').join('')
@@ -766,7 +1205,7 @@
         '</div>' +
         '<div id="nt-partidos">' + filaPartidoHTML(grupoInicial, {}) + '</div>' +
         '<div class="seccion-acciones" style="flex-wrap:wrap;gap:8px;margin-top:8px">' +
-          '<button type="button" class="btn sec" id="nt-agregar-partido">' + icono('plus', 15) + 'Agregar partido</button>' +
+          '<button type="button" class="btn sec" id="nt-agregar-partido">' + icono('plus', 16) + 'Agregar partido</button>' +
           '<button type="button" class="btn" id="nt-guardar-jornada">' + icono('save', 16) + 'Guardar jornada</button>' +
         '</div>' +
       '</div>' +
@@ -922,6 +1361,7 @@
     const email = cont.querySelector('#nt-jug-email').value.trim().toLowerCase();
     const clave = cont.querySelector('#nt-jug-clave').value;
     const pais = cont.querySelector('#nt-jug-pais').value;
+    const paisTel = cont.querySelector('#nt-jug-tel-pais').value || pais;
     const telRaw = cont.querySelector('#nt-jug-tel').value.trim();
     const grupo = cont.querySelector('#nt-jug-grupo').value;
 
@@ -938,9 +1378,13 @@
       GL.notificar('La contraseña debe tener al menos 8 caracteres.', 'advertencia'); return;
     }
     if (!pais) { GL.notificar('Seleccioná el país del jugador.', 'advertencia'); return; }
-    const validacionTel = telRaw ? GL.tel.validar(telRaw, pais) : { ok: true };
+    const validacionTel = GL.tel.validar(telRaw, paisTel, true);
     if (!validacionTel.ok) {
-      GL.notificar(validacionTel.mensaje || 'El teléfono no es válido para el país elegido.', 'advertencia'); return;
+      GL.notificar(validacionTel.mensaje || 'El teléfono es obligatorio y debe ser válido.', 'advertencia'); return;
+    }
+    const camposTel = GL.tel.campos(validacionTel.e164, validacionTel.pais || paisTel);
+    if (!camposTel.telefono_e164) {
+      GL.notificar('El teléfono es obligatorio.', 'advertencia'); return;
     }
     if (!grupo) { GL.notificar('Seleccioná un grupo para el jugador.', 'advertencia'); return; }
 
@@ -948,16 +1392,15 @@
     btn.disabled = true; btn.textContent = 'Creando…';
     try {
       const { data, error } = await sb.functions.invoke('admin-crear-jugador', {
-        body: {
+        body: Object.assign({
           nombre_usuario: nombre,
           email,
           password: clave,
           pais,
           zona_horaria: GL.zonaPorPais(pais),
-          telefono: telRaw ? GL.tel.normalizar(telRaw, pais) : '',
           grupo_id: grupo,
           torneo_id: torneo.id
-        }
+        }, camposTel)
       });
       if (error) throw new Error(await mensajeInvoke(error));
       if (data && data.ok === false) throw new Error(data.mensaje || data.error || 'No se pudo crear el jugador.');
@@ -965,7 +1408,9 @@
       GL.notificar(nombre + ' creado y asignado al grupo.', 'exito');
       Mod.render(root);
     } catch (e) {
-      GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
+      const msg = GL.mensaje(e, 'guardar', 'la administración');
+      GL.notificar(/jugadores_e164_canonicalizado_uniq|tel[eé]fono ya est[aá] registrado/i.test(msg)
+        ? 'Ese teléfono ya está registrado en otro jugador.' : msg, 'error');
       btn.disabled = false; btn.textContent = 'Crear jugador';
     }
   }
@@ -1179,6 +1624,143 @@
     iniciarIconos();
   }
 
+  /* 1.2.1 — Confirmación administrativa explícita con motivo y auditoría.
+     No hay verificación por SMS ni WhatsApp automático: una persona declara
+     que comprobó la titularidad y la RPC la registra. */
+  function modalConfirmarTelefono(j, root) {
+    if (!j) return;
+    const e164Actual = GL.tel.e164Jugador(j);
+    const pais = GL.tel.paisJugador(j) || j.pais || 'NI';
+    const visible = e164Actual
+      ? (GL.tel.nacional(e164Actual, pais) || e164Actual)
+      : String(j.telefono_e164 || j.telefono || '');
+    const titularidadActual = j.telefono_verificado === true;
+
+    const m = GL.abrirModal({
+      titulo: 'Confirmar teléfono — ' + esc(j.nombre_usuario),
+      ancho: 'ancho',
+      cuerpo:
+        '<div style="background:var(--bg-hover);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px">' +
+          icono('phone', 14) + ' Teléfono actual: <strong>' + esc(visible || 'sin teléfono cargado') + '</strong>' +
+          (e164Actual ? ' <span class="nota-pie">(' + esc(e164Actual) + ')</span>' : '') +
+          '<br>' + (titularidadActual
+            ? 'Titularidad: confirmada anteriormente.'
+            : 'Titularidad: sin confirmar.') +
+        '</div>' +
+        '<p class="modal-texto">La confirmación es una acción humana registrada en auditoría. ' +
+          'No se envía SMS ni WhatsApp automático; solo se marca la titularidad si vos la verificaste personalmente.</p>' +
+        '<label class="campo"><span>Motivo de la confirmación (obligatorio)</span>' +
+          '<input class="input" id="cf-motivo" maxlength="200" autocomplete="off" ' +
+            'placeholder="Ej.: verificó su número por llamada telefónica"></label>' +
+        '<label class="campo"><span>Evidencia (obligatoria si confirmás titularidad)</span>' +
+          '<input class="input" id="cf-evidencia" maxlength="200" autocomplete="off" ' +
+            'placeholder="N° de ticket, correo o referencia verificable"></label>' +
+        '<label class="campo"><span>' +
+          '<input type="checkbox" id="cf-titularidad"> Confirmé personalmente la titularidad del número' +
+        '</span></label>' +
+        '<p class="nota-pie" id="cf-estado" aria-live="polite"></p>',
+
+      acciones:
+        '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
+        '<button type="button" class="btn" id="cf-confirmar">' +
+          icono('phone', 16) + 'Confirmar teléfono' +
+        '</button>',
+
+      onAbrir(fondo, cerrar) {
+        const boton = fondo.querySelector('#cf-confirmar');
+        const estado = fondo.querySelector('#cf-estado');
+        /* 2.2 — Estado parcial: la RPC ya se aplicó, pero el recálculo falló.
+           El reintento NO vuelve a llamar a la RPC, por lo que no duplica
+           registros de auditoría ni deshace una titularidad válida. */
+        let pendiente = null;
+
+        const finalizar = async (resultado) => {
+          cerrar();
+          await recargarContextoAdmin();
+          Mod.render(root);
+          const nuevo = (resultado && resultado.nuevo) || e164Actual;
+          GL.notificar(
+            'Teléfono confirmado: ' + nuevo + '. ' +
+            (resultado && resultado.titularidad_confirmada
+              ? 'Titularidad confirmada por administración.'
+              : 'Titularidad no modificada.'),
+            'exito'
+          );
+        };
+
+        boton.addEventListener('click', async () => {
+          if (pendiente) {
+            boton.disabled = true;
+            boton.textContent = 'Reintentando…';
+            try {
+              await Auth.reintentarRecalculo(pendiente.jugadorId, pendiente.e164);
+              await finalizar(pendiente.resultado);
+            } catch (e) {
+              estado.textContent = 'No se pudo actualizar la validación del plan: ' + e.message;
+              GL.notificar(e.message, 'error');
+              boton.disabled = false;
+              boton.textContent = 'Reintentar validación del plan';
+            }
+            return;
+          }
+
+          const motivo = fondo.querySelector('#cf-motivo').value.trim();
+          if (!e164Actual) {
+            estado.textContent = 'Este jugador no tiene un teléfono E.164 válido para confirmar.';
+            return;
+          }
+          if (!motivo) {
+            errorCampo(fondo, '#cf-motivo', 'Escribí el motivo de la confirmación.');
+            return;
+          }
+          const confirmaTitularidad = fondo.querySelector('#cf-titularidad').checked;
+          const evidencia = fondo.querySelector('#cf-evidencia').value.trim();
+          if (confirmaTitularidad && !evidencia) {
+            errorCampo(fondo, '#cf-evidencia', 'La titularidad requiere evidencia verificable.');
+            return;
+          }
+          errorCampo(fondo, '#cf-evidencia', '');
+          errorCampo(fondo, '#cf-motivo', '');
+          boton.disabled = true;
+          boton.textContent = 'Confirmando…';
+          estado.textContent = '';
+          try {
+            const resultado = await Auth.confirmarYRecalcular({
+              jugadorId: j.id,
+              e164: e164Actual,
+              motivo,
+              confirmarTitularidad: confirmaTitularidad,
+              evidencia: evidencia || null
+            });
+            if (!resultado.recalculoOk) {
+              pendiente = {
+                jugadorId: j.id,
+                e164: (resultado.resultado && resultado.resultado.nuevo) || e164Actual,
+                resultado: resultado.resultado
+              };
+              estado.textContent =
+                'La confirmación quedó registrada, pero no se pudo recalcular la validez del plan. ' +
+                (resultado.errorRecalculo ? resultado.errorRecalculo + '. ' : '') +
+                'Podés reintentar sin repetir la confirmación ni la auditoría.';
+              boton.disabled = false;
+              boton.textContent = 'Reintentar validación del plan';
+              GL.notificar('Confirmación registrada; queda pendiente la validación del plan.', 'advertencia');
+              return;
+            }
+            await finalizar(resultado.resultado);
+          } catch (e) {
+            estado.textContent = e.message;
+            GL.notificar(e.message, 'error');
+            boton.disabled = false;
+            boton.textContent = 'Confirmar teléfono';
+          }
+        });
+      }
+    });
+    iniciarIconos();
+    return m;
+  }
+
   /* ---------------- Enlaces de eventos ---------------- */
   function enlazar(cont, root) {
     // Botones de acceso rápido desde el resumen
@@ -1202,6 +1784,7 @@
         // Construir items del menú
         const items = [
           { accion: 'editar-'    + j.id, ico: 'pencil',         label: 'Editar jugador'    },
+          { accion: 'telefono-'  + j.id, ico: 'phone',          label: 'Confirmar teléfono' },
           g && primeraSemana
             ? { accion: 'grupo-' + j.id, ico: 'users',          label: 'Cambiar de grupo'  }
             : !g
@@ -1227,6 +1810,7 @@
       const j = GL.jugador(id);
       if (!j) return;
       if (accion === 'editar')    modalEditar(j, root);
+      if (accion === 'telefono')  modalConfirmarTelefono(j, root);
       if (accion === 'grupo')     modalGrupo(j, root);
       if (accion === 'asignar')   modalGrupo(j, root, true);
       if (accion === 'sancion')   modalSancion(j, root);
@@ -1235,6 +1819,9 @@
     }));
     const agregar = cont.querySelector('[data-agregar]');
     if (agregar) agregar.addEventListener('click', () => modalAgregar(root));
+    enlazarFiltrosJugadores(cont);
+    enlazarFiltrosEquipos(cont);
+    enlazarEquipos(cont);
 
     const agregarAdmin = cont.querySelector('#adm-agregar');
     if (agregarAdmin) agregarAdmin.addEventListener('click', async () => {
@@ -1347,6 +1934,20 @@
     /* ── Nueva Temporada: paso 2 ── */
     const crearJugadorNT = cont.querySelector('#nt-jug-crear');
     if (crearJugadorNT) crearJugadorNT.addEventListener('click', () => crearJugadorRapido(cont, root));
+    enlazarCampoTelefono(cont, {
+      pais: '#nt-jug-tel-pais', tel: '#nt-jug-tel',
+      prefijo: '#nt-jug-tel-prefijo', hint: '#nt-jug-tel-hint'
+    });
+    /* Creación rápida: el país del jugador arrastra al teléfono mientras el
+      administrador no haya elegido uno distinto manualmente. */
+    const paisJugadorNT = cont.querySelector('#nt-jug-pais');
+    const paisTelNT = cont.querySelector('#nt-jug-tel-pais');
+    if (paisTelNT) paisTelNT.addEventListener('change', () => { paisTelNT.dataset.manual = '1'; });
+    if (paisJugadorNT && paisTelNT) paisJugadorNT.addEventListener('change', () => {
+      if (paisTelNT.dataset.manual === '1') return;
+      paisTelNT.value = paisJugadorNT.value || 'NI';
+      paisTelNT.dispatchEvent(new Event('change'));
+    });
     cont.querySelectorAll('[data-nt-eliminar]').forEach(b => b.addEventListener('click', () => {
       modalEliminarJugador(GL.jugador(b.dataset.ntEliminar), root);
     }));
@@ -1417,78 +2018,90 @@
 
   /* ---------------- Modales de jugadores ---------------- */
   function modalEditar(j, root) {
-    // Calcular hint de teléfono según el país actual
-    const hintTel = paisVal => {
-      if (!GL.tel || !CONFIG.PAISES || !CONFIG.PAISES[paisVal]) return '';
-      const cfg = CONFIG.PAISES[paisVal];
-      return '+' + cfg.prefijo + ' · ' + cfg.digitos + ' dígitos';
-    };
+    const paisTelInicial = GL.tel.paisJugador(j) || j.pais || 'NI';
+    const e164Inicial = GL.tel.e164Jugador(j);
+    const telInicial = e164Inicial
+      ? (GL.tel.nacional(e164Inicial, paisTelInicial) || e164Inicial)
+      : String(j.telefono || '');
 
     const m = GL.abrirModal({
       titulo: 'Editar jugador — ' + esc(j.nombre_usuario),
+      ancho: 'j5-forma',
       cuerpo:
-        // Nombre de usuario
-        '<label class="campo"><span>Nombre en el juego</span>' +
-          '<input class="input" id="ed-nombre" maxlength="32" ' +
-            'value="' + esc(j.nombre_usuario) + '" ' +
-            'placeholder="Ej: GOAT_PEREZ" ' +
-            'autocomplete="off">' +
-          '<small style="color:var(--text-secondary);font-size:11px;margin-top:2px;display:block">' +
-            'Solo letras, números y guión bajo (_). Máximo 32 caracteres.' +
-          '</small>' +
-        '</label>' +
-
-        // País
-        '<label class="campo"><span>País</span>' +
-          '<select class="input" id="ed-pais">' +
-            GL.opcionesPais(j.pais, true) +
-          '</select>' +
-        '</label>' +
-
-        // Zona horaria
-        '<label class="campo"><span>Ciudad o zona horaria</span>' +
-          '<select class="input" id="ed-zona">' +
-            GL.opcionesZonaHoraria(j.zona_horaria, j.pais) +
-          '</select>' +
-        '</label>' +
-        '<p class="nota-pie" id="ed-horario"></p>' +
-
-        // Teléfono
-        '<label class="campo">' +
-          '<span>Teléfono <small id="ed-tel-hint" style="color:var(--text-secondary)">' +
-            esc(hintTel(j.pais)) +
-          '</small></span>' +
-          '<input class="input" id="ed-tel" ' +
-            'value="' + esc(j.telefono || '') + '" ' +
-            'placeholder="Solo dígitos, sin espacios ni guiones" ' +
-            'inputmode="numeric">' +
-        '</label>' +
-
-        // Número del jugador (opcional)
-        ('numero' in j
-          ? '<label class="campo"><span>Número del jugador</span>' +
-              '<input class="input" type="number" min="0" max="99" step="1" id="ed-numero" ' +
-                'value="' + esc(j.numero ?? '') + '"></label>'
-          : ''),
+        j5FormIntro('Actualizá los datos visibles del jugador. El teléfono se conserva si no se modifica.') +
+        '<div class="j5-form-grid">' +
+          '<div class="j5-form-section">' +
+            '<h3 class="j5-form-titulo">' + icono('user', 16) + 'Identidad</h3>' +
+            '<label class="campo"><span>Nombre en el juego ' + j5Requerido() + '</span>' +
+              '<input class="input" id="ed-nombre" maxlength="32" ' +
+                'value="' + esc(j.nombre_usuario) + '" ' +
+                'placeholder="Ej: GOAT_PEREZ" ' +
+                'autocomplete="off">' +
+              '<small class="campo-ayuda">Solo letras, números y guión bajo (_). Máximo 32 caracteres.</small>' +
+            '</label>' +
+            '<label class="campo"><span>País ' + j5Requerido() + '</span>' +
+              '<select class="input" id="ed-pais">' +
+                GL.opcionesPais(j.pais, true) +
+              '</select>' +
+            '</label>' +
+          '</div>' +
+          '<div class="j5-form-section">' +
+            '<h3 class="j5-form-titulo">' + icono('clock', 16) + 'Contacto y horario</h3>' +
+            '<label class="campo"><span>Ciudad o zona horaria ' + j5Requerido() + '</span>' +
+              '<select class="input" id="ed-zona">' +
+                GL.opcionesZonaHoraria(j.zona_horaria, j.pais) +
+              '</select>' +
+            '</label>' +
+            '<p class="nota-pie" id="ed-horario"></p>' +
+            '<label class="campo"><span>País del teléfono</span>' +
+              '<select class="input" id="ed-tel-pais">' +
+                GL.opcionesPais(paisTelInicial, false) +
+              '</select></label>' +
+            '<label class="campo">' +
+              '<span>Teléfono / WhatsApp <small id="ed-tel-hint" class="j5-tel-hint">' +
+                esc(hintTel(paisTelInicial)) +
+              '</small></span>' +
+              '<div class="tel-wrap">' +
+                '<button type="button" class="tel-prefijo" id="ed-tel-prefijo" aria-label="Código de país">' +
+                  (GL.tel.prefijo(paisTelInicial) ? '+' + GL.tel.prefijo(paisTelInicial) : '+?') + '</button>' +
+                '<input class="input" id="ed-tel" value="' + esc(telInicial) + '" ' +
+                  'placeholder="8108-5555" inputmode="numeric">' +
+              '</div>' +
+              '<small class="campo-ayuda">El formato válido no confirma la titularidad del número.</small>' +
+            '</label>' +
+            ('numero' in j
+              ? '<label class="campo"><span>Número del jugador</span>' +
+                  '<input class="input" type="number" min="0" max="99" step="1" id="ed-numero" ' +
+                    'value="' + esc(j.numero ?? '') + '"></label>'
+              : '') +
+          '</div>' +
+        '</div>',
 
       acciones:
         '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
-        '<button type="button" class="btn" id="ed-guardar">' + icono('save', 15) + 'Guardar cambios</button>',
+        '<button type="button" class="btn" id="ed-guardar">' + icono('save', 16) + 'Guardar cambios</button>',
 
       onAbrir(fondo, cerrar) {
         const pais = fondo.querySelector('#ed-pais');
         const zona = fondo.querySelector('#ed-zona');
         const nota = fondo.querySelector('#ed-horario');
-        const hint = fondo.querySelector('#ed-tel-hint');
+        const telPais = fondo.querySelector('#ed-tel-pais');
 
-        // Al cambiar país: actualizar zona y hint de teléfono
-        pais.addEventListener('change', () => {
-          GL.actualizarZona(zona, pais.value, nota);
-          if (hint) hint.textContent = hintTel(pais.value);
-          errorCampo(fondo, '#ed-tel', null); // limpiar error de tel al cambiar país
-        });
+        pais.addEventListener('change', () => GL.actualizarZona(zona, pais.value, nota));
         zona.addEventListener('change', () => GL.actualizarZona(zona, pais.value, nota, true));
         GL.actualizarZona(zona, pais.value, nota, true);
+        enlazarCampoTelefono(fondo, {
+          pais: '#ed-tel-pais', tel: '#ed-tel',
+          prefijo: '#ed-tel-prefijo', hint: '#ed-tel-hint'
+        });
+        telPais.addEventListener('change', () => {
+          errorCampo(fondo, '#ed-tel', null);
+          const escrito = fondo.querySelector('#ed-tel').value.trim();
+          if (escrito) {
+            const revalidado = GL.tel.validar(escrito, telPais.value, false);
+            if (!revalidado.ok) errorCampo(fondo, '#ed-tel', revalidado.mensaje);
+          }
+        });
 
         fondo.querySelector('#ed-guardar').addEventListener('click', async () => {
           // Limpiar todos los errores inline
@@ -1526,19 +2139,12 @@
             hayError = true;
           }
 
-          // ── Validar teléfono (opcional) ────────────────────────────
+          // ── Validar teléfono contra su propio país ─────────────────
           const telRaw = fondo.querySelector('#ed-tel').value.trim();
-          let   telFinal = telRaw || null;
-          if (telRaw && pais.value && GL.tel) {
-            const v = GL.tel.validar(telRaw, pais.value);
-            if (!v.ok) {
-              errorCampo(fondo, '#ed-tel',
-                v.mensaje || 'Número inválido para el país seleccionado.');
-              hayError = true;
-            } else {
-              // Normalizar a formato E.164 antes de guardar
-              telFinal = GL.tel.normalizar(telRaw, pais.value);
-            }
+          const telCambios = GL.tel.cambiosSiNuevos(telRaw, telPais.value, j);
+          if (telCambios.__error) {
+            errorCampo(fondo, '#ed-tel', telCambios.__error.mensaje);
+            hayError = true;
           }
 
           if (hayError) return; // Dejar el botón activo para corregir
@@ -1549,9 +2155,10 @@
           const update = {
             nombre_usuario: nombreNorm,
             pais:           pais.value,
-            zona_horaria:   zona.value,
-            telefono:       telFinal
+            zona_horaria:   zona.value
           };
+          // {} cuando el teléfono no cambió: no se borra ni se reescribe.
+          Object.assign(update, telCambios);
           if ('numero' in j) {
             const nEl = fondo.querySelector('#ed-numero');
             update.numero = nEl && nEl.value !== '' ? Number(nEl.value) : null;
@@ -1560,7 +2167,9 @@
           const { error } = await sb.from('jugadores').update(update).eq('id', j.id);
           if (error) {
             // Detectar error de unicidad del servidor (segundo nivel de protección)
-            if (error.message && /unique|duplicat/i.test(error.message)) {
+            if (error.message && /jugadores_e164_canonicalizado_uniq|tel[eé]fono ya est[aá] registrado/i.test(error.message)) {
+              errorCampo(fondo, '#ed-tel', 'Ese teléfono ya está registrado en otro jugador.');
+            } else if (error.message && /unique|duplicat/i.test(error.message)) {
               errorCampo(fondo, '#ed-nombre',
                 'El servidor rechazó el nombre: ya existe en la base de datos.');
             } else {
@@ -1649,7 +2258,7 @@
       acciones:
         '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
         '<button type="button" class="btn" id="gr-guardar">' +
-          (asignar === true ? icono('user-plus', 15) + 'Asignar' : icono('shuffle', 15) + 'Mover jugador') +
+          (asignar === true ? icono('user-plus', 16) + 'Asignar' : icono('shuffle', 16) + 'Mover jugador') +
         '</button>',
 
       onAbrir(fondo, cerrar) {
@@ -1872,7 +2481,7 @@
       : '';
     const alertaSuspension = acumulada > 0
       ? '<div style="background:rgba(245,197,24,.1);border:1px solid var(--accent-gold);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px">' +
-          icono('info', 12) +
+          icono('info', 14) +
           ' Este jugador tiene <strong>' + acumulada + ' partido(s)</strong> de suspensión aún no cumplido(s).' +
         '</div>'
       : '';
@@ -2087,7 +2696,7 @@
 
     const alertaSuspendido = suspendido
       ? '<div style="background:rgba(255,140,0,.1);border:1px solid var(--accent-gold-2);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px">' +
-          icono('info', 12) + ' Este jugador ya está suspendido. ' +
+          icono('info', 14) + ' Este jugador ya está suspendido. ' +
           (acumulada > 0 ? 'Le quedan <strong>' + acumulada + '</strong> partido(s) por cumplir.' : 'No quedan partidos de suspensión pendientes.') +
         '</div>'
       : '';
@@ -2234,106 +2843,100 @@
     }
 
     const grupos = GL.grupos();
-    const hintTel = paisVal => {
-      if (!GL.tel || !CONFIG.PAISES || !CONFIG.PAISES[paisVal]) return '';
-      const cfg = CONFIG.PAISES[paisVal];
-      return '+' + cfg.prefijo + ' · ' + cfg.digitos + ' dígitos';
-    };
 
     const m = GL.abrirModal({
       titulo: 'Agregar jugador al torneo',
-      ancho: '',
+      ancho: 'j5-forma',
       cuerpo:
-        '<div class="campo-row">' +
-          // Nombre
-          '<label class="campo"><span>Nombre en FC Mobile</span>' +
-            '<input class="input" id="ag-nombre" maxlength="32" ' +
-              'placeholder="Ej: GOAT_PEREZ" autocomplete="off">' +
-            '<small style="color:var(--text-secondary);font-size:11px;margin-top:2px;display:block">' +
-              'Solo letras, números y guión bajo. Máximo 32 caracteres.' +
-            '</small>' +
-          '</label>' +
-
-          // País
-          '<label class="campo"><span>País</span>' +
-            '<select class="input" id="ag-pais">' +
-              GL.opcionesPais('', false) +
-            '</select>' +
-          '</label>' +
+        j5FormIntro('Completá los datos para crear la cuenta y asignar al jugador al torneo activo.') +
+        '<div class="j5-form-grid">' +
+          '<div class="j5-form-section">' +
+            '<h3 class="j5-form-titulo">' + icono('user', 16) + 'Identidad y acceso</h3>' +
+            '<label class="campo"><span>Nombre en FC Mobile ' + j5Requerido() + '</span>' +
+              '<input class="input" id="ag-nombre" maxlength="32" ' +
+                'placeholder="Ej: GOAT_PEREZ" autocomplete="off">' +
+              '<small class="campo-ayuda">Solo letras, números y guión bajo. Máximo 32 caracteres.</small>' +
+            '</label>' +
+            '<label class="campo"><span>País ' + j5Requerido() + '</span>' +
+              '<select class="input" id="ag-pais">' +
+                GL.opcionesPais('NI', false) +
+              '</select>' +
+            '</label>' +
+            '<label class="campo"><span>Correo electrónico ' + j5Requerido() + '</span>' +
+              '<input class="input" type="email" id="ag-email" ' +
+                'placeholder="jugador@correo.com" autocomplete="off">' +
+            '</label>' +
+            '<label class="campo"><span>Contraseña temporal ' + j5Requerido() + '</span>' +
+              '<input class="input" id="ag-clave" ' +
+                'value="' + Math.random().toString(36).slice(2, 10) + '" ' +
+                'autocomplete="new-password">' +
+              '<small class="campo-ayuda">Mínimo 8 caracteres. Entregala por un canal privado.</small>' +
+            '</label>' +
+          '</div>' +
+          '<div class="j5-form-section">' +
+            '<h3 class="j5-form-titulo">' + icono('phone', 16) + 'Contacto y torneo</h3>' +
+            '<label class="campo"><span>Ciudad o zona horaria ' + j5Requerido() + '</span>' +
+              '<select class="input" id="ag-zona">' +
+                GL.opcionesZonaHoraria('', '') +
+              '</select>' +
+            '</label>' +
+            '<p class="nota-pie" id="ag-horario"></p>' +
+            '<label class="campo"><span>País del teléfono</span>' +
+              '<select class="input" id="ag-tel-pais">' +
+                GL.opcionesPais('NI', false) +
+              '</select>' +
+            '</label>' +
+            '<label class="campo">' +
+              '<span>Teléfono / WhatsApp (obligatorio) ' +
+                '<small id="ag-tel-hint" class="j5-tel-hint">' + hintTel('NI') + '</small></span>' +
+              '<div class="tel-wrap">' +
+                '<button type="button" class="tel-prefijo" id="ag-tel-prefijo" aria-label="Código de país">+505</button>' +
+                '<input class="input" id="ag-tel" placeholder="8108-5555" inputmode="numeric" required>' +
+              '</div>' +
+              '<small class="campo-ayuda">El formato válido no confirma la titularidad del número.</small>' +
+            '</label>' +
+            '<label class="campo"><span>Grupo ' + j5Requerido() + '</span>' +
+              '<select class="input" id="ag-grupo">' +
+                (grupos.length
+                  ? grupos.map(g =>
+                      '<option value="' + g.id + '">Grupo ' + GL.letraGrupo(g) +
+                      ' — ' + GL.clasificacion(g.id).length + ' jugador(es)</option>'
+                    ).join('')
+                  : '<option value="">Sin grupos disponibles</option>') +
+              '</select>' +
+            '</label>' +
+          '</div>' +
         '</div>' +
-
-        // Zona horaria
-        '<label class="campo"><span>Ciudad o zona horaria</span>' +
-          '<select class="input" id="ag-zona">' +
-            GL.opcionesZonaHoraria('', '') +
-          '</select>' +
-        '</label>' +
-        '<p class="nota-pie" id="ag-horario"></p>' +
-
-        '<div class="campo-row">' +
-          // Teléfono
-          '<label class="campo">' +
-            '<span>Teléfono <small id="ag-tel-hint" style="color:var(--text-secondary)"></small></span>' +
-            '<input class="input" id="ag-tel" ' +
-              'placeholder="Solo dígitos, sin espacios" ' +
-              'inputmode="numeric">' +
-          '</label>' +
-
-          // Grupo
-          '<label class="campo"><span>Grupo</span>' +
-            '<select class="input" id="ag-grupo">' +
-              (grupos.length
-                ? grupos.map(g =>
-                    '<option value="' + g.id + '">Grupo ' + GL.letraGrupo(g) +
-                    ' — ' + GL.clasificacion(g.id).length + ' jugador(es)</option>'
-                  ).join('')
-                : '<option value="">Sin grupos disponibles</option>') +
-            '</select>' +
-          '</label>' +
-        '</div>' +
-
-        '<div class="campo-row">' +
-          // Email
-          '<label class="campo"><span>Correo electrónico</span>' +
-            '<input class="input" type="email" id="ag-email" ' +
-              'placeholder="jugador@correo.com" autocomplete="off">' +
-          '</label>' +
-
-          // Contraseña temporal
-          '<label class="campo"><span>Contraseña temporal</span>' +
-            '<input class="input" id="ag-clave" ' +
-              'value="' + Math.random().toString(36).slice(2, 10) + '" ' +
-              'autocomplete="new-password">' +
-            '<small style="color:var(--text-secondary);font-size:11px;margin-top:2px;display:block">' +
-              'Mínimo 8 caracteres. Entregala por un canal privado.' +
-            '</small>' +
-          '</label>' +
-        '</div>' +
-
-        '<div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);' +
-            'border-radius:8px;padding:10px 14px;font-size:12px;margin-top:4px">' +
-          icono('info', 13) +
+        '<div class="j5-form-aviso">' + icono('info', 14) +
           ' La cuenta se crea en Supabase Auth mediante una función segura del servidor. ' +
           'El jugador podrá cambiar su contraseña desde el perfil.' +
         '</div>',
 
       acciones:
         '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
-        '<button type="button" class="btn" id="ag-crear">' + icono('user-plus', 15) + 'Crear jugador</button>',
+        '<button type="button" class="btn" id="ag-crear">' + icono('user-plus', 16) + 'Crear jugador</button>',
 
       onAbrir(fondo, cerrar) {
         const pais = fondo.querySelector('#ag-pais');
         const zona = fondo.querySelector('#ag-zona');
         const nota = fondo.querySelector('#ag-horario');
-        const hint = fondo.querySelector('#ag-tel-hint');
+        const telPais = fondo.querySelector('#ag-tel-pais');
 
-        pais.addEventListener('change', () => {
-          GL.actualizarZona(zona, pais.value, nota);
-          if (hint) hint.textContent = hintTel(pais.value);
-          errorCampo(fondo, '#ag-tel', null);
-        });
+        pais.addEventListener('change', () => GL.actualizarZona(zona, pais.value, nota));
         zona.addEventListener('change', () => GL.actualizarZona(zona, pais.value, nota, true));
         GL.actualizarZona(zona, pais.value, nota);
+        enlazarCampoTelefono(fondo, {
+          pais: '#ag-tel-pais', tel: '#ag-tel',
+          prefijo: '#ag-tel-prefijo', hint: '#ag-tel-hint'
+        });
+        telPais.addEventListener('change', () => {
+          errorCampo(fondo, '#ag-tel', null);
+          const escrito = fondo.querySelector('#ag-tel').value.trim();
+          if (escrito) {
+            const revalidado = GL.tel.validar(escrito, telPais.value, false);
+            if (!revalidado.ok) errorCampo(fondo, '#ag-tel', revalidado.mensaje);
+          }
+        });
 
         fondo.querySelector('#ag-crear').addEventListener('click', async () => {
           // Limpiar errores anteriores
@@ -2370,17 +2973,18 @@
             hayError = true;
           }
 
-          // ── Validar teléfono (opcional) ────────────────────────────
+          // ── Validar teléfono obligatorio contra su propio país ────
           const telRaw = fondo.querySelector('#ag-tel').value.trim();
-          let   telFinal = telRaw || null;
-          if (telRaw && pais.value && GL.tel) {
-            const v = GL.tel.validar(telRaw, pais.value);
-            if (!v.ok) {
-              errorCampo(fondo, '#ag-tel',
-                v.mensaje || 'Número inválido para el país seleccionado.');
+          const vTel = GL.tel.validar(telRaw, telPais.value, true);
+          let camposTel = null;
+          if (!vTel.ok) {
+            errorCampo(fondo, '#ag-tel', vTel.mensaje);
+            hayError = true;
+          } else {
+            camposTel = GL.tel.campos(vTel.e164, vTel.pais || telPais.value);
+            if (!camposTel.telefono_e164) {
+              errorCampo(fondo, '#ag-tel', 'El teléfono es obligatorio.');
               hayError = true;
-            } else {
-              telFinal = GL.tel.normalizar(telRaw, pais.value);
             }
           }
 
@@ -2413,16 +3017,15 @@
           const btn = fondo.querySelector('#ag-crear');
           btn.disabled = true; btn.textContent = 'Creando…';
 
-          const body = {
+          const body = Object.assign({
             nombre_usuario: nombreNorm,
             pais:           pais.value,
             zona_horaria:   zona.value,
-            telefono:       telFinal,
             grupo_id:       grupoVal,
             torneo_id:      torneoActual.id,
             email:          emailVal,
             password:       claveVal
-          };
+          }, camposTel);
 
           try {
             const { data, error } = await sb.functions.invoke('admin-crear-jugador', { body });
@@ -2435,7 +3038,9 @@
           } catch (e) {
             // Detectar errores específicos del servidor y mostrarlos junto al campo
             const msg = e.message || '';
-            if (/email|correo|ya existe/i.test(msg)) {
+            if (/jugadores_e164_canonicalizado_uniq|tel[eé]fono ya est[aá] registrado/i.test(msg)) {
+              errorCampo(fondo, '#ag-tel', 'Ese teléfono ya está registrado en otro jugador.');
+            } else if (/email|correo|ya existe/i.test(msg)) {
               errorCampo(fondo, '#ag-email', 'Ese correo ya está registrado en el sistema.');
             } else if (/nombre|duplicate/i.test(msg)) {
               errorCampo(fondo, '#ag-nombre', 'Ese nombre ya existe en la base de datos.');
@@ -2587,7 +3192,7 @@
             : visitaExp ? 'Expulsado visita — gana local 1-0'
             : null;
           return '<div class="campo-row" data-pend="' + p.id + '" style="align-items:end;border-bottom:1px solid var(--border);padding-bottom:10px">' +
-            '<div style="font-family:Rajdhani;font-weight:600;font-size:15px;flex:1">' +
+            '<div style="font-family:var(--gl-font-sans);font-weight:600;font-size:15px;flex:1">' +
               esc(GL.nombreJugador(p.local_id)) + ' vs ' + esc(GL.nombreJugador(p.visitante_id)) + '</div>' +
             (autoLabel
               ? '<span style="color:var(--text-secondary);font-size:13px">' + esc(autoLabel) + '</span>'

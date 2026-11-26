@@ -3,23 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0a0e1a">
+  <meta name="theme-color" content="#0B0D10">
   <meta name="description" content="GOATS LATINOS — Gestión integral de la liga FC Mobile: tabla, calendario, resultados, estadísticas y eliminatorias.">
   <title>GOATS LATINOS · League Manager</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0e1a'/%3E%3Cpath d='M12 48V20l10 14 10-14 10 14 10-14v28' fill='none' stroke='%23f5c518' stroke-width='6' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B0D10'/%3E%3Cpath d='M12 48V20l10 14 10-14 10 14 10-14v28' fill='none' stroke='%23E11D35' stroke-width='6' stroke-linejoin='round'/%3E%3C/svg%3E">
 
   <!-- Fuentes -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <!-- Toastify -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 
-  <link rel="stylesheet" href="css/estilos.css?v=1.2.0">
+  <link rel="stylesheet" href="css/tokens-3.1.css?v=3.2.0">
+  <link rel="stylesheet" href="css/estilos.css?v=3.2.0">
   <!-- libphonenumber-js: validación y formato telefónico internacional -->
-  <script src="https://cdn.jsdelivr.net/npm/libphonenumber-js@1.11.4/bundle/libphonenumber-min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/libphonenumber-js@1.13.17/bundle/libphonenumber-min.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#vista">Saltar al contenido principal</a>
   <div class="offline-banner oculto" id="offline-banner">
     <i data-lucide="wifi-off" style="width:16px;height:16px"></i>
     Sin conexión. Los datos se actualizarán cuando vuelva la red.
@@ -36,11 +38,11 @@
         <i data-lucide="trophy" style="width:14px;height:14px"></i>
         <span id="temporada-texto">Cargando temporada…</span>
       </div>
-      <nav id="navegacion"></nav>
+      <nav id="navegacion" aria-label="Navegación principal"></nav>
       <div class="sidebar-footer" id="usuario-caja"></div>
     </aside>
 
-    <main class="main">
+    <main class="main" id="contenido-principal">
       <header class="topbar">
         <button type="button" class="btn-icon btn-menu" id="btn-menu" aria-label="Abrir menú" aria-expanded="false">
           <i data-lucide="menu" style="width:20px;height:20px"></i>
@@ -49,13 +51,15 @@
           <h1 id="titulo-pagina">Tabla de Posiciones</h1>
           <p id="subtitulo-pagina">GOATS LATINOS · Temporada activa</p>
         </div>
-        <button type="button" class="btn-icon" id="btn-notif" aria-label="Notificaciones" style="display:none;position:relative">
-          <i data-lucide="bell" style="width:20px;height:20px"></i>
-          <span class="notif-badge" id="notif-badge" style="display:none"></span>
-        </button>
-        <div class="sesion-chip anonimo" id="estado-sesion"></div>
+        <div class="topbar-acciones">
+          <button type="button" class="btn-icon" id="btn-notif" aria-label="Notificaciones" style="display:none;position:relative">
+            <i data-lucide="bell" style="width:20px;height:20px"></i>
+            <span class="notif-badge" id="notif-badge" style="display:none"></span>
+          </button>
+          <div class="sesion-chip anonimo" id="estado-sesion"></div>
+        </div>
       </header>
-      <section id="vista" class="vista" aria-live="polite"></section>
+      <section id="vista" class="vista" tabindex="-1" aria-live="polite"></section>
     </main>
   </div>
 
@@ -71,20 +75,20 @@
   <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 
   <!-- Núcleo -->
-  <script src="js/core/config.js?v=1.1.0"></script>
-  <script src="js/core/gl.js?v=1.2.0"></script>
+  <script src="js/core/config.js?v=1.2.1"></script>
+  <script src="js/core/gl.js?v=1.2.1"></script>
   <script src="js/core/ui-estados.js?v=1.2.0"></script>
   <script src="js/core/imagen.js?v=1.2.0"></script>
-  <script src="js/core/supabase.js?v=1.1.0"></script>
+  <script src="js/core/supabase.js?v=1.2.1"></script>
   <script src="js/core/clasificacion.js?v=1.1.0"></script>
   <script src="js/core/estadisticas.js?v=1.1.0"></script>
   <script src="js/ui/menu.js?v=1.1.0"></script>
-  <script src="js/ui/auth.js?v=1.1.0"></script>
-  <script src="js/ui/onboarding.js?v=1.1.0"></script>
+  <script src="js/ui/auth.js?v=1.2.1"></script>
+  <script src="js/ui/onboarding.js?v=1.2.1"></script>
   <script src="js/ui/onboarding-admin.js?v=1.2.0"></script>
   <script src="js/modulos/notificaciones.js?v=1.1.0"></script>
   <script src="js/modulos/auditoria.js?v=1.1.0"></script>
   <script src="js/app.js?v=1.1.0"></script>
-  <script src="js/modulos/dashboard-admin.js?v=1.1.0"></script>
+  <script src="js/modulos/dashboard-admin.js?v=1.2.1"></script>
 </body>
 </html>

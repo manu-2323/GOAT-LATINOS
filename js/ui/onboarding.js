@@ -33,7 +33,7 @@ const OnboardingTour = (() => {
       titulo: 'País, teléfono y WhatsApp',
       cuerpo: 'El sistema usa tu teléfono únicamente para generar el enlace de WhatsApp que el ' +
               'administrador incluye en los mensajes de jornada. Nadie más puede ver tu número. ' +
-              'El prefijo se agrega automáticamente según el país que elegiste.',
+              'Elegí el país del teléfono y confirmá el formato: validarlo no confirma la titularidad.',
       accion: { label: 'Actualizar mi teléfono', hash: 'perfil' }
     },
     {
@@ -170,7 +170,7 @@ const OnboardingTour = (() => {
           pasos.map((_, i) => '<div class="ob-punto" data-i="' + i + '"></div>').join('') +
         '</div>' +
         '<div class="ob-pies">' +
-          '<button type="button" class="btn sec ob-atras">' + icono('arrow-left', 15) + 'Anterior</button>' +
+          '<button type="button" class="btn sec ob-atras">' + icono('arrow-left', 16) + 'Anterior</button>' +
           '<button type="button" class="btn sec ob-accion" style="display:none"></button>' +
           '<button type="button" class="btn ob-siguiente">Siguiente</button>' +
         '</div>' +
@@ -225,7 +225,7 @@ const OnboardingTour = (() => {
     const campos = [
       !!j.nombre_usuario,
       !!j.pais,
-      !!j.telefono,
+      !!GL.tel.e164Jugador(j),
       !!j.avatar_url
     ];
     return Math.round((campos.filter(Boolean).length / campos.length) * 100);
@@ -236,7 +236,7 @@ const OnboardingTour = (() => {
     const color = pct === 100 ? 'var(--accent-green)' : (pct >= 50 ? 'var(--accent-gold)' : 'var(--accent-red)');
     const label = pct === 100 ? 'Perfil completo' : 'Perfil ' + pct + '% completado';
     return '<div class="perfil-progreso" title="' + esc(label) + '">' +
-      '<div class="perfil-progreso-label">' + icono('user-check', 13) + esc(label) + '</div>' +
+      '<div class="perfil-progreso-label">' + icono('user-check', 14) + esc(label) + '</div>' +
       '<div class="perfil-progreso-track">' +
         '<div class="perfil-progreso-fill" style="width:' + pct + '%;background:' + color + '"></div>' +
       '</div>' +

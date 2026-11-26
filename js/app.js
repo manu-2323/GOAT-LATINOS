@@ -37,8 +37,24 @@ async function mostrar(id) {
   _rutaActual = item.id;
 
   document.getElementById('titulo-pagina').textContent = item.nombre;
-  document.querySelectorAll('.nav-link,.nav-movil a').forEach(a => a.classList.toggle('activo', a.dataset.id === item.id));
-  if (window.innerWidth <= 1050) document.getElementById('app').classList.remove('menu-abierto');
+  document.querySelectorAll('.nav-link,.nav-movil a').forEach(a => {
+    const activo = a.dataset.id === item.id;
+    a.classList.toggle('activo', activo);
+    if (activo) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  });
+  const masBtn = document.getElementById('btn-mas-nav');
+  if (masBtn) {
+    const activoEnMas = (masBtn.dataset.masIds || '').split(',').includes(item.id);
+    masBtn.classList.toggle('activo', activoEnMas);
+    if (activoEnMas) masBtn.setAttribute('aria-current', 'page');
+    else masBtn.removeAttribute('aria-current');
+  }
+  if (window.innerWidth <= 1050) {
+    document.getElementById('app').classList.remove('menu-abierto');
+    const btnMenu = document.getElementById('btn-menu');
+    if (btnMenu) btnMenu.setAttribute('aria-expanded', 'false');
+  }
 
   if (nivel !== 'publico' && !Auth.usuario) {
     vista.innerHTML = GL.accesoDenegado(nivel);
@@ -102,7 +118,16 @@ function conectarMenu() {
   });
   if (fondo) fondo.addEventListener('click', () => {
     app.classList.remove('menu-abierto');
-    btn.setAttribute('aria-expanded', 'false');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function conectarAccesibilidad() {
+  const salto = document.querySelector('.skip-link');
+  const vista = document.getElementById('vista');
+  if (salto && vista) salto.addEventListener('click', e => {
+    e.preventDefault();
+    vista.focus();
   });
 }
 
@@ -110,6 +135,7 @@ async function arrancar() {
   PantallaAuth.obligatorio = true;
   conectarOffline();
   conectarMenu();
+  conectarAccesibilidad();
   iniciarIconos();
   dibujarMenu();
   pintarSesion();

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard · FASE 3.4 · arnés local</title>
+  <link rel="stylesheet" href="css/tokens-3.1.css">
+  <link rel="stylesheet" href="css/estilos.css">
+  <style>
+    /* Maquetación del banco de pruebas. Los componentes viven en estilos.css. */
+    body { margin:0; background:var(--gl-bg); color:var(--gl-text); font-family:var(--gl-font-sans); }
+    .mock-shell { max-width:var(--gl-content-max); margin:0 auto; padding:20px 22px 64px; }
+    .mock-bar {
+      display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+      min-height:48px; margin-bottom:18px; padding:8px 12px;
+      border:1px solid var(--gl-border); border-radius:var(--gl-radius-sm);
+      background:var(--gl-surface-1); color:var(--gl-text-secondary); font-size:12px;
+    }
+    .mock-bar strong { color:var(--gl-text); font-weight:var(--gl-fw-semibold); }
+    #vista { outline:none; }
+    @media (max-width:600px){ .mock-shell { padding:14px 12px 64px; } }
+  </style>
+</head>
+<body>
+  <div class="mock-shell">
+    <div class="mock-bar">
+      <strong>GOATS LATINOS · Dashboard local</strong>
+      <span>Datos simulados · sin Supabase remoto · <span id="mock-estado">con datos</span></span>
+    </div>
+    <main id="vista" tabindex="-1"></main>
+  </div>
+  <div id="modal-root"></div>
+
+  <script>window.supabase = { createClient: function () { return null; } };</script>
+  <script src="librerias/chart.umd.js"></script>
+  <script>
+    window.lucide = {
+      createIcons: function () {
+        document.querySelectorAll('i[data-lucide]:not([data-gl-icon])').forEach(function (i) {
+          var w = i.style.width || '18px';
+          i.setAttribute('data-gl-icon', '');
+          i.innerHTML = '<svg viewBox="0 0 24 24" width="' + w + '" height="' + w + '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l3 2"></path></svg>';
+        });
+      }
+    };
+  </script>
+  <script>
+    window.Modulos = {};
+    var Modulos = window.Modulos;
+
+    function esc(t) {
+      return String(t === null || t === undefined ? '' : t).replace(/[&<>"']/g,
+        c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    }
+    function icono(nombre, tam, clases) {
+      const escala = [14, 16, 18, 20, 24, 32];
+      const n = Number(tam) || 18;
+      const t = escala.reduce((mejor, v) => {
+        const d = Math.abs(v - n), dm = Math.abs(mejor - n);
+        return d < dm || (d === dm && v > mejor) ? v : mejor;
+      }, escala[0]);
+      return '<i data-lucide="' + esc(nombre) + '" class="' + esc(clases || '') +
+        '" style="width:' + t + 'px;height:' + t + 'px;flex:none"></i>';
+    }
+    function iniciarIconos() { try { window.lucide.createIcons(); } catch (e) {} }
+
+    const modo = new URLSearchParams(location.search).get('estado') || 'datos';
+    document.getElementById('mock-estado').textContent =
+      modo === 'vacio' ? 'sin torneo' : modo === 'carga' ? 'cargando' : modo === 'error' ? 'error' : 'con datos';
+
+    const J = [
+      { id:'j1', nombre_usuario:'CR7_LATINO', pais:'CR', activo:true, suspendido:false, avatar_url:'x', telefono:'+50688887777' },
+      { id:'j2', nombre_usuario:'LIONEL_M10', pais:'AR', activo:true, suspendido:false, avatar_url:'x', telefono:'+5491111111111' },
+      { id:'j3', nombre_usuario:'NEYMAR_JR', pais:'BR', activo:true, suspendido:false, avatar_url:'x', telefono:'+5511999999999' },
+      { id:'j4', nombre_usuario:'MBAPPE_9', pais:'FR', activo:true, suspendido:true, avatar_url:'x', telefono:'+33612345678' },
+      { id:'j5', nombre_usuario:'SIN_GRUPO', pais:'MX', activo:true, suspendido:false, avatar_url:'', telefono:'' },
+      { id:'j6', nombre_usuario:'LESIONADO', pais:'CL', activo:false, suspendido:false, avatar_url:'x', telefono:'+56911111111' }
+    ];
+    const grupos = [{ id:'g1', nombre:'Grupo A' }, { id:'g2', nombre:'Grupo B' }];
+    const miembros = [
+      { jugador_id:'j1', grupo_id:'g1' }, { jugador_id:'j2', grupo_id:'g1' },
+      { jugador_id:'j3', grupo_id:'g2' }, { jugador_id:'j4', grupo_id:'g2' }
+    ];
+    const jornadas = [
+      { numero:1, estado:'cerrada', fecha_inicio:'2026-10-10T11:00:00Z', hora_limite:'2026-10-10T21:00:00Z' },
+      { numero:2, estado:'cerrada', fecha_inicio:'2026-10-17T11:00:00Z', hora_limite:'2026-10-17T21:00:00Z' },
+      { numero:3, estado:'abierta', fecha_inicio:'2026-11-28T11:00:00Z', hora_limite:'2026-11-28T21:00:00Z' },
+      { numero:4, estado:'abierta', fecha_inicio:'2026-12-05T11:00:00Z', hora_limite:'2026-12-05T21:00:00Z' }
+    ];
+    const partidos = [
+      { id:'p1', jornada:1, grupo_id:'g1', local_id:'j1', visitante_id:'j2', goles_local:2, goles_visitante:1, estado:'jugado', updated_at:'2026-10-11T02:10:00Z', created_at:'2026-10-01T10:00:00Z' },
+      { id:'p2', jornada:1, grupo_id:'g2', local_id:'j3', visitante_id:'j4', goles_local:0, goles_visitante:0, estado:'jugado', updated_at:'2026-10-11T01:40:00Z', created_at:'2026-10-01T10:00:00Z' },
+      { id:'p3', jornada:2, grupo_id:'g1', local_id:'j2', visitante_id:'j1', goles_local:1, goles_visitante:3, estado:'jugado', updated_at:'2026-10-18T03:15:00Z', created_at:'2026-10-08T10:00:00Z' },
+      { id:'p4', jornada:2, grupo_id:'g2', local_id:'j4', visitante_id:'j3', goles_local:1, goles_visitante:2, estado:'jugado', updated_at:'2026-10-18T02:30:00Z', created_at:'2026-10-08T10:00:00Z' },
+      { id:'p5', jornada:3, grupo_id:'g1', local_id:'j1', visitante_id:'j3', goles_local:0, goles_visitante:0, estado:'pendiente', updated_at:'', created_at:'2026-10-20T10:00:00Z' },
+      { id:'p6', jornada:3, grupo_id:'g2', local_id:'j2', visitante_id:'j4', goles_local:0, goles_visitante:0, estado:'pendiente', updated_at:'', created_at:'2026-10-20T10:00:00Z' },
+      { id:'p7', jornada:4, grupo_id:'g1', local_id:'j3', visitante_id:'j2', goles_local:0, goles_visitante:0, estado:'pendiente', updated_at:'', created_at:'2026-10-20T10:00:00Z' }
+    ];
+    const sanciones = [
+      { id:'s1', jugador_id:'j1', tipo:'amarilla', created_at:'2026-10-18T03:00:00Z' },
+      { id:'s2', jugador_id:'j1', tipo:'amarilla', created_at:'2026-11-11T03:00:00Z' },
+      { id:'s3', jugador_id:'j4', tipo:'roja', created_at:'2026-10-18T02:40:00Z' }
+    ];
+    const clasificacion = [
+      { jugador_id:'j1', grupo_id:'g1', pj:2, pg:2, pe:0, pp:0, gf:5, gc:2, dif:3, pts:6 },
+      { jugador_id:'j2', grupo_id:'g1', pj:2, pg:1, pe:0, pp:1, gf:4, gc:4, dif:0, pts:3 },
+      { jugador_id:'j3', grupo_id:'g2', pj:2, pg:1, pe:1, pp:0, gf:2, gc:1, dif:1, pts:4 },
+      { jugador_id:'j4', grupo_id:'g2', pj:2, pg:0, pe:1, pp:1, gf:1, gc:2, dif:-1, pts:1 }
+    ];
+
+    window.GL = {
+      tema: {
+        fuente:"'Inter', system-ui, sans-serif", bg:'#0B0D10', superficie:'#14171B', borde:'#2E353D',
+        bordeFuerte:'#3B434D', texto:'#F5F6F7', texto2:'#9299A3', marca:'#E11D35',
+        marcaTexto:'#FF6B7A', exito:'#00D4AA', advertencia:'#F5B301', info:'#5B9BFF',
+        alfa(hex, a) { const h = hex.replace('#',''); const n = parseInt(h,16);
+          return 'rgba(' + [(n>>16)&255,(n>>8)&255,n&255].join(',') + ',' + a + ')'; }
+      },
+      ctx: { jugadores:J, miembros, jornadas, sanciones, clasificacion },
+      async asegurarAdmin() { return true; },
+      async cargarContexto() {},
+      torneo() {
+        return modo === 'vacio' ? null : {
+          id:'t1', nombre:'Liga Apertura 2026', temporada:'2026 · Fase regular',
+          total_jornadas:4, jugadores_por_grupo:2, created_at:'2026-09-01T00:00:00Z'
+        };
+      },
+      torneoId() { return 't1'; },
+      async partidos() {
+        if (modo === 'error') throw new Error('Failed to fetch partidos');
+        await new Promise(r => setTimeout(r, modo === 'carga' ? 1200 : 80));
+        return partidos;
+      },
+      jugadores() { return J.filter(j => j.activo !== false); },
+      grupos() { return grupos; },
+      jugadoresSinGrupo() { return J.filter(j => j.id === 'j5'); },
+      jugador(id) { return J.find(j => j.id === id) || null; },
+      nombreJugador(id) { const j = this.jugador(id); return j ? j.nombre_usuario : 'Por definir'; },
+      grupo(id) { return grupos.find(g => g.id === id) || null; },
+      letraGrupo(g) { const n = String((g && g.nombre) || '').replace(/\D/g,''); return n || 'A'; },
+      clasificacion(grupoId) { return clasificacion.filter(c => !grupoId || c.grupo_id === grupoId); },
+      resultado(p) {
+        let gf = Number(p.goles_local) || 0, gc = Number(p.goles_visitante) || 0;
+        if (p.estado === 'walkover_local') { gf = 3; gc = 0; }
+        if (p.estado === 'walkover_visitante') { gf = 0; gc = 3; }
+        if (p.estado === 'doble_ausencia') { gf = 0; gc = 0; }
+        if (p.estado === 'expulsion_local') { gf = 1; gc = 0; }
+        if (p.estado === 'expulsion_visitante') { gf = 0; gc = 1; }
+        return { gf, gc };
+      },
+      fechaLarga(d) { return new Date(d).toLocaleDateString('es-ES', { day:'2-digit', month:'long', year:'numeric' }); },
+      fechaHoraEnZona(instante) {
+        if (!instante) return 'Por definir';
+        return new Date(instante).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+      },
+      badge(texto, tono, ico) {
+        return '<span class="badge ' + esc(tono || 'neutral') + '">' + (ico ? icono(ico, 14) : '') + esc(texto) + '</span>';
+      },
+      skeleton(filas) { return '<div class="skeleton-wrap" aria-busy="true"><div class="skeleton-lista">' +
+        Array.from({length:filas || 6}, (_,i) => '<div class="skeleton-fila"><span class="skeleton" style="width:28%"></span><span class="skeleton" style="width:44%"></span><span class="skeleton" style="width:12%"></span></div>').join('') +
+        '</div></div>'; },
+      vacio(mensaje, ico, accion, sugerencia) {
+        return '<div class="estado-vacio" role="status"><div class="estado-ico-wrap">' + icono(ico || 'inbox', 38) +
+          '</div><h3>' + esc(mensaje) + '</h3>' + (sugerencia ? '<p class="estado-sugerencia">' + esc(sugerencia) + '</p>' : '') +
+          (accion ? '<div class="estado-accion">' + accion + '</div>' : '') + '</div>';
+      },
+      error() { return '<div class="estado-vacio error" role="alert"><div class="estado-ico-wrap">' + icono('triangle-alert', 38) +
+        '</div><h3>Algo salió mal</h3><p class="estado-desc">No pudimos cargar el centro de control. Intentá de nuevo.</p></div>'; },
+      mensaje(e) { return (e && e.message) || 'Error inesperado'; },
+      notificar() {},
+      tel: { e164Jugador(j) { return j && j.telefono ? j.telefono : ''; } }
+    };
+
+    // Navegación local: conserva el contrato data-ir del módulo real.
+    window.addEventListener('hashchange', () => document.body.dataset.nav = location.hash.replace('#',''));
+  </script>
+  <script src="js/modulos/dashboard-admin.js"></script>
+  <script>
+    Modulos['dashboard-admin'].render(document.getElementById('vista')).then(() => iniciarIconos());
+  </script>
+</body>
+</html>

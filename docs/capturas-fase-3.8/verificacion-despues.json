@@ -1,0 +1,251 @@
+{
+  "capturas": [
+    {
+      "nombre": "despues-con-datos",
+      "ruta": "docs/capturas-fase-3.8/despues-con-datos.png"
+    },
+    {
+      "nombre": "despues-vacio",
+      "ruta": "docs/capturas-fase-3.8/despues-vacio.png"
+    },
+    {
+      "nombre": "despues-cargando",
+      "ruta": "docs/capturas-fase-3.8/despues-cargando.png"
+    },
+    {
+      "nombre": "despues-error",
+      "ruta": "docs/capturas-fase-3.8/despues-error.png"
+    },
+    {
+      "nombre": "despues-bloqueado",
+      "ruta": "docs/capturas-fase-3.8/despues-bloqueado.png"
+    },
+    {
+      "nombre": "despues-cierre-valido",
+      "ruta": "docs/capturas-fase-3.8/despues-cierre-valido.png"
+    },
+    {
+      "nombre": "despues-movil",
+      "ruta": "docs/capturas-fase-3.8/despues-movil.png"
+    },
+    {
+      "nombre": "despues-escritorio",
+      "ruta": "docs/capturas-fase-3.8/despues-escritorio.png"
+    },
+    {
+      "nombre": "despues-jornada-sin-datos",
+      "ruta": "docs/capturas-fase-3.8/despues-jornada-sin-datos.png"
+    },
+    {
+      "nombre": "despues-grupo-sin-datos",
+      "ruta": "docs/capturas-fase-3.8/despues-grupo-sin-datos.png"
+    },
+    {
+      "nombre": "despues-copiado",
+      "ruta": "docs/capturas-fase-3.8/despues-copiado.png"
+    },
+    {
+      "nombre": "despues-cierre-bloqueado",
+      "ruta": "docs/capturas-fase-3.8/despues-cierre-bloqueado.png"
+    }
+  ],
+  "responsive": [
+    {
+      "width": 320,
+      "ancho": 320,
+      "scrollWidth": 320,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 4,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 375,
+      "ancho": 375,
+      "scrollWidth": 375,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 4,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 390,
+      "ancho": 390,
+      "scrollWidth": 390,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 4,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 430,
+      "ancho": 430,
+      "scrollWidth": 430,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 4,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 768,
+      "ancho": 768,
+      "scrollWidth": 768,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 2,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 1024,
+      "ancho": 1024,
+      "scrollWidth": 1024,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 2,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 1366,
+      "ancho": 1366,
+      "scrollWidth": 1366,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 1,
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 1920,
+      "ancho": 1920,
+      "scrollWidth": 1920,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 1,
+      "desbordesInternos": [],
+      "traslapes": 0
+    }
+  ],
+  "estados": {
+    "datos": {
+      "pantalla": true,
+      "skeleton": false,
+      "error": false,
+      "chip": "Listo",
+      "estado": "Datos verificados — la jornada está abierta, con resultados y clasificación actualizados.",
+      "problemas": 0,
+      "botonesBloqueados": 0,
+      "botones": 3,
+      "largoTexto": 1076
+    },
+    "vacio": {
+      "pantalla": true,
+      "skeleton": false,
+      "error": false,
+      "chip": "7 pendientes",
+      "estado": "No se puede generar el mensaje todavía\nNo hay torneo activo.\nFalta elegir un grupo.\nLa jornada tiene 0 de 6 enfrentamientos.\nFalta el reglamento del torneo. Cargalo en Administraci",
+      "problemas": 7,
+      "botonesBloqueados": 3,
+      "botones": 3,
+      "largoTexto": 552
+    },
+    "carga": {
+      "pantalla": false,
+      "skeleton": true,
+      "error": false,
+      "chip": null,
+      "estado": null,
+      "problemas": 0,
+      "botonesBloqueados": 0,
+      "botones": 0,
+      "largoTexto": 0
+    },
+    "error": {
+      "pantalla": false,
+      "skeleton": false,
+      "error": true,
+      "chip": null,
+      "estado": null,
+      "problemas": 0,
+      "botonesBloqueados": 0,
+      "botones": 0,
+      "largoTexto": 0
+    },
+    "bloqueado": {
+      "pantalla": true,
+      "skeleton": false,
+      "error": false,
+      "chip": "3 pendientes",
+      "estado": "No se puede generar el mensaje todavía\nLa jornada tiene 5 de 6 enfrentamientos.\nFalta la fecha y hora de inicio de la jornada. Cargalas en Administración → Jornadas.\nFalta la hora ",
+      "problemas": 3,
+      "botonesBloqueados": 3,
+      "botones": 3,
+      "largoTexto": 327
+    },
+    "cierreValido": {
+      "pantalla": true,
+      "skeleton": false,
+      "error": false,
+      "chip": "Listo",
+      "estado": "Datos verificados — la jornada está cerrada, con resultados y clasificación actualizados.",
+      "problemas": 0,
+      "botonesBloqueados": 0,
+      "botones": 3,
+      "largoTexto": 1436
+    }
+  },
+  "interacciones": {
+    "ids": [
+      "msg-grupo",
+      "msg-jornada",
+      "msg-estado",
+      "msg-texto",
+      "msg-preview"
+    ],
+    "pestañas": 2,
+    "jornadaSinDatos": {
+      "chip": "4 pendientes",
+      "problemas": 4,
+      "deshabilitados": 3
+    },
+    "jornadaRestaurada": {
+      "chip": "Listo",
+      "deshabilitados": 0
+    },
+    "grupoVacio": {
+      "chip": "4 pendientes",
+      "problemas": 4
+    },
+    "acciones": {
+      "copiar": 1,
+      "descargar": [
+        "GOATS_apertura_J7_GA"
+      ],
+      "wa": 1,
+      "copiado": true
+    },
+    "cierreSinCerrar": {
+      "chip": "1 pendiente",
+      "problemas": 1
+    }
+  },
+  "foco": {
+    "etiqueta": "button",
+    "id": null,
+    "clase": "m8-tab",
+    "outlineColor": "rgb(255, 107, 122)",
+    "outlineWidth": "2px"
+  },
+  "movimientoReducido": {
+    "tab": "1e-05s"
+  },
+  "consola": [],
+  "errorEsperado": [
+    "CONSOLE Error: Failed to fetch partidos\n    at Object.partidos (file:///C:/Users/manue/AppData/Local/Temp/opencode/GOAT-LATINOS-deploy/mock-mensajes-3.8.html?estado=error:133:70)\n    at generar (file:///C:/Users/manue/AppData/Local/Temp/opencode/GOAT-LATINOS-deploy/js/modulos/mensajes.js:362:18)\n    at actualizar (file:///C:/Users/manue/AppData/Local/Temp/opencode/GOAT-LATINOS-deploy/js/modulos/mensajes.js:107:33)\n    at Object.render (file:///C:/Users/manue/AppData/Local/Temp/opencode/GOAT-LATINOS-deploy/js/modulos/mensajes.js:141:13)"
+  ]
+}

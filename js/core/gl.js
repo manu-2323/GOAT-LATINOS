@@ -8,13 +8,56 @@ function esc(t) {
 }
 
 function icono(nombre, tam, clases) {
-  const t = tam || 18;
+  const escala = [14, 16, 18, 20, 24, 32];
+  const n = Number(tam) || 18;
+  const t = escala.reduce((mejor, v) => {
+    const d = Math.abs(v - n), dm = Math.abs(mejor - n);
+    return d < dm || (d === dm && v > mejor) ? v : mejor;
+  }, escala[0]);
   return '<i data-lucide="' + esc(nombre) + '" class="' + esc(clases || '') +
     '" style="width:' + t + 'px;height:' + t + 'px;flex:none"></i>';
 }
 
 function iniciarIconos() {
   try { if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons(); } catch (e) { console.warn('Lucide:', e); }
+}
+
+/* FASE 3.3 — Accesibilidad compartida de modales: Escape, Tab contenido,
+   cierre idempotente y devolución del foco al control que lo abrió. */
+function activarModalAccesible(fondo, cerrar) {
+  const anterior = document.activeElement;
+  let cerrado = false;
+  const enfocables = () => [...fondo.querySelectorAll(
+    'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+  )].filter(el => el.getClientRects().length > 0);
+  const onKey = e => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cerrar();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const items = enfocables();
+    if (!items.length) { e.preventDefault(); return; }
+    const primero = items[0];
+    const ultimo = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === primero) {
+      e.preventDefault();
+      ultimo.focus();
+    } else if (!e.shiftKey && document.activeElement === ultimo) {
+      e.preventDefault();
+      primero.focus();
+    }
+  };
+  document.addEventListener('keydown', onKey);
+  return function finalizar() {
+    if (cerrado) return;
+    cerrado = true;
+    document.removeEventListener('keydown', onKey);
+    if (anterior && typeof anterior.focus === 'function' && document.contains(anterior)) {
+      setTimeout(() => anterior.focus(), 0);
+    }
+  };
 }
 
 const GL = {
@@ -25,6 +68,48 @@ const GL = {
   _ctxTime: 0,
   _scripts: {},
   _notificaciones: 0,
+
+  /* FASE 3.3 — Colores de gráficos leídos de los tokens canónicos.
+     No define una paleta nueva: si CSS no está disponible, se usan los
+     mismos valores de css/tokens-3.1.css como respaldo. */
+  tema: (() => {
+    const leer = (nombre, respaldo) => {
+      try {
+        const valor = getComputedStyle(document.documentElement).getPropertyValue(nombre).trim();
+        if (valor) return valor;
+      } catch (e) { /* entorno sin CSS */ }
+      return respaldo;
+    };
+    return {
+      fuente: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+      bg: leer('--gl-bg', '#0B0D10'),
+      superficie: leer('--gl-surface-1', '#14171B'),
+      superficie2: leer('--gl-surface-2', '#20252B'),
+      borde: leer('--gl-border', '#2E353D'),
+      bordeFuerte: leer('--gl-border-strong', '#3B434D'),
+      texto: leer('--gl-text', '#F5F6F7'),
+      texto2: leer('--gl-text-secondary', '#9299A3'),
+      texto3: leer('--gl-text-tertiary', '#7A828E'),
+      marca: leer('--gl-brand', '#E11D35'),
+      marcaTexto: leer('--gl-brand-text', '#FF6B7A'),
+      exito: leer('--gl-success', '#00D4AA'),
+      advertencia: leer('--gl-warning', '#F5B301'),
+      info: leer('--gl-info', '#5B9BFF'),
+      alfa: function (color, valor) {
+        const c = String(color || '').trim();
+        if (c.charAt(0) === '#') {
+          const h = c.slice(1);
+          const hex = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+          const n = parseInt(hex, 16);
+          if (!isNaN(n)) {
+            return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + valor + ')';
+          }
+        }
+        if (c.indexOf('rgb(') === 0) return c.replace('rgb(', 'rgba(').replace(')', ',' + valor + ')');
+        return c;
+      }
+    };
+  })(),
 
   /* ---------- Carga diferida de módulos ---------- */
   cargarScript(ruta) {
@@ -288,8 +373,8 @@ const GL = {
     select.innerHTML = GL.opcionesZonaHoraria(conservar ? select.value : '', pais);
     if (nota) {
       nota.innerHTML = select.value
-        ? icono('clock', 13) + ' Horario de juego: ' + esc(GL.horarioZonaDetalle(select.value))
-        : icono('info', 13) + ' Elegí tu ciudad para ver tu horario de juego.';
+        ? icono('clock', 14) + ' Horario de juego: ' + esc(GL.horarioZonaDetalle(select.value))
+        : icono('info', 14) + ' Elegí tu ciudad para ver tu horario de juego.';
     }
     iniciarIconos();
   },
@@ -335,6 +420,11 @@ const GL = {
     prefijo(codigoPais) {
       const p = PAISES[String(codigoPais || '').toUpperCase()];
       return p ? p.prefijo : '';
+    },
+
+    longitudes(codigoPais) {
+      const p = PAISES[String(codigoPais || '').toUpperCase()];
+      return p ? (p.longitudes || [p.digitos]) : [];
     },
 
     // Normaliza un número escrito por el usuario al formato E.164 (solo dígitos, sin +).
@@ -414,16 +504,16 @@ const GL = {
     return '<a class="wa-link" href="https://wa.me/' + esc(numero) +
       '" target="_blank" rel="noopener noreferrer" ' +
       'title="Escribir a ' + esc(nombre) + ' por WhatsApp">' +
-      icono('message-circle', 13) + esc(display) + '</a>';
+      icono('message-circle', 14) + esc(display) + '</a>';
   },
 
   /* ---------- Notificaciones ---------- */
   notificar(mensaje, tipo, ico) {
     const estilos = {
-      exito:       { background: '#00d4aa', color: '#000' },
-      error:       { background: '#ff4757', color: '#fff' },
-      advertencia: { background: '#f5c518', color: '#000' },
-      info:        { background: '#3b82f6', color: '#fff' }
+      exito:       { background: GL.tema.exito, color: GL.tema.bg },
+      error:       { background: GL.tema.marca, color: GL.tema.texto },
+      advertencia: { background: GL.tema.advertencia, color: GL.tema.bg },
+      info:        { background: GL.tema.info, color: GL.tema.bg }
     };
     const est = estilos[tipo] || estilos.exito;
     const texto = ico ? icono(ico, 16, 'gl-toast-ico' + (ico === 'loader-circle' ? ' girando' : '')) + esc(mensaje) : esc(mensaje);
@@ -432,8 +522,9 @@ const GL = {
       Toastify({
         text: texto, duration: 3500, gravity: movil ? 'bottom' : 'top', position: movil ? 'center' : 'right',
         style: Object.assign({}, est, {
-          borderRadius: '8px', fontFamily: 'Rajdhani, sans-serif', fontWeight: '600',
-          fontSize: '15px', boxShadow: '0 4px 16px rgba(0,0,0,0.3)'
+          borderRadius: '8px', fontFamily: GL.tema.fuente, fontWeight: '600',
+          fontSize: '14px', border: '1px solid ' + GL.tema.bordeFuerte,
+          boxShadow: '0 12px 32px rgba(0,0,0,0.5)'
         })
       }).showToast();
       if (ico) setTimeout(iniciarIconos, 0);
@@ -469,7 +560,7 @@ const GL = {
     }
     return out + '</div>' +
       '<p class="skeleton-leyenda" style="text-align:center;font-size:11px;color:var(--text-secondary);margin-top:10px">' +
-        icono('loader', 13) + ' Cargando información…</p>';
+        icono('loader', 14) + ' Cargando información…</p>';
     /* 1.2.0: se conserva el cierre sobrante como referencia histórica en comentario:
        antes se devolvía un </div> adicional que desequilibraba el panel. */
   },
@@ -498,7 +589,7 @@ const GL = {
       '<p class="estado-desc">' + esc(amigable) + '</p>' +
       '<div class="estado-accion">' +
         '<button type="button" class="btn sec" onclick="location.reload()">' +
-          icono('refresh-cw', 15) + 'Reintentar' +
+          icono('refresh-cw', 16) + 'Reintentar' +
         '</button>' +
       '</div>' +
       /* 1.2.0: el detalle técnico ya no se muestra al usuario; queda solo en consola. */
@@ -579,34 +670,49 @@ const GL = {
     const root = document.getElementById('modal-root') || document.body;
     const fondo = document.createElement('div');
     fondo.className = 'modal-fondo';
-    fondo.innerHTML = '<div class="modal' + (o.ancho ? ' modal-' + o.ancho : '') + '" role="dialog" aria-modal="true">' +
-      '<div class="modal-head"><h2>' + esc(o.titulo || '') + '</h2>' +
+    fondo.innerHTML = '<div class="modal' + (o.ancho ? ' modal-' + o.ancho : '') +
+      '" role="dialog" aria-modal="true" aria-labelledby="modal-titulo-id">' +
+      '<div class="modal-head"><h2 id="modal-titulo-id">' + esc(o.titulo || '') + '</h2>' +
       '<button type="button" class="btn-icon" data-cerrar aria-label="Cerrar">' + icono('x', 20) + '</button></div>' +
       '<div class="modal-cuerpo">' + (o.cuerpo || '') + '</div>' +
       (o.acciones ? '<div class="modal-acciones">' + o.acciones + '</div>' : '') + '</div>';
     root.appendChild(fondo);
-    const cerrar = () => { fondo.classList.add('saliendo'); setTimeout(() => fondo.remove(), 180); };
-    fondo.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', cerrar));
-    fondo.addEventListener('click', e => { if (e.target === fondo) cerrar(); });
-    fondo.cerrar = cerrar;
-    if (o.onAbrir) o.onAbrir(fondo, cerrar);
-    setTimeout(() => { const f = fondo.querySelector('input,select,textarea,button'); if (f) f.focus(); }, 60);
+    let cerrando = false;
+    const cerrarReal = () => {
+      if (cerrando) return;
+      cerrando = true;
+      try { if (typeof o.alCerrar === 'function') o.alCerrar(); } catch (e) { console.warn('[GL.abrirModal] alCerrar:', e); }
+      finalizar();
+      fondo.classList.add('saliendo');
+      setTimeout(() => { if (fondo.parentNode) fondo.remove(); }, 180);
+    };
+    const finalizar = activarModalAccesible(fondo, cerrarReal);
+    fondo.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', cerrarReal));
+    fondo.addEventListener('click', e => { if (e.target === fondo) cerrarReal(); });
+    fondo.cerrar = cerrarReal;
+    if (o.onAbrir) o.onAbrir(fondo, cerrarReal);
+    setTimeout(() => {
+      const f = fondo.querySelector('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[data-confirmar],[data-si],.modal-acciones .btn,button');
+      if (f) f.focus();
+    }, 60);
     return fondo;
   },
 
   confirmar(mensaje, titulo, aceptarTexto) {
     return new Promise(res => {
-      const m = GL.abrirModal({
+      let resuelto = false;
+      const resolver = valor => { if (!resuelto) { resuelto = true; res(valor); } };
+      GL.abrirModal({
         titulo: titulo || 'Confirmar acción',
         cuerpo: '<p class="modal-texto">' + esc(mensaje) + '</p>',
         acciones: '<button type="button" class="btn sec" data-no>Cancelar</button>' +
           '<button type="button" class="btn" data-si>' + esc(aceptarTexto || 'Confirmar') + '</button>',
+        alCerrar: () => resolver(false),
         onAbrir(fondo, cerrar) {
-          fondo.querySelector('[data-no]').addEventListener('click', () => { cerrar(); res(false); });
-          fondo.querySelector('[data-si]').addEventListener('click', () => { cerrar(); res(true); });
+          fondo.querySelector('[data-no]').addEventListener('click', () => { resolver(false); cerrar(); });
+          fondo.querySelector('[data-si]').addEventListener('click', () => { resolver(true); cerrar(); });
         }
       });
-      m.addEventListener('click', e => { if (e.target === m) res(false); });
     });
   },
 
@@ -689,11 +795,17 @@ const GL = {
     iniciarIconos();
 
     // Helpers expuestos en el elemento
-    const cerrar = () => {
+    let cerrando = false;
+    const cerrarReal = () => {
+      if (cerrando) return;
+      cerrando = true;
+      try { if (typeof o.alCerrar === 'function') o.alCerrar(); } catch (e) { console.warn('[GL.dialogo] alCerrar:', e); }
+      finalizar();
       fondo.classList.add('saliendo');
       setTimeout(() => { if (fondo.parentNode) fondo.remove(); }, 180);
     };
-    fondo.cerrar = cerrar;
+    const finalizar = activarModalAccesible(fondo, cerrarReal);
+    fondo.cerrar = cerrarReal;
 
     fondo.setError = (msg) => {
       const el = fondo.querySelector('.modal-error-inline');
@@ -715,28 +827,25 @@ const GL = {
       const confirmBtn = fondo.querySelector('[data-confirmar]');
       if (confirmBtn) {
         confirmBtn.innerHTML = bloq
-          ? icono('loader', 14) + ' Guardando…'
+          ? icono('loader-circle', 14, 'girando') + ' Guardando…'
           : (esPeligro
               ? icono('triangle-alert', 14) + esc(o.confirmTexto || 'Confirmar')
               : esc(o.confirmTexto || 'Aceptar'));
       }
     };
 
-    // Cierre con Escape
-    const onKey = e => { if (e.key === 'Escape') cerrar(); };
-    document.addEventListener('keydown', onKey);
-    fondo.addEventListener('remove', () => document.removeEventListener('keydown', onKey), { once: true });
+    // Cierre con Escape, Tab contenido y retorno de foco: activarModalAccesible().
 
     // Cierre por fondo
-    fondo.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', cerrar));
-    fondo.addEventListener('click', e => { if (e.target === fondo) cerrar(); });
+    fondo.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', cerrarReal));
+    fondo.addEventListener('click', e => { if (e.target === fondo) cerrarReal(); });
 
     // Botón confirmar
     const confirmBtn = fondo.querySelector('[data-confirmar]');
     if (confirmBtn && o.onConfirmar) {
       confirmBtn.addEventListener('click', () => {
         fondo.setError('');
-        o.onConfirmar(fondo, cerrar, fondo.setBloqueado);
+        o.onConfirmar(fondo, cerrarReal, fondo.setBloqueado);
       });
     }
 
@@ -744,11 +853,11 @@ const GL = {
     if (typeof o.cuerpo === 'function') {
       fondo.querySelector('.modal-cuerpo').insertAdjacentHTML('afterbegin', o.cuerpo(fondo));
     }
-    if (o.onAbrir) o.onAbrir(fondo, cerrar);
+    if (o.onAbrir) o.onAbrir(fondo, cerrarReal);
 
     // Foco inicial
     setTimeout(() => {
-      const primer = fondo.querySelector('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled])');
+      const primer = fondo.querySelector('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[data-confirmar],.modal-acciones .btn,button:not([disabled])');
       if (primer) primer.focus();
     }, 60);
 
@@ -759,6 +868,8 @@ const GL = {
   confirmarPeligro(opciones) {
     const o = opciones || {};
     return new Promise(res => {
+      let resuelto = false;
+      const resolver = valor => { if (!resuelto) { resuelto = true; res(valor); } };
       GL.dialogo({
         titulo:        o.titulo        || '¿Estás seguro?',
         icono:         o.icono         || 'triangle-alert',
@@ -768,11 +879,8 @@ const GL = {
         cuerpo:        '<p class="modal-texto">' + esc(o.mensaje || '¿Querés continuar?') + '</p>',
         confirmTexto:  o.confirmTexto  || 'Sí, continuar',
         cancelTexto:   o.cancelTexto   || 'Cancelar',
-        onAbrir(fondo, cerrar) {
-          fondo.querySelector('[data-cerrar]').addEventListener('click', () => { cerrar(); res(false); });
-          fondo.addEventListener('click', e => { if (e.target === fondo) res(false); });
-        },
-        onConfirmar(fondo, cerrar) { cerrar(); res(true); }
+        alCerrar: () => resolver(false),
+        onConfirmar(fondo, cerrar) { resolver(true); cerrar(); }
       });
     });
   },
@@ -806,7 +914,7 @@ const GL = {
   // 'jugadores' solo lo lee el admin (por RLS); no necesita filtrar aquí.
   // 'jugadores_publicos' es la vista ya filtrada en la base de datos.
   _columnas: {
-    jugadores:         'id,nombre_usuario,pais,zona_horaria,avatar_url,activo,suspendido,rol,torneo_id,numero,telefono,email,user_id,super_admin,created_at',
+    jugadores:         'id,nombre_usuario,pais,zona_horaria,avatar_url,activo,suspendido,rol,torneo_id,numero,telefono,telefono_e164,telefono_nacional,pais_telefono,telefono_verificado,telefono_valido_plan,email,user_id,super_admin,created_at',
     jugadores_publicos:'id,nombre_usuario,pais,zona_horaria,avatar_url,activo,suspendido,torneo_id,numero',
     sanciones:         'id,jugador_id,torneo_id,tipo,puntos_descuento,partidos_suspension,motivo,created_at'
   },
@@ -993,7 +1101,7 @@ const GL = {
   },
 
   accesoDenegado(requerido) {
-    return '<div class="acceso-denegado">' + icono('lock-keyhole', 48) +
+    return '<div class="acceso-denegado">' + icono('lock-keyhole', 32) +
       '<h2>Acceso restringido</h2><p>' +
       (requerido === 'admin'
         ? 'Esta sección es exclusiva del administrador de la liga.'
@@ -1161,46 +1269,145 @@ const GL_telIntl = (function () {
     GL.tel.e164 = e164;
     GL.tel.nacional = nacional;
     GL.tel.esValido = function (telefono, codigoPais) { return !!parsear(telefono, codigoPais); };
-    GL.tel.validar = function (telefono, codigoPais) {
-      if (!telefono) return { ok: true };
-      if (!disponible) return original.validar(telefono, codigoPais);
-      const p = parsear(telefono, codigoPais);
+    GL.tel.validar = function (telefono, codigoPais, obligatorio) {
+      const valor = String(telefono ?? '').trim();
+      const pais = paisDe(codigoPais);
+      const nombre = (PAISES[pais] || {}).nombre || 'ese país';
+      const prefijo = GL.tel.prefijo(pais) ? '+' + GL.tel.prefijo(pais) : '';
+
+      if (!valor) {
+        if (obligatorio) {
+          return { ok: false, requerido: true, motivo: 'requerido', pais, mensaje: 'El teléfono es obligatorio.' };
+        }
+        return { ok: true, e164: '', nacional: '', pais, motivo: '', mensaje: '' };
+      }
+      if (!disponible) return original.validar(valor, pais);
+
+      const p = parsear(valor, pais);
       if (!p) {
-        const nombre = (PAISES[paisDe(codigoPais)] || {}).nombre || 'ese país';
+        const soloDigitos = digitos(valor);
+        let motivo = 'invalido';
+        if (!valor.startsWith('+') && /^0/.test(soloDigitos)) motivo = 'cero_inicial';
+        else if (soloDigitos.length && soloDigitos.length < 8) motivo = 'incompleto';
+        else if (valor.startsWith('+')) {
+          const otro = parsear(valor);
+          if (otro && otro.country && otro.country !== pais) motivo = 'prefijo';
+        }
+        const mensajes = {
+          requerido: 'El teléfono es obligatorio.',
+          incompleto: 'El número está incompleto. Completá todos los dígitos.',
+          cero_inicial: 'El formato nacional no puede empezar con cero. Quitá el cero inicial.',
+          prefijo: 'El prefijo no corresponde a ' + nombre + (prefijo ? '. Usá ' + prefijo : '') + '.',
+          invalido: 'El número no parece válido para ' + nombre + '. Comprueba el prefijo y vuelve a intentarlo.'
+        };
+        return { ok: false, motivo, pais, mensaje: mensajes[motivo] };
+      }
+
+      if (p.country && pais && p.country !== pais) {
         return {
-          ok: false,
-          mensaje: 'El número no parece válido para ' + nombre + '. Comprueba el prefijo y vuelve a intentarlo.'
+          ok: false, motivo: 'prefijo', pais,
+          mensaje: 'El prefijo no corresponde a ' + nombre + (prefijo ? '. Usá ' + prefijo : '') + '.'
         };
       }
-      return { ok: true, e164: p.number, nacional: nacional(p.number, codigoPais), pais: paisDe(codigoPais) };
+      return {
+        ok: true, e164: p.number, nacional: nacional(p.number, pais),
+        pais: p.country || pais, motivo: '', mensaje: ''
+      };
     };
     GL.tel.formatear = function (valor, codigoPais) {
       const texto = nacional(valor, codigoPais);
       return texto || original.formatear(valor, codigoPais);
     };
+
+    /* 1.2.1 — Una sola ruta para construir los campos canónicos. Nunca se
+       incluye telefono_verificado; la titularidad solo la confirma una persona. */
+    GL.tel.campos = function (valor, codigoPais) {
+      const estado = GL.tel.validar(valor, codigoPais, false);
+      if (!estado.ok || !estado.e164) {
+        return {
+          telefono: '', telefono_e164: '', telefono_valido_plan: null,
+          telefono_nacional: '', pais_telefono: paisDe(codigoPais)
+        };
+      }
+      return {
+        telefono: digitos(estado.e164),
+        telefono_e164: estado.e164,
+        telefono_valido_plan: true,
+        telefono_nacional: estado.nacional,
+        pais_telefono: estado.pais || paisDe(codigoPais)
+      };
+    };
+
+    GL.tel.pais = function (valor) {
+      const p = parsear(valor);
+      return p && p.country ? p.country : '';
+    };
+
+    GL.tel.paisJugador = function (jugador) {
+      if (!jugador || typeof jugador !== 'object') return '';
+      return String(jugador.pais_telefono || jugador.pais || '').toUpperCase();
+    };
+
+    /* Acepta telefonos históricos con o sin '+'. Solo devuelve un E.164
+       cuando libphonenumber-js puede parsearlo; nunca inventa un enlace. */
+    GL.tel.e164Jugador = function e164Jugador(jugador) {
+      if (!jugador || typeof jugador !== 'object') return '';
+      const valor = String(jugador.telefono_e164 || jugador.telefono || '').trim();
+      if (!valor) return '';
+      if (valor.startsWith('+')) {
+        const p = parsear(valor);
+        return p ? p.number : '';
+      }
+      /* Formatos históricos sin '+': si ya traen el prefijo del país, se
+         reinterpretan como internacionales en vez de como nacionales. */
+      const paisJugador = GL.tel.paisJugador(jugador);
+      const soloDigitos = digitos(valor);
+      const prefijo = GL.tel.prefijo(paisJugador);
+      const candidato = prefijo && soloDigitos.startsWith(prefijo)
+        ? '+' + soloDigitos : valor;
+      return e164(candidato, paisJugador);
+    };
+
+    /* El número no cambió: recalcula la validez de formato cuando el campo
+       quedó NULL, sin tocar telefono ni telefono_verificado. */
+    GL.tel.cambiosSiNuevos = function cambiosSiNuevos(valor, codigoPais, jugador) {
+      const anterior = GL.tel.e164Jugador(jugador);
+      const escrito = String(valor ?? '').trim();
+      if (!escrito) {
+        if (!anterior) return {};
+        return {
+          telefono: '', telefono_e164: '', telefono_nacional: '',
+          pais_telefono: '', telefono_valido_plan: null
+        };
+      }
+      const estado = GL.tel.validar(escrito, codigoPais || GL.tel.paisJugador(jugador), false);
+      if (!estado.ok) return { __error: estado };
+      if (estado.e164 === anterior) {
+        return jugador && jugador.telefono_valido_plan === true
+          ? {} : { telefono_valido_plan: true };
+      }
+      return GL.tel.campos(estado.e164, estado.pais || codigoPais);
+    };
     return { disponible, e164, nacional, parsear };
 })();
 
-/* 1.2.0 — WhatsApp: usa telefono_e164 cuando existe y genera wa.me sin +,
-   espacios ni guiones. No afirma que el número tenga cuenta de WhatsApp. */
+/* 1.2.1 — WhatsApp: solo con objeto jugador y E.164 válido. Genera wa.me sin
+   +, espacios ni guiones. No afirma que el número tenga cuenta de WhatsApp ni
+   que la titularidad esté confirmada. */
 (function () {
   GL.linkWhatsapp = function (jugador, nombreFallback) {
-    let telefono = '', codigoPais = '', nombre = nombreFallback || '';
-    if (jugador && typeof jugador === 'object') {
-      telefono   = String(jugador.telefono_e164 || jugador.telefono || '');
-      codigoPais = String(jugador.pais_telefono || jugador.pais || '');
-      nombre     = nombreFallback || jugador.nombre_usuario || '';
-    } else {
-      telefono = String(jugador || '');
-    }
-    const numero = GL.tel.normalizar(telefono, codigoPais);
+    if (!jugador || typeof jugador !== 'object') return '';
+    const numero = GL.tel.e164Jugador(jugador);
     if (!numero) return '';
-    const display = GL.tel.formatear(numero, codigoPais) || ('+' + numero);
-    return '<a class="wa-link" href="https://wa.me/' + esc(numero) +
+    const soloDigitos = String(numero).replace(/\D/g, '');
+    if (!/^[1-9]\d{7,14}$/.test(soloDigitos)) return '';
+    const nombre = nombreFallback || jugador.nombre_usuario || '';
+    const display = GL.tel.formatear(numero, GL.tel.paisJugador(jugador)) || numero;
+    return '<a class="wa-link" href="https://wa.me/' + soloDigitos +
       '" target="_blank" rel="noopener noreferrer" ' +
       'aria-label="Abrir chat con ' + esc(nombre || 'este jugador') + ' por WhatsApp" ' +
       'title="Abrir chat con ' + esc(nombre || 'este jugador') + '">' +
-      icono('message-circle', 13) + esc(display) + '</a>';
+      icono('message-circle', 14) + esc(display) + '</a>';
   };
 })();
 

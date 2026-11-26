@@ -112,7 +112,7 @@ const OnboardingAdmin = (() => {
           pasos.map((_, i) => '<div class="ob-punto" data-i="' + i + '"></div>').join('') +
         '</div>' +
         '<div class="ob-pies">' +
-          '<button type="button" class="btn-secundario ob-atras">' + icono('arrow-left', 15) + 'Anterior</button>' +
+          '<button type="button" class="btn-secundario ob-atras">' + icono('arrow-left', 16) + 'Anterior</button>' +
           '<button type="button" class="btn-secundario ob-accion" style="display:none"></button>' +
           '<button type="button" class="btn-primario ob-siguiente">Siguiente</button>' +
         '</div>' +

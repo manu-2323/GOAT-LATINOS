@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jugadores · FASE 3.5 · arnés local</title>
+  <link rel="stylesheet" href="css/tokens-3.1.css">
+  <link rel="stylesheet" href="css/estilos.css">
+  <style>
+    /* Maquetación del banco de pruebas; los componentes viven en estilos.css */
+    body{margin:0;background:var(--gl-bg);color:var(--gl-text);font-family:var(--gl-font-sans)}
+    .mock-shell{max-width:var(--gl-content-max);margin:0 auto;padding:20px 22px 64px}
+    .mock-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;min-height:48px;margin-bottom:18px;padding:8px 12px;border:1px solid var(--gl-border);border-radius:var(--gl-radius-sm);background:var(--gl-surface-1);color:var(--gl-text-secondary);font-size:12px}
+    .mock-bar strong{color:var(--gl-text);font-weight:var(--gl-fw-semibold)}
+    #vista{outline:none}
+    @media(max-width:600px){.mock-shell{padding:14px 12px 64px}}
+  </style>
+</head>
+<body>
+  <div class="mock-shell">
+    <div class="mock-bar">
+      <strong>GOATS LATINOS · Jugadores local</strong>
+      <span>Datos simulados · sin Supabase remoto · <span id="mock-estado">con datos</span></span>
+    </div>
+    <main id="vista" tabindex="-1"></main>
+  </div>
+  <div id="modal-root"></div>
+
+  <script>window.supabase={createClient:function(){return null}};</script>
+  <script>
+    window.lucide={createIcons:function(){
+      document.querySelectorAll('i[data-lucide]:not([data-gl-icon])').forEach(function(i){
+        var w=i.style.width||'18px';i.setAttribute('data-gl-icon','');
+        i.innerHTML='<svg viewBox="0 0 24 24" width="'+w+'" height="'+w+'" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l3 2"></path></svg>';
+      });
+    }};
+  </script>
+  <script>
+    window.CONFIG={NOMBRE_LIGA:'GOATS LATINOS',ZONA_REFERENCIA:'America/Managua',JORNADAS_FASE_REGULAR:22,TIPOS_SANCION:{leve:{puntos:3,partidos:0},moderada:{puntos:6,partidos:0},grave:{puntos:0,partidos:1},muy_grave:{puntos:0,partidos:0}}};
+    window.PAISES={NI:{nombre:'Nicaragua',prefijo:'505'},CR:{nombre:'Costa Rica',prefijo:'506'},AR:{nombre:'Argentina',prefijo:'54'},BR:{nombre:'Brasil',prefijo:'55'},MX:{nombre:'México',prefijo:'52'},FR:{nombre:'Francia',prefijo:'33'}};
+    window.sb={
+      _tabla:null,_pendiente:null,
+      from:function(tabla){this._tabla=tabla;return this},
+      select:function(){return this},
+      update:function(datos){this._pendiente=datos;return this},
+      eq:function(campo,valor){
+        if(this._tabla==='jugadores'&&campo==='id'&&this._pendiente){
+          var j=J.find(function(x){return x.id===valor});
+          if(j)Object.assign(j,this._pendiente);
+        }
+        this._pendiente=null;
+        return Promise.resolve({data:null,error:null})
+      },
+      insert:function(){return Promise.resolve({error:null})},
+      delete:function(){return Promise.resolve({error:null})},
+      rpc:function(){return Promise.resolve({data:{ok:true},error:null})},
+      functions:{invoke:function(){return Promise.resolve({data:{ok:true},error:null})}}
+    };
+    window.Auth={jugador:{rol:'admin',super_admin:true},cargarPerfil:function(){return Promise.resolve(true)},confirmarYRecalcular:function(){return Promise.resolve({ok:true})},eliminarCuenta:function(){return Promise.resolve({ok:true})}};
+    window.Modulos={};var Modulos=window.Modulos;
+
+    function esc(t){return String(t===null||t===undefined?'':t).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+    function icono(nombre,tam,clases){var escala=[14,16,18,20,24,32],n=Number(tam)||18,t=escala.reduce(function(m,v){var d=Math.abs(v-n),dm=Math.abs(m-n);return d<dm||(d===dm&&v>m)?v:m},escala[0]);return '<i data-lucide="'+esc(nombre)+'" class="'+esc(clases||'')+'" style="width:'+t+'px;height:'+t+'px;flex:none"></i>'}
+    function iniciarIconos(){try{window.lucide.createIcons()}catch(e){}}
+
+    var modo=new URLSearchParams(location.search).get('estado')||'datos';
+    document.getElementById('mock-estado').textContent=
+      modo==='vacio'?'sin jugadores':modo==='carga'?'cargando':modo==='error'?'error':'con datos';
+    function esperar(ms){return new Promise(function(r){setTimeout(r,ms)})}
+
+    var J=[
+      {id:'j1',nombre_usuario:'CR7_LATINO',pais:'CR',zona_horaria:'America/Costa_Rica',activo:true,suspendido:false,rol:'admin',super_admin:true,avatar_url:'x',telefono:'+50688887777',telefono_e164:'+50688887777'},
+      {id:'j2',nombre_usuario:'LIONEL_M10',pais:'AR',zona_horaria:'America/Argentina/Buenos_Aires',activo:true,suspendido:false,rol:'jugador',avatar_url:'x',telefono:'+5491111111111',telefono_e164:'+5491111111111'},
+      {id:'j3',nombre_usuario:'NEYMAR_JR',pais:'BR',zona_horaria:'America/Sao_Paulo',activo:true,suspendido:true,rol:'jugador',avatar_url:'',telefono:'+5511999999999',telefono_e164:'+5511999999999'},
+      {id:'j4',nombre_usuario:'MBAPPE_9',pais:'FR',zona_horaria:'Europe/Paris',activo:true,suspendido:false,rol:'jugador',avatar_url:'x',telefono:'',telefono_e164:''},
+      {id:'j5',nombre_usuario:'SIN_GRUPO',pais:'MX',zona_horaria:'America/Mexico_City',activo:true,suspendido:false,rol:'jugador',avatar_url:'',telefono:'+525511223344',telefono_e164:'+525511223344'},
+      {id:'j6',nombre_usuario:'LESIONADO',pais:'NI',zona_horaria:'America/Managua',activo:false,suspendido:false,rol:'jugador',avatar_url:'x',telefono:'+50588886666',telefono_e164:'+50588886666'},
+      {id:'j7',nombre_usuario:'EXPULSADO',pais:'CR',zona_horaria:'America/Costa_Rica',activo:true,suspendido:false,rol:'expulsado',avatar_url:'',telefono:'+50688885555',telefono_e164:'+50688885555'},
+      {id:'j8',nombre_usuario:'CHICHARITO',pais:'MX',zona_horaria:'America/Mexico_City',activo:true,suspendido:false,rol:'jugador',avatar_url:'x',telefono:'+525599887766',telefono_e164:'+525599887766'}
+    ];
+    var grupos=[{id:'g1',nombre:'Grupo A'},{id:'g2',nombre:'Grupo B'}];
+    var miembros=[{jugador_id:'j1',grupo_id:'g1'},{jugador_id:'j2',grupo_id:'g1'},{jugador_id:'j3',grupo_id:'g2'},{jugador_id:'j4',grupo_id:'g2'},{jugador_id:'j8',grupo_id:'g1'}];
+    var sanciones=[{jugador_id:'j1',tipo:'amarilla'},{jugador_id:'j1',tipo:'amarilla'},{jugador_id:'j1',tipo:'amarilla'},{jugador_id:'j2',tipo:'roja'}];
+
+    function abrirModalMock(o){
+      o=o||{};var root=document.getElementById('modal-root')||document.body;
+      var fondo=document.createElement('div');fondo.className='modal-fondo';
+      var modal=document.createElement('div');modal.className='modal modal-'+(o.ancho||'md');
+      modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-labelledby','modal-titulo-id');
+      modal.innerHTML='<div class="modal-head"><h2 id="modal-titulo-id">'+esc(o.titulo||'')+'</h2><button type="button" class="btn-icon" data-cerrar aria-label="Cerrar">'+icono('x',20)+'</button></div>'+
+        '<div class="modal-cuerpo">'+(o.cuerpo||'')+'</div>'+
+        (o.acciones?'<div class="modal-acciones">'+o.acciones+'</div>':'');
+      fondo.appendChild(modal);root.appendChild(fondo);
+      var cerrando=false;
+      function cerrar(){if(cerrando)return;cerrando=true;if(o.alCerrar)o.alCerrar();fondo.remove();}
+      fondo.cerrar=cerrar;
+      fondo.setError=function(msg){var n=document.createElement('div');n.className='modal-error-inline';n.textContent=msg;modal.querySelector('.modal-cuerpo').prepend(n)};
+      fondo.setBloqueado=function(b){modal.querySelectorAll('button').forEach(function(x){x.disabled=!!b})};
+      fondo.querySelectorAll('[data-cerrar]').forEach(function(b){b.addEventListener('click',cerrar)});
+      fondo.addEventListener('click',function(e){if(e.target===fondo)cerrar()});
+      var onKey=function(e){if(e.key==='Escape')cerrar()};document.addEventListener('keydown',onKey);
+      fondo._onKey=onKey;
+      if(o.onAbrir)o.onAbrir(fondo,cerrar);
+      setTimeout(function(){var f=modal.querySelector('input:not([disabled]),select:not([disabled])');if(f)f.focus()},40);
+      return fondo;
+    }
+
+    window.GL={
+      tema:{fuente:CONFIG?CONFIG.FUENTE||"'Inter',system-ui,sans-serif":'',bg:'#0B0D10',superficie:'#14171B',borde:'#2E353D',bordeFuerte:'#3B434D',texto:'#F5F6F7',texto2:'#9299A3',advertencia:'#F5B301',exito:'#00D4AA',info:'#5B9BFF',marca:'#E11D35',marcaTexto:'#FF6B7A',alfa:function(h,a){return 'rgba(225,29,53,'+a+')'}},
+      ctx:{jugadores:J,grupos:grupos,miembros:miembros,sanciones:sanciones,jornadas:[],clasificacion:[],torneo:null},
+      skeleton:function(filas,alto,titulo){var n=filas||5,h=alto||18,out='<div class="skeleton-wrap" aria-busy="true" aria-label="Cargando contenido">';if(titulo)out+='<div class="skeleton-header"><span class="skeleton" style="width:38%;height:22px;display:block"></span></div>';out+='<div class="skeleton-lista">';for(var i=0;i<n;i++)out+='<div class="skeleton-fila"><span class="skeleton" style="width:18%;height:'+h+'px"></span><span class="skeleton" style="width:42%;height:'+h+'px"></span><span class="skeleton" style="width:14%;height:'+h+'px"></span></div>';return out+'</div>'},
+      vacio:function(mensaje,ico,accion,sugerencia){return '<div class="estado-vacio" role="status"><div class="estado-ico-wrap">'+icono(ico||'inbox',38)+'</div><h3>'+esc(mensaje)+'</h3>'+(sugerencia?'<p class="estado-sugerencia">'+esc(sugerencia)+'</p>':'')+(accion?'<div class="estado-accion">'+accion+'</div>':'')+'</div>'},
+      error:function(mensaje){return '<div class="estado-vacio error" role="alert"><div class="estado-ico-wrap">'+icono('triangle-alert',38)+'</div><h3>Algo salió mal</h3><p class="estado-desc">'+esc(mensaje||'No pudimos cargar el módulo.')+'</p><div class="estado-accion"><button type="button" class="btn" onclick="location.reload()">Reintentar</button></div></div>'},
+      mensaje:function(e){return (e&&e.message)||'Error inesperado'},
+      notificar:function(){},
+      estado:function(contenedor,modo,o){contenedor.innerHTML=this.vacio((o&&o.titulo)||'Sin datos',(o&&o.icono)||'inbox',null,(o&&o.texto)||'')},
+      badge:function(texto,tono,ico){return '<span class="badge '+esc(tono||'neutral')+'">'+(ico?icono(ico,14):'')+esc(texto)+'</span>'},
+      asegurarAdmin:function(){return Promise.resolve(true)},
+      esAdmin:function(){return true},esSuperAdmin:function(){return true},
+      esExpulsado:function(j){return !!j&&(j.activo===false||j.rol==='expulsado')},
+      cargarContexto:function(){if(modo==='carga')return esperar(1200);return Promise.resolve()},
+      invalidar:function(){},
+      torneo:function(){if(modo==='sin-torneo')return null;return {id:'t1',nombre:'Liga Apertura 2026',temporada:'2026 · Fase regular',total_jornadas:22,created_at:new Date().toISOString(),estado:'activo'}},
+      torneoId:function(){return 't1'},
+      partidos:function(){if(modo==='error')return Promise.reject(new Error('Failed to fetch partidos'));if(modo==='carga')return esperar(1200);return Promise.resolve([])},
+      jugadores:function(){if(modo==='vacio')return [];return J.filter(function(j){return j.activo!==false})},
+      jugadoresSinGrupo:function(){var ids=miembros.map(function(m){return m.jugador_id});return J.filter(function(j){return j.activo!==false&&ids.indexOf(j.id)<0})},
+      grupos:function(){return grupos},
+      clasificacion:function(){return []},
+      jugador:function(id){return J.find(function(j){return j.id===id})||null},
+      grupo:function(id){return grupos.find(function(g){return g.id===id})||null},
+      grupoDeJugador:function(id){var m=miembros.find(function(x){return x.jugador_id===id});return m?this.grupo(m.grupo_id):null},
+      faltas:function(id){return sanciones.filter(function(s){return s.jugador_id===id}).length},
+      letraGrupo:function(g){var n=String((g&&g.nombre)||'').match(/[A-Za-z]$/);return n?n[0].toUpperCase():'A'},
+      nombrePais:function(c){var p=PAISES[String(c||'').toUpperCase()];return p?p.nombre:String(c||'—')},
+      banderaHTML:function(c,t){return '<span class="j5-bandera" aria-hidden="true" title="'+esc(this.nombrePais(c))+'">'+esc(c||'—')+'</span>'},
+      zonaJugador:function(j){return (j&&j.zona_horaria)||CONFIG.ZONA_REFERENCIA},
+      etiquetaZona:function(z){return String(z||'').replace(/_/g,' ')},
+      horarioJugador:function(j){return this.etiquetaZona(this.zonaJugador(j))+' · GMT−6'},
+      opcionesPais:function(valor,vacio){var out=vacio?'<option value="">Seleccioná país</option>':'';Object.keys(PAISES).forEach(function(k){out+='<option value="'+k+'"'+(k===valor?' selected':'')+'>'+PAISES[k].nombre+'</option>'});return out},
+      opcionesZonaHoraria:function(valor){var zonas=['America/Managua','America/Costa_Rica','America/Argentina/Buenos_Aires','America/Sao_Paulo','America/Mexico_City','Europe/Paris'];return zonas.map(function(z){return '<option value="'+z+'"'+(z===valor?' selected':'')+'>'+z.replace(/_/g,' ')+'</option>'}).join('')},
+      actualizarZona:function(select,pais,nota){if(nota)nota.textContent=this.etiquetaZona(select.value||pais)},
+      avatarHTML:function(j,clase){var n=String(j.nombre_usuario||'?').slice(0,2).toUpperCase();return '<span class="'+esc(clase||'avatar-sm')+'" aria-hidden="true">'+esc(n)+'</span>'},
+      linkWhatsapp:function(j,nombre){return '<a class="wa-link" href="#" aria-label="Escribir a '+esc(nombre||j.nombre_usuario)+'">'+icono('message-circle',14)+esc(nombre||j.nombre_usuario)+'</a>'},
+      seguroTexto:function(t){return String(t||'').replace(/[^A-Za-z0-9_ ]/g,'')},
+      abrirModal:abrirModalMock,
+      dialogo:function(o){o=o||{};return abrirModalMock({titulo:o.titulo||'Confirmar',cuerpo:o.cuerpo||'',acciones:'<button type="button" class="btn sec" data-cerrar>Cancelar</button><button type="button" class="btn" data-confirmar>Confirmar</button>',onAbrir:o.onAbrir})},
+      tel:{prefijo:function(p){return (PAISES[String(p||'').toUpperCase()]||{}).prefijo||''},paisJugador:function(j){return (j&&(j.pais_telefono||j.pais))||'NI'},e164Jugador:function(j){return (j&&(j.telefono_e164||j.telefono))||''},nacional:function(e,p){return e||''},formatear:function(e){return e||''},longitudes:function(){return [8]},validar:function(v,p,req){return {ok:!!v||!req,mensaje:v?'':'Ingresá un teléfono válido.'}},campos:function(){return []},cambiosSiNuevos:function(){return {cambia:false}}}
+    };
+  </script>
+  <script src="js/modulos/admin.js"></script>
+  <script>
+    Modulos.admin.setTab('jugadores');
+    Modulos.admin.render(document.getElementById('vista')).then(iniciarIconos);
+  </script>
+</body>
+</html>

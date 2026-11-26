@@ -71,10 +71,11 @@ function dibujarMenu() {
   nav.innerHTML = SECCIONES.map(sec => {
     const items = sec.items.filter(i => nivelPermitido(i.nivel));
     if (!items.length) return '';
-    return '<div class="nav-group">' + esc(sec.titulo) + '</div>' + items.map(i =>
-      '<a class="nav-link' + (i.id === actual ? ' activo' : '') + '" href="#' + i.id + '" data-id="' + i.id + '">' +
-      icono(i.icono, 18) + esc(i.nombre) + '</a>'
-    ).join('');
+    return '<div class="nav-group">' + esc(sec.titulo) + '</div>' + items.map(i => {
+      const activo = i.id === actual;
+      return '<a class="nav-link' + (activo ? ' activo' : '') + '" href="#' + i.id + '" data-id="' + i.id + '"' +
+        (activo ? ' aria-current="page"' : '') + '>' + icono(i.icono, 18) + esc(i.nombre) + '</a>';
+    }).join('');
   }).join('');
   iniciarIconos();
   dibujarNavMovil();
@@ -90,14 +91,17 @@ function dibujarNavMovil() {
 
   const fijosHTML = NAV_MOVIL_FIJOS.map(item => {
     // Si el ítem fijo es el activo, marcarlo; si es "eliminatorias" es público siempre
+    const activo = item.id === actual;
     return '<a href="#' + item.id + '" data-id="' + item.id + '" class="nav-movil-link' +
-      (item.id === actual ? ' activo' : '') + '">' +
+      (activo ? ' activo' : '') + '"' + (activo ? ' aria-current="page"' : '') + '>' +
       icono(item.icono, 20) + '<span class="nav-label">' + esc(item.corto) + '</span>' +
     '</a>';
   }).join('');
 
   const masHTML =
-    '<button type="button" id="btn-mas-nav" class="nav-movil-link' + (activoEnMas ? ' activo' : '') + '" aria-label="Más opciones">' +
+    '<button type="button" id="btn-mas-nav" class="nav-movil-link' + (activoEnMas ? ' activo' : '') +
+      '" aria-label="Más opciones" data-mas-ids="' + NAV_MOVIL_MAS.map(x => x.id).join(',') + '"' +
+      (activoEnMas ? ' aria-current="page"' : '') + '>' +
       icono('grid-2x2', 20) +
       '<span class="nav-label">Más</span>' +
     '</button>';
@@ -131,7 +135,7 @@ function abrirPanelMas() {
     '</a>';
 
   const secAdmin = admin.length
-    ? '<div class="panel-mas-separador">' + icono('shield', 12) + 'Administración</div>' +
+    ? '<div class="panel-mas-separador">' + icono('shield', 14) + 'Administración</div>' +
       admin.map(renderItem).join('')
     : '';
 
@@ -147,7 +151,7 @@ function abrirPanelMas() {
   sheet.setAttribute('aria-label', 'Más opciones');
   sheet.innerHTML =
     '<div class="panel-mas-handle"></div>' +
-    '<div class="panel-mas-titulo">' + icono('grid-2x2', 15) + 'Más opciones</div>' +
+    '<div class="panel-mas-titulo">' + icono('grid-2x2', 16) + 'Más opciones</div>' +
     '<div class="panel-mas-cuerpo">' +
       deportivos.map(renderItem).join('') +
       secAdmin +
@@ -228,7 +232,7 @@ function pintarSesion() {
     caja.innerHTML = '<button type="button" class="btn" id="btn-login-side">' + icono('log-in', 16) + 'Iniciar sesión</button>';
     chip.className = 'sesion-chip anonimo';
     chip.innerHTML = '<span class="punto"></span><span class="txt">Invitado</span>' +
-      '<button type="button" class="btn sm" id="btn-login-top" style="padding:4px 10px">Ingresar</button>';
+      '<button type="button" class="btn sm" id="btn-login-top">Ingresar</button>';
     [caja.querySelector('#btn-login-side'), chip.querySelector('#btn-login-top')].forEach(b => {
       if (b) b.addEventListener('click', () => PantallaAuth.mostrar(() => {
         dibujarMenu(); pintarSesion(); mostrar(rutaActual());

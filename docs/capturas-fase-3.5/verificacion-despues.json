@@ -1,0 +1,264 @@
+{
+  "modo": "despues",
+  "capturas": [
+    {
+      "nombre": "despues-escritorio",
+      "ruta": "docs/capturas-fase-3.5/despues-escritorio.png"
+    },
+    {
+      "nombre": "despues-movil",
+      "ruta": "docs/capturas-fase-3.5/despues-movil.png"
+    },
+    {
+      "nombre": "despues-con-datos",
+      "ruta": "docs/capturas-fase-3.5/despues-con-datos.png"
+    },
+    {
+      "nombre": "despues-vacio",
+      "ruta": "docs/capturas-fase-3.5/despues-vacio.png"
+    },
+    {
+      "nombre": "despues-cargando",
+      "ruta": "docs/capturas-fase-3.5/despues-cargando.png"
+    },
+    {
+      "nombre": "despues-error",
+      "ruta": "docs/capturas-fase-3.5/despues-error.png"
+    },
+    {
+      "nombre": "despues-busqueda",
+      "ruta": "docs/capturas-fase-3.5/despues-busqueda.png"
+    },
+    {
+      "nombre": "despues-filtros-combinados",
+      "ruta": "docs/capturas-fase-3.5/despues-filtros-combinados.png"
+    },
+    {
+      "nombre": "despues-sin-resultados",
+      "ruta": "docs/capturas-fase-3.5/despues-sin-resultados.png"
+    },
+    {
+      "nombre": "despues-formulario-registro",
+      "ruta": "docs/capturas-fase-3.5/despues-formulario-registro.png"
+    },
+    {
+      "nombre": "despues-formulario-edicion",
+      "ruta": "docs/capturas-fase-3.5/despues-formulario-edicion.png"
+    },
+    {
+      "nombre": "despues-menu-movil",
+      "ruta": "docs/capturas-fase-3.5/despues-menu-movil.png"
+    },
+    {
+      "nombre": "despues-formulario-registro-movil",
+      "ruta": "docs/capturas-fase-3.5/despues-formulario-registro-movil.png"
+    }
+  ],
+  "responsive": [
+    {
+      "width": 320,
+      "ancho": 320,
+      "scrollWidth": 320,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 4,
+      "tablaScroll": {
+        "clientWidth": 270,
+        "scrollWidth": 270
+      },
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 375,
+      "ancho": 375,
+      "scrollWidth": 375,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 2,
+      "tablaScroll": {
+        "clientWidth": 325,
+        "scrollWidth": 325
+      },
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 390,
+      "ancho": 390,
+      "scrollWidth": 390,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 2,
+      "tablaScroll": {
+        "clientWidth": 340,
+        "scrollWidth": 340
+      },
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 430,
+      "ancho": 430,
+      "scrollWidth": 430,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 2,
+      "tablaScroll": {
+        "clientWidth": 380,
+        "scrollWidth": 380
+      },
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 768,
+      "ancho": 768,
+      "scrollWidth": 768,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 2,
+      "tablaScroll": {
+        "clientWidth": 690,
+        "scrollWidth": 690
+      },
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 1024,
+      "ancho": 1024,
+      "scrollWidth": 1024,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 2,
+      "tablaScroll": {
+        "clientWidth": 946,
+        "scrollWidth": 946
+      },
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 1366,
+      "ancho": 1366,
+      "scrollWidth": 1366,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 1,
+      "tablaScroll": {
+        "clientWidth": 1286,
+        "scrollWidth": 1286
+      },
+      "desbordesInternos": [],
+      "traslapes": 0
+    },
+    {
+      "width": 1920,
+      "ancho": 1920,
+      "scrollWidth": 1920,
+      "fuentesMenores12": [],
+      "minControl": 44,
+      "filasKpi": 1,
+      "tablaScroll": {
+        "clientWidth": 1360,
+        "scrollWidth": 1360
+      },
+      "desbordesInternos": [],
+      "traslapes": 0
+    }
+  ],
+  "filtros": {
+    "totalInicial": 7,
+    "trasBuscar": 1,
+    "trasLimpiar": 7,
+    "combinados": 1,
+    "sinResultados": 1,
+    "trasLimpiarFinal": 7,
+    "contador": "7 jugadores"
+  },
+  "formularios": {
+    "idsRegistro": [
+      "ag-nombre",
+      "ag-pais",
+      "ag-zona",
+      "ag-tel",
+      "ag-grupo",
+      "ag-email",
+      "ag-clave",
+      "ag-crear"
+    ],
+    "idsEdicion": [
+      "ed-nombre",
+      "ed-pais",
+      "ed-zona",
+      "ed-tel",
+      "ed-guardar"
+    ],
+    "erroresValidacion": 3,
+    "guardoEdicion": true,
+    "modalesCerrados": true,
+    "modalMovil": {
+      "dentroDelViewport": true,
+      "ancho": 351,
+      "cuerpoDesplazable": true
+    }
+  },
+  "navegacion": {
+    "dataAgregar": 1,
+    "dataAccion": 41,
+    "menuMovil": {
+      "abrioSheet": true,
+      "cerroSheet": true,
+      "errores": []
+    },
+    "pestañas": [
+      "resumen",
+      "jugadores",
+      "equipos",
+      "jornadas",
+      "disciplina",
+      "admins",
+      "config"
+    ],
+    "jugadoresActivo": true,
+    "sigueJ5": true
+  },
+  "estados": {
+    "con-datos": {
+      "estado": "con datos",
+      "tieneSkeleton": false,
+      "tieneEstadoVacio": false,
+      "esError": false
+    },
+    "vacio": {
+      "estado": "sin jugadores",
+      "tieneSkeleton": false,
+      "tieneEstadoVacio": true,
+      "esError": false
+    },
+    "cargando": {
+      "estado": "cargando",
+      "tieneSkeleton": true,
+      "tieneEstadoVacio": false,
+      "esError": false
+    },
+    "error": {
+      "estado": "error",
+      "tieneSkeleton": false,
+      "tieneEstadoVacio": true,
+      "esError": true
+    }
+  },
+  "foco": {
+    "etiqueta": "button",
+    "clase": "tab",
+    "outlineColor": "rgb(255, 107, 122)",
+    "outlineWidth": "2px"
+  },
+  "movimientoReducido": {
+    "transicion": "1e-05s",
+    "animacion": "1e-05s"
+  },
+  "consola": []
+}

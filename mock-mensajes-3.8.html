@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mensajes · FASE 3.8 · arnés local</title>
+  <link rel="stylesheet" href="css/tokens-3.1.css">
+  <link rel="stylesheet" href="css/estilos.css">
+  <style>
+    body{margin:0;background:var(--gl-bg);color:var(--gl-text);font-family:var(--gl-font-sans)}
+    .mock-shell{max-width:var(--gl-content-max);margin:0 auto;padding:20px 22px 64px}
+    .mock-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;min-height:48px;margin-bottom:18px;padding:8px 12px;border:1px solid var(--gl-border);border-radius:var(--gl-radius-sm);background:var(--gl-surface-1);color:var(--gl-text-secondary);font-size:12px}
+    .mock-bar strong{color:var(--gl-text);font-weight:var(--gl-fw-semibold)}
+    #vista{outline:none}
+    @media(max-width:600px){.mock-shell{padding:14px 12px 64px}}
+  </style>
+</head>
+<body>
+  <div class="mock-shell">
+    <div class="mock-bar">
+      <strong>GOATS LATINOS · Mensajes local</strong>
+      <span>Datos simulados · sin Supabase remoto · <span id="mock-estado">con datos</span></span>
+    </div>
+    <main id="vista" tabindex="-1"></main>
+  </div>
+  <div id="modal-root"></div>
+
+  <script>window.supabase={createClient:function(){return null}};</script>
+  <script>
+    window.lucide={createIcons:function(){
+      document.querySelectorAll('i[data-lucide]:not([data-gl-icon])').forEach(function(i){
+        var w=i.style.width||'18px';i.setAttribute('data-gl-icon','');
+        i.innerHTML='<svg viewBox="0 0 24 24" width="'+w+'" height="'+w+'" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l3 2"></path></svg>';
+      });
+    }};
+  </script>
+  <script>
+    window.CONFIG={NOMBRE_LIGA:'GOATS LATINOS',ZONA_REFERENCIA:'America/Managua',JORNADAS_FASE_REGULAR:22,MAX_CAPTURA_BYTES:5*1024*1024,BUCKET_CAPTURAS:'capturas-partidos'};
+    window.ESTADOS_PARTIDO={
+      pendiente:{label:'Pendiente',icono:'clock',color:'neutral'},
+      jugado:{label:'Jugado',icono:'check-circle',color:'green'},
+      walkover_local:{label:'Walkover local',icono:'x-circle',color:'orange'},
+      walkover_visitante:{label:'Walkover vis.',icono:'x-circle',color:'orange'},
+      doble_ausencia:{label:'Doble ausencia',icono:'minus-circle',color:'red'}
+    };
+    window.ZONAS_HORARIAS_DISPONIBLES=[
+      {pais:'CR',zona:'America/Costa_Rica'},{pais:'AR',zona:'America/Argentina/Buenos_Aires'},
+      {pais:'BR',zona:'America/Sao_Paulo'},{pais:'MX',zona:'America/Mexico_City'},
+      {pais:'NI',zona:'America/Managua'}
+    ];
+    window.EST={
+      calcularClasificacion:function(partidos){
+        return ['j1','j2','j3','j4'].map(function(id,i){return {id:id,pj:6-i,pg:4-i,pe:1,pp:i,gf:12-i*2,gc:5+i,pts:13-i*3};});
+      },
+      calcularGolesReales:function(partidos){
+        return [{id:'j1',gf:5},{id:'j2',gf:3},{id:'j3',gf:2},{id:'j4',gf:1}];
+      },
+      calcularPromedios:function(partidos){
+        return [
+          {id:'j1',promPase:86,paseN:6,promPos:58,posN:6},
+          {id:'j2',promPase:81,paseN:6,promPos:52,posN:6},
+          {id:'j3',promPase:77,paseN:5,promPos:47,posN:5},
+          {id:'j4',promPase:72,paseN:5,promPos:43,posN:5}
+        ];
+      }
+    };
+    window.Modulos={};var Modulos=window.Modulos;
+    window.__acciones=[];
+
+    function esc(t){return String(t===null||t===undefined?'':t).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+    function icono(nombre,tam,clases){var escala=[14,16,18,20,24,28,32],n=Number(tam)||18,t=escala.reduce(function(m,v){var d=Math.abs(v-n),dm=Math.abs(m-n);return d<dm||(d===dm&&v>m)?v:m},escala[0]);return '<i data-lucide="'+esc(nombre)+'" class="'+esc(clases||'')+'" style="width:'+t+'px;height:'+t+'px;flex:none"></i>'}
+    function bandera(pais){var mapa={CR:'🇨🇷',AR:'🇦🇷',BR:'🇧🇷',MX:'🇲🇽',NI:'🇳🇮',FR:'🇫🇷'};return mapa[String(pais||'').toUpperCase()]||'⚽'}
+    window.bandera=bandera;
+    function iniciarIconos(){try{window.lucide.createIcons()}catch(e){}}
+
+    var params=new URLSearchParams(location.search);
+    var estado=params.get('estado')||'datos';
+    var tipoInicial=params.get('tipo')||'apertura';
+    document.getElementById('mock-estado').textContent=
+      estado==='carga'?'cargando':estado==='error'?'error':estado==='vacio'?'sin torneo':estado==='bloqueado'?'datos incompletos':estado==='cerrada'?'jornada cerrada':'con datos';
+    function esperar(ms){return new Promise(function(r){setTimeout(r,ms)})}
+
+    var J={
+      j1:{id:'j1',nombre_usuario:'CR7_LATINO',pais:'CR',zona_horaria:'America/Costa_Rica'},
+      j2:{id:'j2',nombre_usuario:'MESSI_10',pais:'AR',zona_horaria:'America/Argentina/Buenos_Aires'},
+      j3:{id:'j3',nombre_usuario:'NEYMAR_JR',pais:'BR',zona_horaria:'America/Sao_Paulo'},
+      j4:{id:'j4',nombre_usuario:'MBAPPE_9',pais:'FR',zona_horaria:'America/Managua'}
+    };
+    var G={g1:{id:'g1',nombre:'Grupo A'},g2:{id:'g2',nombre:'Grupo B'}};
+    var partidos=[
+      {id:'p1',torneo_id:'t1',grupo_id:'g1',jornada:7,local_id:'j1',visitante_id:'j2',estado:'jugado',goles_local:2,goles_visitante:1,updated_at:'2026-11-26T02:00:00Z'},
+      {id:'p2',torneo_id:'t1',grupo_id:'g1',jornada:7,local_id:'j3',visitante_id:'j4',estado:'jugado',goles_local:1,goles_visitante:1,updated_at:'2026-11-26T02:00:00Z'},
+      {id:'p3',torneo_id:'t1',grupo_id:'g1',jornada:7,local_id:'j1',visitante_id:'j3',estado:'jugado',goles_local:3,goles_visitante:0,updated_at:'2026-11-26T02:00:00Z'},
+      {id:'p4',torneo_id:'t1',grupo_id:'g1',jornada:7,local_id:'j2',visitante_id:'j4',estado:'jugado',goles_local:2,goles_visitante:2,updated_at:'2026-11-26T02:00:00Z'},
+      {id:'p5',torneo_id:'t1',grupo_id:'g1',jornada:7,local_id:'j4',visitante_id:'j1',estado:'jugado',goles_local:0,goles_visitante:1,updated_at:'2026-11-26T02:00:00Z'},
+      {id:'p6',torneo_id:'t1',grupo_id:'g1',jornada:7,local_id:'j3',visitante_id:'j2',estado:'jugado',goles_local:1,goles_visitante:0,updated_at:'2026-11-26T02:00:00Z'}
+    ];
+    if(estado==='bloqueado') partidos=partidos.slice(0,5);
+    if(estado==='vacio') partidos=[];
+
+    var jornada={
+      id:'jn7',torneo_id:'t1',grupo_id:'g1',numero:7,
+      estado:(estado==='cerrada'||estado==='datos')?'abierta':estado==='bloqueado'?'abierta':'abierta',
+      fecha:'26/11/2026',
+      fecha_inicio:estado==='bloqueado'?null:'2026-11-28T18:00:00Z',
+      hora_limite:estado==='bloqueado'?null:'2026-11-28T22:00:00Z'
+    };
+    if(estado==='cerrada'||tipoInicial==='cierre') jornada.estado='cerrada';
+
+    window.GL={
+      ctx:{
+        torneo:{id:'t1',nombre:'Liga Apertura 2026',temporada:'2026',total_jornadas:22,reglamento:'Partidos de 6 minutos por lado. Walkover según reglamento.'},
+        jugadores:Object.keys(J).map(function(k){return J[k]}),
+        grupos:[G.g1,G.g2],
+        miembros:['j1','j2','j3','j4'].map(function(id){return {grupo_id:'g1',jugador_id:id}}),
+        jornadas:[jornada,{id:'jn8',torneo_id:'t1',grupo_id:'g1',numero:8,estado:'abierta',fecha_inicio:null,hora_limite:null}],
+        clasificacion:[]
+      },
+      skeleton:function(filas,alto,titulo){var n=filas||5,h=alto||18,out='<div class="skeleton-wrap" aria-busy="true" aria-label="Cargando contenido">';if(titulo)out+='<div class="skeleton-header"><span class="skeleton" style="width:38%;height:22px;display:block"></span></div>';out+='<div class="skeleton-lista">';for(var i=0;i<n;i++)out+='<div class="skeleton-fila"><span class="skeleton" style="width:18%;height:'+h+'px"></span><span class="skeleton" style="width:42%;height:'+h+'px"></span><span class="skeleton" style="width:14%;height:'+h+'px"></span></div>';return out+'</div>'},
+      vacio:function(mensaje,ico,accion,sugerencia){return '<div class="estado-vacio" role="status"><div class="estado-ico-wrap">'+icono(ico||'inbox',38)+'</div><h3>'+esc(mensaje)+'</h3>'+(sugerencia?'<p class="estado-sugerencia">'+esc(sugerencia)+'</p>':'')+(accion?'<div class="estado-accion">'+accion+'</div>':'')+'</div>'},
+      error:function(mensaje){return '<div class="estado-vacio error" role="alert"><div class="estado-ico-wrap">'+icono('triangle-alert',38)+'</div><h3>Algo salió mal</h3><p class="estado-desc">'+esc(mensaje||'No pudimos cargar el módulo.')+'</p><div class="estado-accion"><button type="button" class="btn" onclick="location.reload()">Reintentar</button></div></div>'},
+      mensaje:function(e){return (e&&e.message)||'Error inesperado'},
+      notificar:function(texto,tono){window.__acciones.push({tipo:'notificar',texto:String(texto),tono:tono})},
+      badge:function(texto,tono,ico){return '<span class="badge '+esc(tono||'neutral')+'">'+(ico?icono(ico,14):'')+esc(texto)+'</span>'},
+      asegurarAdmin:function(){return Promise.resolve(true)},
+      esAdmin:function(){return true},
+      cargarContexto:function(){return estado==='carga'?esperar(1400):Promise.resolve(this.ctx)},
+      torneo:function(){return this.ctx.torneo},
+      grupos:function(){return this.ctx.grupos},
+      grupo:function(id){return G[id]||null},
+      letraGrupo:function(g){var n=String((g&&g.nombre)||'').match(/[A-Za-z]$/);return n?n[0].toUpperCase():'A'},
+      jornadaActual:function(){return {numero:7}},
+      partidos:function(f){if(estado==='error')return Promise.reject(new Error('Failed to fetch partidos'));return Promise.resolve(partidos.filter(function(p){return (!f.grupo_id||p.grupo_id===f.grupo_id)&&(!f.jornada||p.jornada===f.jornada)}))},
+      jugador:function(id){return J[id]||null},
+      nombreJugador:function(id){var j=J[id];return j?j.nombre_usuario:'Por definir'},
+      paisJugador:function(id){var j=J[id];return j?j.pais:''},
+      zonaJugador:function(j){return (j&&j.zona_horaria)||''},
+      _zonaResuelta:function(z){return z||''},
+      fechaHoraEnZona:function(iso,zona){var d=new Date(iso);return isNaN(d.getTime())?'—':d.toISOString().slice(0,16).replace('T',' ')+' UTC'},
+      etiquetaZona:function(z){return String(z||'').replace('America/','')},
+      offsetZona:function(){return 'UTC-6'},
+      horaEnZona:function(iso,zona){var d=new Date(iso);return isNaN(d.getTime())?'—':d.toISOString().slice(11,16)},
+      signo:function(n){return Number(n)>0?'+':''+Number(n)},
+      esAdministrativo:function(p){return String(p.estado||'').indexOf('walkover')===0||p.estado==='doble_ausencia'},
+      resultado:function(p){var gf=Number(p.goles_local)||0,gc=Number(p.goles_visitante)||0;return {gf:gf,gc:gc,texto:gf+'–'+gc}},
+      clasificacion:function(grupoId){
+        return EST.calcularClasificacion().map(function(s){return Object.assign({},s,{jugador_id:s.id,pts_penalizacion:0,updated_at:'2026-11-26T03:00:00Z'})});
+      },
+      copiar:function(texto){window.__acciones.push({tipo:'copiar',longitud:String(texto).length});return Promise.resolve()},
+      descargarTexto:function(nombre,texto){window.__acciones.push({tipo:'descargar',nombre:nombre,longitud:String(texto).length})}
+    };
+    GL.ctx.clasificacion=GL.clasificacion('g1');
+    if(estado==='vacio'){GL.ctx.torneo=null;GL.ctx.grupos=[];GL.ctx.miembros=[];GL.ctx.clasificacion=[];}
+  </script>
+  <script src="js/modulos/mensajes.js"></script>
+  <script>
+    if(tipoInicial==='cierre'&&window.Modulos&&Modulos.mensajes) Modulos.mensajes.setContexto('cierre','g1',7);
+    Modulos.mensajes.render(document.getElementById('vista')).then(iniciarIconos);
+  </script>
+</body>
+</html>

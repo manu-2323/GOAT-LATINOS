@@ -1,0 +1,144 @@
+{
+  "modo": "antes",
+  "capturas": [
+    {
+      "nombre": "antes-escritorio",
+      "ruta": "docs/capturas-fase-3.3/antes-escritorio.png"
+    },
+    {
+      "nombre": "antes-botones",
+      "ruta": "docs/capturas-fase-3.3/antes-botones.png"
+    },
+    {
+      "nombre": "antes-formularios",
+      "ruta": "docs/capturas-fase-3.3/antes-formularios.png"
+    },
+    {
+      "nombre": "antes-tarjetas-kpi",
+      "ruta": "docs/capturas-fase-3.3/antes-tarjetas-kpi.png"
+    },
+    {
+      "nombre": "antes-tablas",
+      "ruta": "docs/capturas-fase-3.3/antes-tablas.png"
+    },
+    {
+      "nombre": "antes-estados",
+      "ruta": "docs/capturas-fase-3.3/antes-estados.png"
+    },
+    {
+      "nombre": "antes-modales",
+      "ruta": "docs/capturas-fase-3.3/antes-modales.png"
+    },
+    {
+      "nombre": "antes-movil",
+      "ruta": "docs/capturas-fase-3.3/antes-movil.png"
+    }
+  ],
+  "responsive": [
+    {
+      "width": 320,
+      "ancho": 320,
+      "scrollWidth": 320,
+      "fuentesMenores12": [
+        "small.campo-ayuda:11.6667px"
+      ],
+      "minControl": 32,
+      "iconosSinLabel": 0,
+      "tablaDentroDeContenedor": true
+    },
+    {
+      "width": 375,
+      "ancho": 375,
+      "scrollWidth": 375,
+      "fuentesMenores12": [
+        "small.campo-ayuda:11.6667px"
+      ],
+      "minControl": 32,
+      "iconosSinLabel": 0,
+      "tablaDentroDeContenedor": true
+    },
+    {
+      "width": 390,
+      "ancho": 390,
+      "scrollWidth": 390,
+      "fuentesMenores12": [
+        "small.campo-ayuda:11.6667px"
+      ],
+      "minControl": 32,
+      "iconosSinLabel": 0,
+      "tablaDentroDeContenedor": true
+    },
+    {
+      "width": 430,
+      "ancho": 430,
+      "scrollWidth": 430,
+      "fuentesMenores12": [
+        "small.campo-ayuda:11.6667px"
+      ],
+      "minControl": 32,
+      "iconosSinLabel": 0,
+      "tablaDentroDeContenedor": true
+    },
+    {
+      "width": 768,
+      "ancho": 768,
+      "scrollWidth": 768,
+      "fuentesMenores12": [
+        "small.campo-ayuda:11.6667px"
+      ],
+      "minControl": 32,
+      "iconosSinLabel": 0,
+      "tablaDentroDeContenedor": true
+    },
+    {
+      "width": 1024,
+      "ancho": 1024,
+      "scrollWidth": 1024,
+      "fuentesMenores12": [
+        "small.campo-ayuda:11.6667px"
+      ],
+      "minControl": 32,
+      "iconosSinLabel": 0,
+      "tablaDentroDeContenedor": true
+    },
+    {
+      "width": 1366,
+      "ancho": 1366,
+      "scrollWidth": 1366,
+      "fuentesMenores12": [
+        "small.campo-ayuda:11.6667px"
+      ],
+      "minControl": 32,
+      "iconosSinLabel": 0,
+      "tablaDentroDeContenedor": true
+    },
+    {
+      "width": 1920,
+      "ancho": 1920,
+      "scrollWidth": 1920,
+      "fuentesMenores12": [
+        "small.campo-ayuda:11.6667px"
+      ],
+      "minControl": 32,
+      "iconosSinLabel": 0,
+      "tablaDentroDeContenedor": true
+    }
+  ],
+  "interaccion": {
+    "total": 9,
+    "pulsados": 9
+  },
+  "foco": {
+    "etiqueta": "button",
+    "clase": "btn",
+    "outlineColor": "rgb(255, 107, 122)",
+    "outlineWidth": "2px"
+  },
+  "modal": {
+    "dentroViewport": true,
+    "focoDentro": false,
+    "tieneAriaModal": true,
+    "modalCerrado": true,
+    "focoRestaurado": false
+  }
+}

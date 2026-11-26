@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resultados · FASE 3.7 · arnés local</title>
+  <link rel="stylesheet" href="css/tokens-3.1.css">
+  <link rel="stylesheet" href="css/estilos.css">
+  <style>
+    body{margin:0;background:var(--gl-bg);color:var(--gl-text);font-family:var(--gl-font-sans)}
+    .mock-shell{max-width:var(--gl-content-max);margin:0 auto;padding:20px 22px 64px}
+    .mock-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;min-height:48px;margin-bottom:18px;padding:8px 12px;border:1px solid var(--gl-border);border-radius:var(--gl-radius-sm);background:var(--gl-surface-1);color:var(--gl-text-secondary);font-size:12px}
+    .mock-bar strong{color:var(--gl-text);font-weight:var(--gl-fw-semibold)}
+    #vista{outline:none}
+    @media(max-width:600px){.mock-shell{padding:14px 12px 64px}}
+  </style>
+</head>
+<body>
+  <div class="mock-shell">
+    <div class="mock-bar">
+      <strong>GOATS LATINOS · Resultados local</strong>
+      <span>Datos simulados · sin Supabase remoto · <span id="mock-estado">con datos</span></span>
+    </div>
+    <main id="vista" tabindex="-1"></main>
+  </div>
+  <div id="modal-root"></div>
+
+  <script>window.supabase={createClient:function(){return null}};</script>
+  <script>
+    window.lucide={createIcons:function(){
+      document.querySelectorAll('i[data-lucide]:not([data-gl-icon])').forEach(function(i){
+        var w=i.style.width||'18px';i.setAttribute('data-gl-icon','');
+        i.innerHTML='<svg viewBox="0 0 24 24" width="'+w+'" height="'+w+'" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l3 2"></path></svg>';
+      });
+    }};
+  </script>
+  <script>
+    window.CONFIG={NOMBRE_LIGA:'GOATS LATINOS',ZONA_REFERENCIA:'America/Managua',JORNADAS_FASE_REGULAR:22,MAX_CAPTURA_BYTES:5*1024*1024,BUCKET_CAPTURAS:'capturas-partidos',TIPOS_SANCION:{leve:{puntos:3,partidos:0},moderada:{puntos:6,partidos:0},grave:{puntos:0,partidos:1},muy_grave:{puntos:0,partidos:0}}};
+    window.ESTADOS_PARTIDO={
+      pendiente:{label:'Pendiente',icono:'clock',color:'neutral'},
+      jugado:{label:'Jugado',icono:'check-circle',color:'green'},
+      walkover_local:{label:'Walkover local',icono:'x-circle',color:'orange'},
+      walkover_visitante:{label:'Walkover vis.',icono:'x-circle',color:'orange'},
+      doble_ausencia:{label:'Doble ausencia',icono:'minus-circle',color:'red'},
+      expulsion_local:{label:'1-0 por expulsión',icono:'user-x',color:'orange'},
+      expulsion_visitante:{label:'0-1 por expulsión',icono:'user-x',color:'orange'}
+    };
+    window.Modulos={};var Modulos=window.Modulos;
+    window.__toasts=[];window.__audit=[];window.__rpc=[];
+
+    function esc(t){return String(t===null||t===undefined?'':t).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+    function icono(nombre,tam,clases){var escala=[14,16,18,20,24,28,32],n=Number(tam)||18,t=escala.reduce(function(m,v){var d=Math.abs(v-n),dm=Math.abs(m-n);return d<dm||(d===dm&&v>m)?v:m},escala[0]);return '<i data-lucide="'+esc(nombre)+'" class="'+esc(clases||'')+'" style="width:'+t+'px;height:'+t+'px;flex:none"></i>'}
+    function iniciarIconos(){try{window.lucide.createIcons()}catch(e){}}
+
+    var modo=new URLSearchParams(location.search).get('estado')||'datos';
+    document.getElementById('mock-estado').textContent=
+      modo==='vacio'?'sin jornada abierta':modo==='carga'?'cargando':modo==='error'?'error':modo==='cerrada'?'jornada cerrada':'con datos';
+    function esperar(ms){return new Promise(function(r){setTimeout(r,ms)})}
+
+    var J={
+      j1:{id:'j1',nombre_usuario:'CR7_LATINO',pais:'CR'},j2:{id:'j2',nombre_usuario:'MESSI_10',pais:'AR'},
+      j3:{id:'j3',nombre_usuario:'NEYMAR_JR',pais:'BR'},j4:{id:'j4',nombre_usuario:'MBAPPE_9',pais:'FR'},
+      j5:{id:'j5',nombre_usuario:'CHICHARITO',pais:'MX'},j6:{id:'j6',nombre_usuario:'LUKAKU',pais:'BR'}
+    };
+    var G={g1:{id:'g1',nombre:'Grupo A'},g2:{id:'g2',nombre:'Grupo B'}};
+    var partidos=[
+      {id:'p1',torneo_id:'t1',jornada:7,grupo_id:'g1',local_id:'j1',visitante_id:'j2',estado:'jugado',goles_local:2,goles_visitante:1},
+      {id:'p2',torneo_id:'t1',jornada:7,grupo_id:'g1',local_id:'j3',visitante_id:'j4',estado:'pendiente',goles_local:0,goles_visitante:0},
+      {id:'p3',torneo_id:'t1',jornada:7,grupo_id:'g2',local_id:'j5',visitante_id:'j6',estado:'pendiente',goles_local:0,goles_visitante:0},
+      {id:'p4',torneo_id:'t1',jornada:7,grupo_id:'g2',local_id:'j2',visitante_id:'j4',estado:'jugado',goles_local:1,goles_visitante:1},
+      {id:'p5',torneo_id:'t1',jornada:7,grupo_id:'g2',local_id:'j1',visitante_id:'j5',estado:'pendiente',goles_local:0,goles_visitante:0},
+      {id:'p6',torneo_id:'t1',jornada:7,grupo_id:'g1',local_id:'j6',visitante_id:'j3',estado:'pendiente',goles_local:0,goles_visitante:0}
+    ];
+    var jornadas=[
+      {numero:7,grupo_id:'g1',estado:modo==='cerrada'?'cerrada':'abierta'},
+      {numero:7,grupo_id:'g2',estado:'abierta'}
+    ];
+
+    window.sb={
+      _guardado:null,
+      auth:{getUser:function(){return Promise.resolve({data:{user:{id:'u-local'}},error:null})}},
+      storage:{from:function(){return {
+        upload:function(){return Promise.resolve({error:null})},
+        getPublicUrl:function(ruta){return {data:{publicUrl:'local://capturas/'+ruta}}}
+      }}},
+      functions:{invoke:function(){return Promise.resolve({data:{
+        goles_local:3,goles_visitante:2,estado:'jugado',
+        tiros_local:12,tiros_puerta_local:7,posesion_local:56,pase_local:84,
+        tiros_visitante:9,tiros_puerta_visitante:4,posesion_visitante:44,pase_visitante:78
+      },error:null})}},
+      rpc:function(nombre,params){window.__rpc.push({nombre:nombre,params:params});return Promise.resolve({data:{ok:true,es_correccion:false},error:null})}
+    };
+
+    window.GL={
+      tema:{fuente:"'Inter',system-ui,sans-serif",bg:'#0B0D10',superficie:'#14171B',borde:'#2E353D',bordeFuerte:'#3B434D',texto:'#F5F6F7',texto2:'#9299A3',advertencia:'#F5B301',exito:'#00D4AA',info:'#5B9BFF',marca:'#E11D35',marcaTexto:'#FF6B7A',alfa:function(h,a){return 'rgba(225,29,53,'+a+')'}},
+      ctx:{torneo:{id:'t1',nombre:'Liga Apertura 2026',temporada:'2026',total_jornadas:22,estado:'activo'},jugadores:Object.keys(J).map(function(k){return J[k]}),grupos:[G.g1,G.g2],miembros:[],jornadas:jornadas,clasificacion:[],sanciones:[]},
+      skeleton:function(filas,alto,titulo){var n=filas||5,h=alto||18,out='<div class="skeleton-wrap" aria-busy="true" aria-label="Cargando contenido">';if(titulo)out+='<div class="skeleton-header"><span class="skeleton" style="width:38%;height:22px;display:block"></span></div>';out+='<div class="skeleton-lista">';for(var i=0;i<n;i++)out+='<div class="skeleton-fila"><span class="skeleton" style="width:18%;height:'+h+'px"></span><span class="skeleton" style="width:42%;height:'+h+'px"></span><span class="skeleton" style="width:14%;height:'+h+'px"></span></div>';return out+'</div>'},
+      vacio:function(mensaje,ico,accion,sugerencia){return '<div class="estado-vacio" role="status"><div class="estado-ico-wrap">'+icono(ico||'inbox',38)+'</div><h3>'+esc(mensaje)+'</h3>'+(sugerencia?'<p class="estado-sugerencia">'+esc(sugerencia)+'</p>':'')+(accion?'<div class="estado-accion">'+accion+'</div>':'')+'</div>'},
+      error:function(mensaje){return '<div class="estado-vacio error" role="alert"><div class="estado-ico-wrap">'+icono('triangle-alert',38)+'</div><h3>Algo salió mal</h3><p class="estado-desc">'+esc(mensaje||'No pudimos cargar el módulo.')+'</p><div class="estado-accion"><button type="button" class="btn" onclick="location.reload()">Reintentar</button></div></div>'},
+      estado:function(contenedor,modo,o){contenedor.innerHTML=this.vacio((o&&o.titulo)||'Cargando',(o&&o.icono)||'loader-circle',null,(o&&o.texto)||'')},
+      mensaje:function(e){return (e&&e.message)||'Error inesperado'},
+      notificar:function(texto,tono,ico){window.__toasts.push({texto:String(texto),tono:tono||'info',ico:ico||null})},
+      badge:function(texto,tono,ico){return '<span class="badge '+esc(tono||'neutral')+'">'+(ico?icono(ico,14):'')+esc(texto)+'</span>'},
+      asegurarAdmin:function(){return Promise.resolve(true)},
+      esAdmin:function(){return true},esSuperAdmin:function(){return true},
+      conAccion:function(btn,nombre,fn){try{return fn()}catch(e){console.error(e);throw e}},
+      invalidar:function(){},
+      cargarContexto:function(){if(modo==='carga')return esperar(1400);return Promise.resolve(this.ctx)},
+      torneo:function(){return this.ctx.torneo},torneoId:function(){return this.ctx.torneo?this.ctx.torneo.id:null},
+      jornadaAbiertaNumero:function(){return modo==='vacio'?null:7},
+      partidos:function(f){if(modo==='error')return Promise.reject(new Error('Failed to fetch partidos'));return Promise.resolve(partidos.filter(function(p){return !f.jornada||p.jornada===f.jornada}))},
+      grupo:function(id){return G[id]||null},letraGrupo:function(g){var n=String((g&&g.nombre)||'').match(/[A-Za-z]$/);return n?n[0].toUpperCase():'A'},
+      jugador:function(id){return J[id]||null},nombreJugador:function(id){var j=J[id];return j?j.nombre_usuario:'Por definir'},
+      esResolucionExpulsion:function(o){return String(o.estado||'').indexOf('expulsion')===0},
+      resultado:function(o){return o.estado==='expulsion_local'?{gf:1,gc:0}:{gf:0,gc:1}},
+      auditoria:{registrar:function(tipo,entidad,id,datos){window.__audit.push({tipo:tipo,entidad:entidad,id:id,datos:datos})}}
+    };
+  </script>
+  <script src="js/modulos/resultados.js"></script>
+  <script>Modulos.resultados.render(document.getElementById('vista')).then(iniciarIconos);</script>
+</body>
+</html>

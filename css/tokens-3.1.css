@@ -1,0 +1,201 @@
+/* =====================================================================
+   GOAT-LATINOS — SISTEMA DE DISEÑO ÚNICO
+   Definido en FASE 3.1 · aplicado en FASE 3.2
+
+   Fuente única de verdad para color, tipografía, espaciado, radios,
+   elevación, capas y movimiento. index.html carga este archivo antes de
+   css/estilos.css; esa hoja solo consume variables, nunca redefine :root.
+
+   Reglas de uso:
+   - Los colores de marca van por rol, no por valor (#E11D35 no se repite).
+   - Tipografía única: Inter. Rajdhani queda solo en exportaciones PNG
+     específicas pendientes de migración en una subfase posterior.
+   - Iconografía única: Lucide vía GL.icono().
+   ===================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ------------------------------------------------------------------
+     1) Superficies
+     ------------------------------------------------------------------ */
+  --gl-bg: #0B0D10;                 /* Fondo principal */
+  --gl-surface-1: #14171B;          /* Tarjetas */
+  --gl-surface-2: #20252B;          /* Superficies elevadas / inputs */
+  --gl-surface-3: #2A3038;          /* Recipientes internos / hover */
+  --gl-border: #2E353D;             /* Borde por defecto */
+  --gl-border-strong: #3B434D;      /* Borde en foco / activo */
+
+  /* ------------------------------------------------------------------
+     2) Texto
+     ------------------------------------------------------------------ */
+  --gl-text: #F5F6F7;               /* 17.98:1 sobre --gl-bg */
+  --gl-text-secondary: #9299A3;     /* 6.77:1 sobre --gl-bg */
+  --gl-text-tertiary: #7A828E;      /* 4.63:1 sobre --gl-surface-1 */
+  --gl-text-inverse: #0B0D10;       /* Para rellenos claros */
+
+  /* ------------------------------------------------------------------
+     3) Marca y acción
+     --gl-brand y --gl-danger comparten tono pero son roles distintos.
+     --gl-brand-text NO es --gl-brand: el rojo puro no llega a AA como
+     texto pequeño sobre fondo oscuro (4.10:1).
+     ------------------------------------------------------------------ */
+  --gl-brand: #E11D35;              /* Rellenos, barras, bordes */
+  --gl-brand-hover: #F2455B;        /* Hover / estados activos */
+  --gl-brand-text: #FF6B7A;         /* 7.08:1 sobre --gl-bg */
+  --gl-brand-subtle: rgba(225, 29, 53, 0.14);
+  --gl-brand-ring: rgba(225, 29, 53, 0.38);
+  --gl-danger-bg: rgba(225, 29, 53, 0.12);
+
+  /* ------------------------------------------------------------------
+     4) Semánticos de estado
+     ------------------------------------------------------------------ */
+  --gl-success: #00D4AA;            /* 10.19:1 sobre --gl-bg */
+  --gl-warning: #F5B301;            /* 10.50:1 sobre --gl-bg */
+  --gl-info: #5B9BFF;               /* 7.02:1 sobre --gl-bg */
+  --gl-danger: var(--gl-brand);
+  --gl-danger-text: var(--gl-brand-text);
+  --gl-pending: var(--gl-warning);
+
+  /* ------------------------------------------------------------------
+     5) Tipografía
+     Una sola familia. Pesos coherentes. Mínimo 12px.
+     Números tabulares obligatorios en marcadores, stats y cantidades.
+     ------------------------------------------------------------------ */
+  --gl-font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --gl-font-mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+
+  --gl-fs-2xs: 12px;                /* Mínimo permitido */
+  --gl-fs-xs: 13px;
+  --gl-fs-sm: 14px;                 /* Cuerpo base */
+  --gl-fs-md: 16px;
+  --gl-fs-lg: 20px;
+  --gl-fs-xl: 26px;
+  --gl-fs-2xl: 34px;
+  --gl-fs-3xl: 44px;                /* Logotipo / hero */
+
+  --gl-fw-regular: 400;
+  --gl-fw-medium: 500;
+  --gl-fw-semibold: 600;
+  --gl-fw-bold: 700;
+  --gl-fw-black: 800;
+
+  --gl-lh-tight: 1.1;               /* Títulos */
+  --gl-lh-snug: 1.3;                /* Subtítulos / Tarjetas */
+  --gl-lh-normal: 1.5;              /* Cuerpo */
+
+  --gl-track-display: -0.02em;      /* Títulos ajustados */
+  --gl-track-label: 0.08em;         /* Etiquetas uppercase */
+  --gl-numeric: tabular-nums;
+
+  /* ------------------------------------------------------------------
+     6) Espaciado y radios
+     ------------------------------------------------------------------ */
+  --gl-space-1: 4px;
+  --gl-space-2: 8px;
+  --gl-space-3: 12px;
+  --gl-space-4: 16px;
+  --gl-space-5: 20px;
+  --gl-space-6: 24px;
+  --gl-space-8: 32px;
+  --gl-space-10: 40px;
+
+  --gl-radius-sm: 8px;
+  --gl-radius: 12px;
+  --gl-radius-lg: 16px;
+  --gl-radius-pill: 999px;
+
+  /* ------------------------------------------------------------------
+     7) Elevación, foco y movimiento
+     ------------------------------------------------------------------ */
+  --gl-shadow-1: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --gl-shadow-2: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --gl-focus-ring: 0 0 0 3px rgba(255, 107, 122, 0.38);
+  --gl-disabled-opacity: 0.5;
+
+  --gl-motion-fast: 120ms;
+  --gl-motion-base: 180ms;
+  --gl-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* ------------------------------------------------------------------
+     8) Iconografía (Lucide, vía GL.icono())
+     Un solo grosor y una escala cerrada de tamaños.
+     ------------------------------------------------------------------ */
+  --gl-icon-xs: 14px;
+  --gl-icon-sm: 16px;
+  --gl-icon-md: 18px;
+  --gl-icon-lg: 20px;
+  --gl-icon-xl: 24px;
+  --gl-icon-2xl: 32px;
+  --gl-icon-stroke: 1.8;
+
+  /* ------------------------------------------------------------------
+     9) Estructura, anchos y capas
+     ------------------------------------------------------------------ */
+  --gl-sidebar-w: 252px;
+  --gl-content-max: 1440px;
+  --gl-header-h: 72px;
+
+  --gl-z-base: 0;
+  --gl-z-sticky: 2;
+  --gl-z-overlay: 55;
+  --gl-z-sidebar: 60;
+  --gl-z-topbar: 50;
+  --gl-z-nav: 70;
+  --gl-z-sheet: 8900;
+  --gl-z-modal: 200;
+  --gl-z-auth: 500;
+  --gl-z-feedback: 400;
+
+  /* ------------------------------------------------------------------
+     10) Aliases de compatibilidad
+     Los módulos existentes siguen usando los nombres históricos. Todos
+     apuntan a los roles canónicos: no hay una segunda paleta.
+     ------------------------------------------------------------------ */
+  --bg-primary: var(--gl-bg);
+  --bg-secondary: var(--gl-surface-2);
+  --bg-card: var(--gl-surface-1);
+  --bg-hover: var(--gl-surface-3);
+  --text-primary: var(--gl-text);
+  --text-main: var(--gl-text);
+  --text-secondary: var(--gl-text-secondary);
+  --text-muted: var(--gl-text-tertiary);
+  --border: var(--gl-border);
+  --border-hover: var(--gl-border-strong);
+
+  --accent-gold: var(--gl-brand);
+  --accent-gold-2: var(--gl-brand-hover);
+  --color-dorado: var(--gl-brand);
+  --accent-red: var(--gl-danger);
+  --color-error: var(--gl-danger-text);
+  --accent-green: var(--gl-success);
+  --color-exito: var(--gl-success);
+  --accent-blue: var(--gl-info);
+  --color-info: var(--gl-info);
+  --accent-orange: var(--gl-warning);
+  --accent-primary: var(--gl-brand-text);
+  --accent-primary-rgb: 255, 107, 122;
+  --rojo: var(--gl-brand-text);
+  --color-secundario: var(--gl-text-secondary);
+
+  --gradient-gold: linear-gradient(135deg, var(--gl-brand) 0%, var(--gl-brand-hover) 100%);
+  --gradient-card: linear-gradient(145deg, var(--gl-surface-1) 0%, var(--gl-bg) 100%);
+  --gradient-hero: linear-gradient(135deg, var(--gl-bg) 0%, var(--gl-surface-1) 50%, var(--gl-bg) 100%);
+  --shadow-card: var(--gl-shadow-1);
+  --shadow-gold: 0 0 20px rgba(225, 29, 53, 0.18);
+  --sombra-tarjeta: var(--gl-shadow-1);
+
+  --radius: var(--gl-radius);
+  --radius-sm: var(--gl-radius-sm);
+  --radius-lg: var(--gl-radius-lg);
+  --radio-tarjeta: var(--gl-radius);
+  --sidebar-w: var(--gl-sidebar-w);
+  --duracion: var(--gl-motion-base);
+  --space-1: var(--gl-space-1);
+  --space-2: var(--gl-space-2);
+  --space-3: var(--gl-space-3);
+  --space-4: var(--gl-space-4);
+  --space-5: var(--gl-space-5);
+  --space-6: var(--gl-space-6);
+  --space-8: var(--gl-space-8);
+}

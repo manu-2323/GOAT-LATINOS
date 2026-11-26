@@ -1,6 +1,6 @@
 {
   "name": "goats-latinos",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "GOATS LATINOS · League Manager — HTML, CSS y JavaScript vanilla",
   "scripts": {
@@ -15,7 +15,7 @@
     "@playwright/test": "^1.65.1",
     "@supabase/cli": "^1.0.0",
     "jsdom": "^26.1.0",
-    "libphonenumber-js": "^1.13.17",
+    "libphonenumber-js": "1.13.17",
     "lighthouse": "^12.8.2",
     "vitest": "^5.1.2"
   }

@@ -100,7 +100,7 @@
 
       if (pos === total - 2 && !separador) {
         filasHtml += '<tr class="fila-separadora"><td colspan="12"><div class="linea-descenso">' +
-          icono('arrow-down', 12) + ' Zona de descenso</div></td></tr>';
+          icono('arrow-down', 14) + ' Zona de descenso</div></td></tr>';
         separador = true;
       }
 
@@ -150,7 +150,7 @@
           '<td class="col-expand">' +
             '<button type="button" class="btn-expandir" data-expandir ' +
               'aria-expanded="false" aria-label="Ver detalle de ' + esc(j.nombre_usuario || 'jugador') + '">' +
-              icono('chevron-down', 15) +
+              icono('chevron-down', 16) +
             '</button>' +
           '</td>' +
         '</tr>' +
@@ -183,7 +183,7 @@
 
     return '<div id="tabla-export" style="padding:6px;background:var(--bg-primary);border-radius:var(--radius)">' +
       '<div class="tabla-wrap tabla-wrap-scroll" tabindex="0" role="region" aria-label="Tabla de posiciones con desplazamiento horizontal">' +
-        '<div class="tabla-scroll-hint" aria-hidden="true">' + icono('arrow-right', 12) + ' Deslizá para ver más</div>' +
+        '<div class="tabla-scroll-hint" aria-hidden="true">' + icono('arrow-right', 14) + ' Deslizá para ver más</div>' +
         '<table class="tabla tabla-posiciones"><thead><tr>' +
           '<th class="col-zona" aria-label="Zona"></th>' +
           '<th class="col-pos">#</th>' +
@@ -216,7 +216,7 @@
       const horarioVisita = GL.horarioJugador(visita);
       return '<div class="partido-card partido-card-fixture" style="animation-delay:' + (i * .05) + 's">' +
         '<div class="equipo-row local">' +
-          '<div class="equipo">' + icono('home', 15) + '<span>' + esc(GL.nombreJugador(p.local_id)) + '</span>' + GL.banderaHTML(local.pais, 15) + '</div>' +
+          '<div class="equipo">' + icono('home', 16) + '<span>' + esc(GL.nombreJugador(p.local_id)) + '</span>' + GL.banderaHTML(local.pais, 15) + '</div>' +
           (r.pendiente ? '<div class="hora">' + esc(horarioLocal) + '</div>' : '') +
         '</div>' +
         '<div class="marcador-centro">' +
@@ -224,7 +224,7 @@
           '<div class="estado-mini" style="justify-content:center;margin-top:4px">' + icono(r.estado.icono, 12) + r.estado.label + '</div>' +
         '</div>' +
         '<div class="equipo-row visita">' +
-          '<div class="equipo visita">' + GL.banderaHTML(visita.pais, 15) + '<span>' + esc(GL.nombreJugador(p.visitante_id)) + '</span>' + icono('plane', 15) + '</div>' +
+          '<div class="equipo visita">' + GL.banderaHTML(visita.pais, 15) + '<span>' + esc(GL.nombreJugador(p.visitante_id)) + '</span>' + icono('plane', 16) + '</div>' +
           (r.pendiente ? '<div class="hora">' + esc(horarioVisita) + '</div>' : '') +
         '</div></div>';
     }).join('');

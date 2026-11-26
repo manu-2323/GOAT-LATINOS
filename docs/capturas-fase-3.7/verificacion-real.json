@@ -1,0 +1,33 @@
+{
+  "ejecutada": true,
+  "tipo": "app real autenticada con Supabase · solo lectura",
+  "resultado": {
+    "hash": "#resultados",
+    "titulo": "Carga de resultados",
+    "kpis": [
+      "0",
+      "0",
+      "0",
+      "0%"
+    ],
+    "partidos": 0,
+    "contador": "0 partidos",
+    "panelManual": false,
+    "AIATab": true,
+    "scrollWidth": 1366,
+    "ancho": 1366,
+    "estadoVacio": "No hay partidos pendientes en esta jornada."
+  },
+  "erroresConsola": [
+    "CONSOLE Failed to load resource: the server responded with a status of 400 ()",
+    "CONSOLE Failed to load resource: the server responded with a status of 400 ()",
+    "CONSOLE Failed to load resource: the server responded with a status of 400 ()"
+  ],
+  "fallosRed": [
+    "400 https://zmjzlvsdlfzmhptmtmjx.supabase.co/rest/v1/jugadores?select=id%2Cnombre_usuario%2Cpais%2Czona_horaria%2Cavatar_url%2Cactivo%2Csuspendido%2Crol%2Ctorneo_id%2Cnumero%2Ctelefono%2Ctelefono_e164%2Ctelefono_nacional%2Cpais_telefono%2Ctelefono_verificado%2Ctelefono_valido_plan%2Cemail%2Cuser_id%2Csuper_admin%2Ccreated_at&order=nombre_usuario.asc",
+    "400 https://zmjzlvsdlfzmhptmtmjx.supabase.co/rest/v1/jugadores?select=id%2Cnombre_usuario%2Cpais%2Czona_horaria%2Cavatar_url%2Cactivo%2Csuspendido%2Crol%2Ctorneo_id%2Cnumero%2Ctelefono%2Ctelefono_e164%2Ctelefono_nacional%2Cpais_telefono%2Ctelefono_verificado%2Ctelefono_valido_plan%2Cemail%2Cuser_id%2Csuper_admin%2Ccreated_at&order=nombre_usuario.asc",
+    "400 https://zmjzlvsdlfzmhptmtmjx.supabase.co/rest/v1/jugadores?select=id%2Cnombre_usuario%2Cpais%2Czona_horaria%2Cavatar_url%2Cactivo%2Csuspendido%2Crol%2Ctorneo_id%2Cnumero%2Ctelefono%2Ctelefono_e164%2Ctelefono_nacional%2Cpais_telefono%2Ctelefono_verificado%2Ctelefono_valido_plan%2Cemail%2Cuser_id%2Csuper_admin%2Ccreated_at&order=nombre_usuario.asc"
+  ],
+  "deudaTecnicaPreexistente": true,
+  "captura": "docs/capturas-fase-3.7/despues-resultados-real.png"
+}
