@@ -1,40 +1,58 @@
 /* =====================================================================
-   MÓDULO 3 — Ingreso de resultados (solo admin)
+   MÓDULO 3 — Registro y corrección de resultados (solo admin)
    Modo A: análisis de captura con Gemini Flash (vía Edge Function)
    Modo B: ingreso manual
+   FASE 3.15: validación estricta, historial real y trazabilidad de cambios.
    ===================================================================== */
 (function () {
+  /* Contrato desplegado de gl_guardar_resultado_interno: solo estos estados.
+     Las resoluciones por expulsión se registran al cerrar la jornada; ofrecerlas
+     aquí produciría un rechazo del RPC y un falso éxito en la interfaz. */
+  const ESTADOS_GUARDABLES = ['jugado', 'walkover_local', 'walkover_visitante', 'doble_ausencia'];
+  const ESTADOS_CANONICOS = ['walkover_local', 'walkover_visitante', 'doble_ausencia'];
+  const MAX_GOLES = 99;
+  const DIAS_RECIENTES = 7;
+
   const Mod = {
     titulo: 'Resultados',
     modo: 'manual',
+    vista: 'carga',          // 'carga' | 'historial'
     partidoId: null,
     archivo: null,
     datosIA: null,
     analizando: false,
+    guardando: false,        // bloquea clics y solicitudes simultáneas
+    partidos: [],            // una sola consulta por render, reutilizada por ambas vistas
+    corregidos: new Set(),   // correcciones confirmadas en esta sesión (sin columnas nuevas)
 
     async render(el) {
       el.innerHTML = GL.skeleton(6);
       if (!(await GL.asegurarAdmin(el))) return;
       try {
         await GL.cargarContexto(true);
-        if (!GL.torneo()) { el.innerHTML = GL.vacio('No hay torneo activo. Crealo desde Administración → Configuración.', 'trophy', null); iniciarIconos(); return; }
-        const jn = GL.jornadaAbiertaNumero();
-        if (!jn) {
-          el.innerHTML = GL.vacio('No hay jornadas abiertas. Abrí una desde Administración → Jornadas.', 'lock', null);
-          iniciarIconos(); return;
+        if (!GL.torneo()) {
+          el.innerHTML = GL.vacio('No hay torneo activo. Crealo desde Administración → Configuración.', 'trophy', null);
+          iniciarIconos();
+          return;
         }
-        const partidosJornada = await GL.partidos({ torneo_id: GL.torneo().id, jornada: jn });
-        const pendientes = partidosJornada.filter(p => p.estado === 'pendiente');
-        const jugados = partidosJornada.length - pendientes.length;
-        const progreso = partidosJornada.length ? Math.round((jugados / partidosJornada.length) * 100) : 0;
-        const totalJornadas = Number((GL.torneo() && GL.torneo().total_jornadas) || 22);
-        if (Mod.partidoId && !pendientes.some(p => p.id === Mod.partidoId)) Mod.partidoId = null;
-        if (!Mod.partidoId && pendientes.length) Mod.partidoId = pendientes[0].id;
 
-        const gruposPendientes = [...new Set(pendientes.map(p => p.grupo_id))].map(id => {
-          const g = GL.grupo(id);
-          return '<option value="' + esc(id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</option>';
-        }).join('');
+        const jn = GL.jornadaAbiertaNumero();
+        const consulta = await GL.partidos({ torneo_id: GL.torneo().id });
+        const { partidos, duplicados } = deduplicar(Array.isArray(consulta) ? consulta : []);
+        Mod.partidos = partidos;
+
+        const deJornada = Mod.partidos.filter(p => Number(p.jornada) === Number(jn));
+        const pendientes = deJornada.filter(p => p.estado === 'pendiente');
+        const jugados = deJornada.length - pendientes.length;
+        const progreso = deJornada.length ? Math.round((jugados / deJornada.length) * 100) : 0;
+        const totalJornadas = Number((GL.torneo() && GL.torneo().total_jornadas) || 22);
+        const historial = Mod.partidos
+          .filter(p => p.estado && p.estado !== 'pendiente')
+          .sort((a, b) => Number(b.jornada) - Number(a.jornada) || String(b.id).localeCompare(String(a.id)));
+
+        const pool = Mod.vista === 'historial' ? historial : pendientes;
+        if (Mod.partidoId && !pool.some(p => p.id === Mod.partidoId)) Mod.partidoId = null;
+        if (!Mod.partidoId && pool.length) Mod.partidoId = pool[0].id;
 
         el.innerHTML =
           '<div class="r7-pantalla" data-resultados>' +
@@ -42,73 +60,156 @@
               '<div class="r7-hero-copy">' +
                 '<span class="r7-eyebrow">' + icono('clipboard-check', 14) + 'Dirección del torneo · Resultados</span>' +
                 '<h1 class="r7-titulo">Carga de resultados</h1>' +
-                '<p class="r7-bajada">Jornada ' + jn + ' · Validá el marcador antes de guardar. El cálculo de tabla es automático.</p>' +
+                '<p class="r7-bajada">' +
+                  (jn ? 'Jornada ' + jn + ' · Validá el marcador antes de guardar. El cálculo de tabla es automático.'
+                      : 'No hay jornada abierta. Podés consultar y corregir el historial; abrí una jornada para cargar resultados nuevos.') +
+                '</p>' +
               '</div>' +
               '<div class="r7-hero-acciones">' +
-                GL.badge(jn + ' / ' + totalJornadas, 'gold', 'flag') +
-                GL.badge(partidosJornada.length + ' partidos', 'neutral', 'calendar-days') +
+                GL.badge((jn || '—') + ' / ' + totalJornadas, 'gold', 'flag') +
+                GL.badge(historial.length + ' registrados', 'neutral', 'list-checks') +
               '</div>' +
             '</header>' +
             '<section class="r7-kpis" aria-label="Progreso de la jornada">' +
               r7Kpi(pendientes.length, 'Pendientes', 'Partidos sin resultado', 'clock', true, progreso) +
               r7Kpi(jugados, 'Cargados', 'Resultados ya registrados', 'check-circle-2') +
-              r7Kpi(partidosJornada.length, 'Total', 'Partidos de la jornada', 'calendar-days') +
+              r7Kpi(deJornada.length, 'Total', 'Partidos de la jornada', 'calendar-days') +
               r7Kpi(progreso + '%', 'Progreso', 'Jornada en curso', 'chart-no-axes-column') +
             '</section>' +
-            '<div class="r7-tabs" role="tablist" aria-label="Modo de carga">' +
-              '<button type="button" class="r7-tab' + (Mod.modo === 'manual' ? ' activo' : '') + '" data-modo="manual" role="tab" aria-selected="' + (Mod.modo === 'manual') + '">' +
-                icono('keyboard', 16) + 'Ingreso manual</button>' +
-              '<button type="button" class="r7-tab' + (Mod.modo === 'ia' ? ' activo' : '') + '" data-modo="ia" role="tab" aria-selected="' + (Mod.modo === 'ia') + '">' +
-                icono('scan-eye', 16) + 'Análisis de captura (IA)</button>' +
+            '<div class="r7-tabs r7-tabs-vistas" role="tablist" aria-label="Sección de resultados">' +
+              '<button type="button" class="r7-tab' + (Mod.vista === 'carga' ? ' activo' : '') +
+                '" data-vista="carga" role="tab" aria-selected="' + (Mod.vista === 'carga') + '">' +
+                icono('clipboard-check', 16) + 'Cargar resultados</button>' +
+              '<button type="button" class="r7-tab' + (Mod.vista === 'historial' ? ' activo' : '') +
+                '" data-vista="historial" role="tab" aria-selected="' + (Mod.vista === 'historial') + '">' +
+                icono('history', 16) + 'Historial (' + historial.length + ')</button>' +
             '</div>' +
+            (duplicados.length
+              ? '<div class="r7-aviso r7-aviso-duplicados">' + icono('triangle-alert', 14) +
+                '<span>Se detectaron ' + duplicados.length + ' partidos repetidos en el torneo. ' +
+                'Se muestran una sola vez para evitar cargar el mismo resultado dos veces.</span></div>'
+              : '') +
+            (Mod.vista === 'carga'
+              ? '<div class="r7-tabs" role="tablist" aria-label="Modo de carga">' +
+                  '<button type="button" class="r7-tab' + (Mod.modo === 'manual' ? ' activo' : '') +
+                    '" data-modo="manual" role="tab" aria-selected="' + (Mod.modo === 'manual') + '">' +
+                    icono('keyboard', 16) + 'Ingreso manual</button>' +
+                  '<button type="button" class="r7-tab' + (Mod.modo === 'ia' ? ' activo' : '') +
+                    '" data-modo="ia" role="tab" aria-selected="' + (Mod.modo === 'ia') + '">' +
+                    icono('scan-eye', 16) + 'Análisis de captura (IA)</button>' +
+                '</div>'
+              : '') +
             '<div class="r7-layout">' +
-              '<section class="r7-panel r7-lista-panel" aria-labelledby="r7-lista-titulo">' +
-                '<div class="r7-panel-cab"><div><h2 id="r7-lista-titulo">' + icono('list-checks', 18) + 'Partidos pendientes</h2>' +
-                  '<p>Seleccioná un encuentro para cargar su resultado.</p></div>' +
-                  '<span id="r7-contador" aria-live="polite">' + pendientes.length + (pendientes.length === 1 ? ' partido' : ' partidos') + '</span></div>' +
-                '<div class="r7-filtros">' +
-                  '<label class="r7-campo"><span>Buscar partido</span>' +
-                    '<span class="r7-input-ico">' + icono('search', 16) +
-                      '<input class="input" id="r7-buscar" type="search" placeholder="Ej: jugador o equipo" autocomplete="off" aria-label="Buscar partidos pendientes">' +
-                    '</span></label>' +
-                  '<label class="r7-campo"><span>Grupo</span>' +
-                    '<select class="input" id="r7-grupo" aria-label="Filtrar partidos por grupo">' +
-                      '<option value="">Todos los grupos</option>' + gruposPendientes +
-                    '</select></label>' +
-                  '<button type="button" class="btn sec r7-limpiar" data-r7-limpiar>' + icono('rotate-ccw', 16) + 'Limpiar</button>' +
-                '</div>' +
-                '<div id="lista-pendientes" class="r7-lista">' + htmlLista(pendientes) + '</div>' +
-                '<div class="r7-estado-vacio" id="r7-sin-resultados" hidden>' + icono('search-x', 28) +
-                  '<strong>Sin coincidencias</strong><span>Probá con otro nombre o quitá el filtro de grupo.</span>' +
-                  '<button type="button" class="btn sec sm" data-r7-limpiar>' + icono('rotate-ccw', 15) + 'Limpiar filtros</button></div>' +
-              '</section>' +
+              (Mod.vista === 'carga'
+                ? '<section class="r7-panel r7-lista-panel" aria-labelledby="r7-lista-titulo">' +
+                    '<div class="r7-panel-cab"><div><h2 id="r7-lista-titulo">' + icono('list-checks', 18) + 'Partidos pendientes</h2>' +
+                      '<p>Seleccioná un encuentro para cargar su resultado.</p></div>' +
+                      '<span id="r7-contador" aria-live="polite">' + pendientes.length + (pendientes.length === 1 ? ' partido' : ' partidos') + '</span></div>' +
+                    '<div class="r7-filtros">' +
+                      '<label class="r7-campo"><span>Buscar partido</span>' +
+                        '<span class="r7-input-ico">' + icono('search', 16) +
+                          '<input class="input" id="r7-buscar" type="search" placeholder="Ej: jugador o equipo" autocomplete="off" aria-label="Buscar partidos pendientes">' +
+                        '</span></label>' +
+                      '<label class="r7-campo"><span>Grupo</span>' +
+                        '<select class="input" id="r7-grupo" aria-label="Filtrar partidos por grupo">' +
+                          '<option value="">Todos los grupos</option>' + opcionesGrupo(pendientes) +
+                        '</select></label>' +
+                      '<button type="button" class="btn sec r7-limpiar" data-r7-limpiar>' + icono('rotate-ccw', 16) + 'Limpiar</button>' +
+                    '</div>' +
+                    '<div id="lista-pendientes" class="r7-lista">' + htmlLista(pendientes) + '</div>' +
+                    '<div class="r7-estado-vacio" id="r7-sin-resultados" hidden>' + icono('search-x', 28) +
+                      '<strong>Sin coincidencias</strong><span>Probá con otro nombre o quitá el filtro de grupo.</span>' +
+                      '<button type="button" class="btn sec sm" data-r7-limpiar>' + icono('rotate-ccw', 15) + 'Limpiar filtros</button></div>' +
+                  '</section>'
+                : '<section class="r7-panel r7-lista-panel" aria-labelledby="r7-h-titulo">' +
+                    '<div class="r7-panel-cab"><div><h2 id="r7-h-titulo">' + icono('history', 18) + 'Historial de resultados</h2>' +
+                      '<p>Consultá partidos disputados y corregí uno cuando sea necesario.</p></div>' +
+                      '<span id="r7-h-contador" aria-live="polite">' + historial.length + (historial.length === 1 ? ' resultado' : ' resultados') + '</span></div>' +
+                    '<div class="r7-filtros r7-filtros-h">' +
+                      '<label class="r7-campo"><span>Buscar participante</span>' +
+                        '<span class="r7-input-ico">' + icono('search', 16) +
+                          '<input class="input" id="r7-h-buscar" type="search" placeholder="Nombre del jugador" autocomplete="off" aria-label="Buscar en el historial">' +
+                        '</span></label>' +
+                      '<label class="r7-campo"><span>Jornada</span>' +
+                        '<select class="input" id="r7-h-jornada" aria-label="Filtrar historial por jornada">' +
+                          '<option value="">Todas</option>' + opcionesJornada(historial) +
+                        '</select></label>' +
+                      '<label class="r7-campo"><span>Grupo</span>' +
+                        '<select class="input" id="r7-h-grupo" aria-label="Filtrar historial por grupo">' +
+                          '<option value="">Todos</option>' + opcionesGrupo(historial) +
+                        '</select></label>' +
+                      '<label class="r7-campo"><span>Estado</span>' +
+                        '<select class="input" id="r7-h-estado" aria-label="Filtrar historial por estado">' +
+                          '<option value="">Todos</option>' + opcionesEstado(historial) +
+                        '</select></label>' +
+                      '<label class="r7-check"><input type="checkbox" id="r7-h-recientes">' +
+                        '<span>Solo recientes (' + DIAS_RECIENTES + ' días)</span></label>' +
+                      '<button type="button" class="btn sec r7-limpiar" data-r7-limpiar-h>' + icono('rotate-ccw', 16) + 'Limpiar</button>' +
+                    '</div>' +
+                    '<div id="lista-resultados" class="r7-lista">' + htmlHistorial(historial) + '</div>' +
+                    '<div class="r7-estado-vacio" id="r7-h-vacio" hidden>' + icono('search-x', 28) +
+                      '<strong>Sin resultados para ese filtro</strong>' +
+                      '<span>Ajustá la búsqueda, la jornada o el estado.</span>' +
+                      '<button type="button" class="btn sec sm" data-r7-limpiar-h>' + icono('rotate-ccw', 15) + 'Limpiar filtros</button></div>' +
+                  '</section>') +
               '<section class="r7-panel r7-editor-panel" aria-label="Editor de resultado"><div id="panel-resultado"></div></section>' +
             '</div>' +
           '</div>';
 
         const panel = el.querySelector('#panel-resultado');
         const pintarPanel = () => {
-          const p = pendientes.find(x => x.id === Mod.partidoId);
-          panel.innerHTML = !p ? GL.vacio('No hay partidos pendientes en esta jornada.', 'check-check', null)
-            : (Mod.modo === 'manual' ? htmlManual(p) : htmlIA(p));
+          const lista = Mod.vista === 'historial' ? historial : pendientes;
+          const p = lista.find(x => x.id === Mod.partidoId) || null;
+          panel.innerHTML = !p
+            ? GL.vacio(Mod.vista === 'historial'
+                ? 'Todavía no hay resultados registrados. Cuando se cargue uno, aparecerá acá.'
+                : (!jn ? 'No hay jornada abierta. Abrí una desde Administración → Jornadas para cargar resultados.'
+                       : 'No hay partidos pendientes en esta jornada.'), 'check-check', null)
+            : (Mod.vista === 'historial' || Mod.modo === 'manual' ? htmlManual(p, Mod.vista === 'historial') : htmlIA(p));
           enlazarPanel(panel, p, pintarPanel);
           iniciarIconos();
         };
+        Mod._repintar = pintarPanel;
         pintarPanel();
 
+        el.querySelectorAll('[data-vista]').forEach(b => b.addEventListener('click', () => {
+          Mod.vista = b.dataset.vista;
+          Mod.partidoId = null; Mod.archivo = null; Mod.datosIA = null;
+          Mod.render(el);
+        }));
         el.querySelectorAll('[data-modo]').forEach(b => b.addEventListener('click', () => {
           Mod.modo = b.dataset.modo; Mod.datosIA = null; Mod.archivo = null; Mod.render(el);
         }));
-        el.querySelectorAll('[data-partido]').forEach(b => b.addEventListener('click', () => {
-          Mod.partidoId = b.dataset.partido; Mod.datosIA = null; Mod.archivo = null;
-          el.querySelectorAll('[data-partido]').forEach(x => x.classList.toggle('activo', x === b));
+        el.querySelectorAll('[data-partido],[data-resultado]').forEach(b => b.addEventListener('click', () => {
+          Mod.partidoId = b.dataset.partido || b.dataset.resultado;
+          Mod.archivo = null; Mod.datosIA = null;
+          el.querySelectorAll('[data-partido],[data-resultado]').forEach(x =>
+            x.classList.toggle('activo', x === b));
           pintarPanel();
         }));
-        enlazarFiltros(el);
-      } catch (e) { console.error(e); el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'los resultados'), null, 'los resultados'); }
+        if (Mod.vista === 'carga') enlazarFiltros(el);
+        else enlazarFiltrosHistorial(el);
+      } catch (e) {
+        console.error(e);
+        el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'los resultados'), null, 'los resultados');
+      }
       iniciarIconos();
     }
   };
+
+  /* Misma clave que el Cuadro de partidos: jornada|local|visitante. */
+  function deduplicar(lista) {
+    const vistos = new Set();
+    const partidos = [];
+    const duplicados = [];
+    (lista || []).forEach(p => {
+      const clave = [p.jornada, p.local_id, p.visitante_id].join('|');
+      if (vistos.has(clave)) { duplicados.push(p); return; }
+      vistos.add(clave);
+      partidos.push(p);
+    });
+    return { partidos, duplicados };
+  }
 
   function r7Kpi(valor, etiqueta, nota, ico, principal, progreso) {
     return '<article class="r7-kpi' + (principal ? ' principal' : '') + '">' +
@@ -124,6 +225,30 @@
           '<span style="width:' + Number(progreso || 0) + '%"></span></span>'
         : '') +
     '</article>';
+  }
+
+  function opcionesGrupo(partidos) {
+    return [...new Set(partidos.map(p => p.grupo_id).filter(Boolean))].map(id => {
+      const g = GL.grupo(id);
+      return '<option value="' + esc(id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</option>';
+    }).join('');
+  }
+
+  function opcionesGuardables(p) {
+    return Object.entries(ESTADOS_PARTIDO)
+      .filter(([k]) => ESTADOS_GUARDABLES.includes(k) || k === p.estado)
+      .map(([k, v]) => '<option value="' + k + '"' + (p.estado === k ? ' selected' : '') + '>' + v.label + '</option>').join('');
+  }
+
+  function opcionesJornada(partidos) {
+    return [...new Set(partidos.map(p => Number(p.jornada)).filter(Number.isFinite))]
+      .sort((a, b) => b - a)
+      .map(n => '<option value="' + n + '">Jornada ' + n + '</option>').join('');
+  }
+
+  function opcionesEstado(partidos) {
+    return [...new Set(partidos.map(p => p.estado).filter(Boolean))]
+      .map(k => '<option value="' + esc(k) + '">' + esc((ESTADOS_PARTIDO[k] || {}).label || k) + '</option>').join('');
   }
 
   function htmlLista(pendientes) {
@@ -145,6 +270,57 @@
             (cerrada ? GL.badge('Cerrada', 'red', 'lock') : GL.badge('Pendiente', 'neutral', 'clock')) + '</span>' +
           '<span class="r7-partido-nombres">' + local + ' <span>vs</span> ' + visita + '</span>' +
           '<span class="r7-partido-foot"><span>Resultado pendiente</span>' + icono('chevron-right', 16) + '</span>' +
+        '</button>';
+    }).join('') + '</div>';
+  }
+
+  function fechaPartido(p) {
+    const j = (GL.ctx.jornadas || []).find(x =>
+      Number(x.numero) === Number(p.jornada) && (!p.grupo_id || !x.grupo_id || x.grupo_id === p.grupo_id));
+    const valor = j && (j.fecha_inicio || j.fecha);
+    if (!valor) return 'Sin programación';
+    const fecha = new Date(valor);
+    if (Number.isNaN(fecha.getTime())) return 'Sin programación';
+    try {
+      return new Intl.DateTimeFormat('es-NI', {
+        timeZone: CONFIG.ZONA_REFERENCIA, day: '2-digit', month: 'short', year: 'numeric'
+      }).format(fecha);
+    } catch (e) {
+      return fecha.toISOString().slice(0, 10);
+    }
+  }
+
+  function esReciente(p) {
+    const valor = p.updated_at || p.created_at;
+    if (!valor) return false;
+    const instante = Date.parse(valor);
+    return Number.isFinite(instante) && (Date.now() - instante) <= DIAS_RECIENTES * 24 * 60 * 60 * 1000;
+  }
+
+  function htmlHistorial(partidos) {
+    if (!partidos.length) {
+      return '<div class="r7-vacio">' + icono('history', 28) +
+        '<strong>Todavía no hay resultados registrados</strong>' +
+        '<span>Cuando se cargue un marcador aparecerá acá con su jornada y su estado.</span></div>';
+    }
+    return '<div class="r7-lista-items">' + partidos.map(p => {
+      const res = GL.resultado(p);
+      const local = esc(GL.nombreJugador(p.local_id));
+      const visita = esc(GL.nombreJugador(p.visitante_id));
+      const cuando = esc(fechaPartido(p));
+      const estado = (ESTADOS_PARTIDO[p.estado] || ESTADOS_PARTIDO.pendiente).label;
+      const reciente = esReciente(p);
+      return '<button type="button" class="partido-card r7-partido r7-partido-h' + (p.id === Mod.partidoId ? ' activo' : '') + '"' +
+        ' data-resultado="' + esc(p.id) + '" data-r7-h-nombre="' + esc(local + ' ' + visita) + '"' +
+        ' data-r7-h-jornada="' + Number(p.jornada) + '" data-r7-h-grupo="' + esc(p.grupo_id) + '"' +
+        ' data-r7-h-estado="' + esc(p.estado) + '" data-r7-h-reciente="' + (reciente ? '1' : '0') + '"' +
+        (p.id === Mod.partidoId ? ' aria-current="true"' : '') + '>' +
+          '<span class="r7-partido-top"><span class="r7-partido-jornada">J' + Number(p.jornada) + ' · ' + esc(cuando) + '</span>' +
+            (Mod.corregidos.has(p.id) ? GL.badge('Corregido', 'gold', 'pencil')
+              : reciente ? GL.badge('Reciente', 'green', 'sparkles') : '') + '</span>' +
+          '<span class="r7-partido-nombres">' + local + ' <span>vs</span> ' + visita + '</span>' +
+          '<span class="r7-marcador-final" aria-label="Marcador">' + esc(res.texto) + '</span>' +
+          '<span class="r7-partido-foot"><span>' + esc(estado) + '</span>' + icono('pencil', 15) + '</span>' +
         '</button>';
     }).join('') + '</div>';
   }
@@ -190,34 +366,99 @@
     aplicar();
   }
 
-  function htmlManual(p) {
+  function enlazarFiltrosHistorial(cont) {
+    const buscar = cont.querySelector('#r7-h-buscar');
+    const jornada = cont.querySelector('#r7-h-jornada');
+    const grupo = cont.querySelector('#r7-h-grupo');
+    const estado = cont.querySelector('#r7-h-estado');
+    const recientes = cont.querySelector('#r7-h-recientes');
+    const lista = cont.querySelector('#lista-resultados');
+    if (!buscar || !jornada || !grupo || !estado || !recientes || !lista) return;
+    const contador = cont.querySelector('#r7-h-contador');
+    const vacio = cont.querySelector('#r7-h-vacio');
+    const tarjetas = [...lista.querySelectorAll('.r7-partido-h')];
+    const total = tarjetas.length;
+    const normalizar = texto => String(texto || '').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    const aplicar = () => {
+      const texto = normalizar(buscar.value.trim());
+      let visibles = 0;
+      tarjetas.forEach(tarjeta => {
+        const d = tarjeta.dataset;
+        const mostrar =
+          (!texto || normalizar(d.r7HNombre).includes(texto)) &&
+          (!jornada.value || d.r7HJornada === jornada.value) &&
+          (!grupo.value || d.r7HGrupo === grupo.value) &&
+          (!estado.value || d.r7HEstado === estado.value) &&
+          (!recientes.checked || d.r7HReciente === '1');
+        tarjeta.hidden = !mostrar;
+        if (mostrar) visibles++;
+      });
+      if (contador) {
+        contador.textContent = visibles + (visibles === 1 ? ' resultado' : ' resultados') +
+          (visibles !== total ? ' de ' + total : '');
+      }
+      if (vacio) vacio.hidden = !(total > 0 && visibles === 0);
+    };
+
+    [buscar, jornada, grupo, estado, recientes].forEach(el =>
+      el.addEventListener(el === buscar ? 'input' : 'change', aplicar));
+    cont.querySelectorAll('[data-r7-limpiar-h]').forEach(b => b.addEventListener('click', () => {
+      buscar.value = ''; jornada.value = ''; grupo.value = ''; estado.value = ''; recientes.checked = false;
+      aplicar();
+      buscar.focus();
+    }));
+    aplicar();
+  }
+
+  /* Un partido pendiente puede traer 0 en BD; no debe precargarse como 0-0. */
+  function valorInput(p, clave, mostrarCero) {
+    const valor = p && p[clave] !== null && p[clave] !== undefined ? p[clave] : '';
+    if (!mostrarCero && p && p.estado === 'pendiente' && Number(valor) === 0) return '';
+    return esc(valor);
+  }
+
+  function htmlManual(p, esCorreccion) {
     const cerrada = esCerrada(p);
     const local = esc(GL.nombreJugador(p.local_id));
     const visita = esc(GL.nombreJugador(p.visitante_id));
+    const anterior = GL.resultado(p);
+    const opciones = opcionesGuardables(p);
     return '<div class="r7-forma">' +
-      '<div class="r7-forma-cab"><div><span class="r7-forma-eyebrow">' + icono('keyboard', 14) + 'Modo manual</span>' +
-        '<h3>Resultado del encuentro</h3></div>' +
-        (cerrada ? GL.badge('Jornada cerrada', 'red', 'lock') : GL.badge('Editable', 'green', 'pencil')) + '</div>' +
+      '<div class="r7-forma-cab"><div><span class="r7-forma-eyebrow">' + icono(esCorreccion ? 'triangle-alert' : 'keyboard', 14) +
+        (esCorreccion ? 'Corrección' : 'Modo manual') + '</span>' +
+        '<h3>' + (esCorreccion ? 'Corregir resultado registrado' : 'Resultado del encuentro') + '</h3></div>' +
+        (cerrada ? GL.badge('Jornada cerrada', 'red', 'lock') : GL.badge(esCorreccion ? 'Corrección' : 'Editable', 'green', 'pencil')) + '</div>' +
+      (esCorreccion
+        ? '<div class="r7-aviso r7-aviso-correccion">' + icono('triangle-alert', 14) + '<span>' +
+            'Estás modificando <strong>' + local + ' vs ' + visita + '</strong> (J' + Number(p.jornada) + '). ' +
+            'Valor registrado: <strong>' + esc(anterior.texto) + '</strong> · ' + esc(anterior.estado.label) + '. ' +
+            'La corrección queda sujeta al motivo que indiques.'
+          + '</span></div>'
+        : '<p class="r7-aviso">' + icono('info', 14) +
+          'Partido seleccionado: <strong>' + local + ' vs ' + visita + '</strong> (J' + Number(p.jornada) + '). Confirmá antes de guardar.</p>') +
       (cerrada ? '<p class="r7-aviso">' + icono('info', 14) + 'Esta jornada está cerrada; no se puede editar el resultado.</p>' : '') +
       '<div class="r7-marcador">' +
         '<div class="r7-equipo"><span class="r7-equipo-rol">Local</span>' +
           '<strong class="r7-equipo-nombre">' + local + '</strong>' +
-          '<input class="input" type="number" min="0" max="99" id="g-local" value="' + (p.goles_local || 0) + '"' + (cerrada ? ' disabled' : '') + ' aria-label="Goles del local"></div>' +
+          '<input class="input" type="number" min="0" max="' + MAX_GOLES + '" step="1" inputmode="numeric" id="g-local" value="' +
+            valorInput(p, 'goles_local', esCorreccion) + '"' + (cerrada ? ' disabled' : '') + ' aria-label="Goles del local"></div>' +
         '<span class="r7-vs" aria-hidden="true">VS</span>' +
         '<div class="r7-equipo"><span class="r7-equipo-rol">Visitante</span>' +
           '<strong class="r7-equipo-nombre">' + visita + '</strong>' +
-          '<input class="input" type="number" min="0" max="99" id="g-visita" value="' + (p.goles_visitante || 0) + '"' + (cerrada ? ' disabled' : '') + ' aria-label="Goles del visitante"></div>' +
+          '<input class="input" type="number" min="0" max="' + MAX_GOLES + '" step="1" inputmode="numeric" id="g-visita" value="' +
+            valorInput(p, 'goles_visitante', esCorreccion) + '"' + (cerrada ? ' disabled' : '') + ' aria-label="Goles del visitante"></div>' +
       '</div>' +
       '<label class="r7-campo"><span>Estado del partido</span>' +
-        '<select class="input" id="estado"' + (cerrada ? ' disabled' : '') + '>' +
-          Object.entries(ESTADOS_PARTIDO).filter(([k]) => k !== 'pendiente').map(([k, v]) =>
-            '<option value="' + k + '"' + (p.estado === k ? ' selected' : '') + '>' + v.label + '</option>').join('') +
-        '</select></label>' +
-      (p.estado && p.estado !== 'pendiente'
-        ? '<label class="r7-campo"><span>Motivo de corrección</span>' +
+        '<select class="input" id="estado"' + (cerrada ? ' disabled' : '') + '>' + opciones + '</select></label>' +
+      (esCorreccion
+        ? '<label class="r7-campo"><span>Motivo de corrección (obligatorio)</span>' +
             '<input class="input" type="text" id="motivo" maxlength="160" placeholder="Describe qué se corrigió" required>' +
           '</label>'
         : '') +
+      '<p class="r7-pista">Estados disponibles para esta RPC: Jugado, Walkover local, Walkover vis. y Doble ausencia. ' +
+        'Las resoluciones por expulsión se registran al cerrar la jornada.</p>' +
       '<details class="r7-detalles"><summary>' + icono('chart-no-axes-column', 14) + ' Estadísticas avanzadas (opcional)</summary>' +
         '<div class="r7-stats-grid">' + camposStats(p, cerrada) + '</div></details>' +
       (!cerrada ? (
@@ -235,7 +476,7 @@
       ) : '') +
       '<div class="r7-acciones">' +
         '<button type="button" class="btn" id="guardar"' + (cerrada ? ' disabled' : '') + '>' +
-          icono('save', 18) + 'Confirmar y Guardar</button>' +
+          icono('save', 18) + (esCorreccion ? 'Confirmar corrección' : 'Confirmar y Guardar') + '</button>' +
       '</div>' +
     '</div>';
   }
@@ -251,8 +492,8 @@
     return campos.map(([k, label]) =>
       '<label class="r7-campo r7-stat"><span>' + label + '</span>' +
         '<span class="r7-input-ico">' +
-          '<input class="input" type="number" min="0" max="100" id="' + k + '" value="' +
-          (d[k] !== undefined ? d[k] : (p[k] !== undefined ? p[k] : '')) + '"' + (cerrada ? ' disabled' : '') + '>' +
+          '<input class="input" type="number" min="0" max="100" step="1" inputmode="numeric" id="' + k + '" value="' +
+          (d[k] !== undefined && d[k] !== null ? esc(d[k]) : valorInput(p, k)) + '"' + (cerrada ? ' disabled' : '') + '>' +
           icono('pencil', 14) +
         '</span></label>').join('');
   }
@@ -277,15 +518,21 @@
       return '<div class="r7-forma"><div class="r7-forma-cab"><div>' +
         '<span class="r7-forma-eyebrow">' + icono('sparkles', 14) + 'Modo IA</span><h3>Datos detectados</h3></div>' +
         GL.badge('Revisá antes de guardar', 'gold', 'triangle-alert') + '</div>' +
+        '<p class="r7-aviso">Partido: <strong>' + esc(GL.nombreJugador(p.local_id)) + ' vs ' +
+          esc(GL.nombreJugador(p.visitante_id)) + '</strong> (J' + Number(p.jornada) + ').</p>' +
         '<div class="r7-marcador r7-marcador-ia">' +
           '<div class="r7-equipo"><span class="r7-equipo-rol">Local</span>' +
             '<strong class="r7-equipo-nombre">' + esc(GL.nombreJugador(p.local_id)) + '</strong>' +
-            '<input class="input" type="number" min="0" id="g-local" value="' + (d.goles_local || 0) + '" aria-label="Goles del local"></div>' +
+            '<input class="input" type="number" min="0" max="' + MAX_GOLES + '" step="1" inputmode="numeric" id="g-local" value="' +
+              (d.goles_local === undefined || d.goles_local === null ? '' : esc(d.goles_local)) + '" aria-label="Goles del local"></div>' +
           '<span class="r7-vs" aria-hidden="true">VS</span>' +
           '<div class="r7-equipo"><span class="r7-equipo-rol">Visitante</span>' +
             '<strong class="r7-equipo-nombre">' + esc(GL.nombreJugador(p.visitante_id)) + '</strong>' +
-            '<input class="input" type="number" min="0" id="g-visita" value="' + (d.goles_visitante || 0) + '" aria-label="Goles del visitante"></div>' +
+            '<input class="input" type="number" min="0" max="' + MAX_GOLES + '" step="1" inputmode="numeric" id="g-visita" value="' +
+              (d.goles_visitante === undefined || d.goles_visitante === null ? '' : esc(d.goles_visitante)) + '" aria-label="Goles del visitante"></div>' +
         '</div>' +
+        '<label class="r7-campo"><span>Estado del partido</span>' +
+          '<select class="input" id="estado" aria-label="Estado del partido">' + opcionesGuardables(p) + '</select></label>' +
         '<details class="r7-detalles" open><summary>' + icono('chart-no-axes-column', 14) + ' Estadísticas detectadas</summary>' +
           '<div class="r7-stats-grid">' + camposStats(p, false, d) + '</div></details>' +
         '<div class="r7-acciones">' +
@@ -317,26 +564,44 @@
     return !!(j && j.estado === 'cerrada');
   }
 
+  /* Adjuntar la captura no debe repintar el formulario: se perdería el
+     marcador y las estadísticas que el administrador ya escribió. */
+  function mostrarArchivoManual(zona, file) {
+    zona.innerHTML = icono('image-check', 20) + ' <span class="r7-dropzone-texto">' + esc(file.name) + '</span>';
+    iniciarIconos();
+  }
+
   function enlazarPanel(panel, p, actualizarPanel) {
     const g = s => panel.querySelector(s);
 
-    // Dropzone de captura en modo manual
     const dropzoneManual = g('#dropzone-manual');
     const archivoManual  = g('#archivo-manual');
     if (dropzoneManual && archivoManual) {
       dropzoneManual.addEventListener('click', () => archivoManual.click());
-      dropzoneManual.addEventListener('dragover', e => { e.preventDefault(); dropzoneManual.style.borderColor = 'var(--accent-gold)'; });
-      dropzoneManual.addEventListener('dragleave', () => { dropzoneManual.style.borderColor = 'var(--border)'; });
+      dropzoneManual.addEventListener('dragover', e => {
+        e.preventDefault(); dropzoneManual.style.borderColor = 'var(--gl-brand-ring)';
+      });
+      dropzoneManual.addEventListener('dragleave', () => { dropzoneManual.style.borderColor = ''; });
       dropzoneManual.addEventListener('drop', e => {
-        e.preventDefault();
-        dropzoneManual.style.borderColor = 'var(--border)';
+        e.preventDefault(); dropzoneManual.style.borderColor = '';
         const f = e.dataTransfer.files[0];
-        if (f && ['image/jpeg', 'image/png'].includes(f.type)) { Mod.archivo = f; actualizarPanel(); }
-        else GL.notificar('Solo se aceptan JPG o PNG.', 'advertencia');
+        if (f && ['image/jpeg', 'image/png'].includes(f.type) && f.size <= CONFIG.MAX_CAPTURA_BYTES) {
+          Mod.archivo = f;
+          mostrarArchivoManual(dropzoneManual, f);
+        } else {
+          GL.notificar('Solo se aceptan JPG o PNG de hasta 5 MB.', 'advertencia');
+        }
       });
       archivoManual.addEventListener('change', () => {
         const f = archivoManual.files[0];
-        if (f) { Mod.archivo = f; actualizarPanel(); }
+        if (!f) return;
+        if (!['image/jpeg', 'image/png'].includes(f.type) || f.size > CONFIG.MAX_CAPTURA_BYTES) {
+          GL.notificar('Usá una imagen JPG o PNG de hasta 5 MB.', 'advertencia');
+          archivoManual.value = '';
+          return;
+        }
+        Mod.archivo = f;
+        mostrarArchivoManual(dropzoneManual, f);
       });
     }
 
@@ -344,41 +609,43 @@
     if (selEstado) selEstado.addEventListener('change', () => {
       const v = selEstado.value, gl = g('#g-local'), gv = g('#g-visita');
       if (!gl || !gv) return;
-      if (v === 'walkover_local') { gl.value = 3; gv.value = 0; }
-      if (v === 'walkover_visitante') { gl.value = 0; gv.value = 3; }
-      if (v === 'doble_ausencia') { gl.value = 0; gv.value = 0; }
-      if (v === 'expulsion_local') { gl.value = 1; gv.value = 0; }
-      if (v === 'expulsion_visitante') { gl.value = 0; gv.value = 1; }
+      if (!ESTADOS_CANONICOS.includes(v)) return;
+      const r = GL.resultado({ estado: v });
+      gl.value = r.gf; gv.value = r.gc;
     });
 
     const drop = g('#dropzone'), input = g('#archivo');
     if (drop && input) {
       const elegir = () => input.click();
       drop.addEventListener('click', e => { if (e.target.id !== 'preview') elegir(); });
-      ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('arrastrando'); }));
-      ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('arrastrando'); }));
-      drop.addEventListener('drop', e => { if (e.dataTransfer.files[0]) procesarArchivo(e.dataTransfer.files[0], panel, p); });
-      input.addEventListener('change', () => { if (input.files[0]) procesarArchivo(input.files[0], panel, p); });
+      ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => {
+        e.preventDefault(); drop.classList.add('arrastrando');
+      }));
+      ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => {
+        e.preventDefault(); drop.classList.remove('arrastrando');
+      }));
+      drop.addEventListener('drop', e => { if (e.dataTransfer.files[0]) procesarArchivo(e.dataTransfer.files[0]); });
+      input.addEventListener('change', () => { if (input.files[0]) procesarArchivo(input.files[0]); });
       const btnElegir = g('#elegir-captura');
-      if (btnElegir) btnElegir.addEventListener('click', () => input.click());
+      if (btnElegir) btnElegir.addEventListener('click', elegir);
     }
     const analizar = g('#analizar');
     if (analizar) analizar.addEventListener('click', () => GL.conAccion(analizar, 'analizar', () => analizarCaptura(p)));
     const rehacer = g('#re-hacer');
-    if (rehacer) rehacer.addEventListener('click', () => { Mod.datosIA = null; Mod.archivo = null; Mod.render(panel.closest('#vista') || document.getElementById('vista')); });
+    if (rehacer) rehacer.addEventListener('click', () => {
+      Mod.datosIA = null; Mod.archivo = null;
+      if (Mod._repintar) Mod._repintar();
+    });
     const guardar = g('#guardar');
-    if (guardar) guardar.addEventListener('click', () => GL.conAccion(guardar, 'guardar', () => guardarResultado(p, panel)));
+    if (guardar) guardar.addEventListener('click', () => guardarResultado(p, panel));
   }
 
-  function procesarArchivo(file, panel, p) {
+  function procesarArchivo(file) {
     const ok = ['image/jpeg', 'image/png'].includes(file.type);
     if (!ok) { GL.notificar('Formato no admitido. Usá JPG o PNG.', 'error'); return; }
     if (file.size > CONFIG.MAX_CAPTURA_BYTES) { GL.notificar('La imagen supera los 5 MB.', 'error'); return; }
     Mod.archivo = file;
-    if (Mod.analizando === false) {
-      // Vuelve a pintar el panel con la vista previa y el botón de análisis.
-      Mod.render(document.getElementById('vista'));
-    }
+    if (Mod._repintar) Mod._repintar();
   }
 
   function aBase64(file) {
@@ -391,7 +658,7 @@
   }
 
   async function analizarCaptura(p) {
-    if (!Mod.archivo) return;
+    if (!Mod.archivo || Mod.analizando) return;
     Mod.analizando = true;
     const panel = document.getElementById('panel-resultado');
     GL.estado(panel, 'cargando', {
@@ -417,142 +684,282 @@
       GL.notificar(GL.mensaje(e, 'analizar', 'la captura') + ' Puedes introducir el resultado manualmente.', 'error');
     } finally {
       Mod.analizando = false;
-      Mod.render(document.getElementById('vista'));
+      if (Mod._repintar) Mod._repintar();
     }
   }
 
-  // ── Validación de estadísticas en frontend ──────────────────
+  /* ── Validación estricta (funciones puras, expuestas para pruebas) ──── */
+  function enteroNoNegativo(valor, etiqueta, max) {
+    const texto = String(valor === null || valor === undefined ? '' : valor).trim();
+    if (texto === '') return { ok: false, error: etiqueta + ' no puede estar vacío.' };
+    if (!/^\d+$/.test(texto)) {
+      return { ok: false, error: etiqueta + ' debe ser un número entero no negativo (sin decimales ni signos).' };
+    }
+    const numero = Number(texto);
+    if (!Number.isSafeInteger(numero)) return { ok: false, error: etiqueta + ' no es un número válido.' };
+    if (max !== undefined && numero > max) return { ok: false, error: etiqueta + ' no puede superar ' + max + '.' };
+    return { ok: true, valor: numero };
+  }
+
+  function validarMarcador(local, visita, estado) {
+    if (ESTADOS_CANONICOS.includes(estado)) {
+      const r = GL.resultado({ estado });
+      return { ok: true, golesLocal: r.gf, golesVisita: r.gc };
+    }
+    const l = enteroNoNegativo(local, 'Goles del local', MAX_GOLES);
+    if (!l.ok) return l;
+    const v = enteroNoNegativo(visita, 'Goles del visitante', MAX_GOLES);
+    if (!v.ok) return v;
+    return { ok: true, golesLocal: l.valor, golesVisita: v.valor };
+  }
+
+  function verificarPartido(p, partidosActuales, esCorreccion) {
+    const lista = partidosActuales || [];
+    const actual = lista.find(x => x.id === p.id);
+    if (!actual) return 'El partido ya no existe en el torneo. Recargá la vista.';
+    if (!actual.local_id || !actual.visitante_id || actual.local_id === actual.visitante_id) {
+      return 'Los participantes del partido no son válidos.';
+    }
+    if (actual.local_id !== p.local_id || actual.visitante_id !== p.visitante_id) {
+      return 'Los participantes cambiaron desde que abriste el formulario. Recargá la vista.';
+    }
+    const clave = [p.jornada, p.local_id, p.visitante_id].join('|');
+    if (lista.filter(x => [x.jornada, x.local_id, x.visitante_id].join('|') === clave).length > 1) {
+      return 'Hay partidos duplicados para ese cruce. No se guardó nada para no repetir el resultado.';
+    }
+    const jugadores = (GL.ctx && GL.ctx.jugadores) || [];
+    if (jugadores.length && (!jugadores.some(j => j.id === actual.local_id) ||
+        !jugadores.some(j => j.id === actual.visitante_id))) {
+      return 'Los participantes no pertenecen al torneo activo.';
+    }
+    if (esCorreccion && actual.estado === 'pendiente') {
+      return 'El partido volvió a pendiente. No se puede corregir un resultado inexistente.';
+    }
+    if (!esCorreccion && actual.estado !== 'pendiente') {
+      return 'Este partido ya tiene resultado. Usá el historial para corregirlo y no duplicarlo.';
+    }
+    return null;
+  }
+
+  function resumenCambio(p, datos, esCorreccion) {
+    const local = GL.nombreJugador(p.local_id);
+    const visita = GL.nombreJugador(p.visitante_id);
+    const anterior = GL.resultado(p);
+    return (esCorreccion ? 'CORRECCIÓN DE RESULTADO' : 'NUEVO RESULTADO') + '\n\n' +
+      'Partido: ' + local + ' vs ' + visita + ' (J' + Number(p.jornada) + ')\n' +
+      (esCorreccion ? 'Valor actual: ' + anterior.texto + ' · ' + anterior.estado.label + '\n' : '') +
+      'Nuevo marcador: ' + datos.golesLocal + ' - ' + datos.golesVisita + '\n' +
+      'Estado: ' + ((ESTADOS_PARTIDO[datos.estado] || {}).label || datos.estado) + '\n' +
+      (esCorreccion ? 'Motivo: ' + datos.motivo + '\n' : '') +
+      '\n¿Confirmás este guardado?';
+  }
+
+  async function confirmarCambio(resumen) {
+    if (typeof GL !== 'undefined' && typeof GL.confirmar === 'function') {
+      return GL.confirmar(resumen, 'Confirmar resultado', 'Guardar resultado');
+    }
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      return window.confirm(resumen);
+    }
+    return true;
+  }
+
+  function respuestaConfirmada(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error('La base de datos no confirmó el guardado. No se informó éxito.');
+    }
+    if (data.error || data.ok === false) {
+      throw new Error(String(data.error || 'El servidor rechazó el resultado.'));
+    }
+    return data;
+  }
+
+  /* Validación de estadísticas opcionales: mismas reglas que el marcador. */
   function validarStats(panel, estado) {
-    // En walkover/doble ausencia no hay stats que validar
-    if (estado && estado !== 'jugado') return null;
-
-    const n = id => { const el = panel.querySelector('#' + id); return el && el.value !== '' ? Number(el.value) : null; };
-
-    const tL  = n('tiros_local'),        tpL = n('tiros_puerta_local');
-    const tV  = n('tiros_visitante'),    tpV = n('tiros_puerta_visitante');
-    const posL = n('posesion_local'),    posV = n('posesion_visitante');
-    const paL  = n('pase_local'),        paV  = n('pase_visitante');
-
-    if (tL  !== null && tL  < 0) return 'Tiros local no puede ser negativo.';
-    if (tV  !== null && tV  < 0) return 'Tiros visitante no puede ser negativo.';
-    if (tpL !== null && tpL < 0) return 'Tiros a puerta local no puede ser negativo.';
-    if (tpV !== null && tpV < 0) return 'Tiros a puerta visitante no puede ser negativo.';
-    if (tL  !== null && tpL !== null && tpL > tL)  return 'Tiros a puerta local no puede superar los tiros totales.';
-    if (tV  !== null && tpV !== null && tpV > tV)  return 'Tiros a puerta visitante no puede superar los tiros totales.';
-    if (posL !== null && (posL < 0 || posL > 100)) return 'Posesión local debe estar entre 0 y 100.';
-    if (posV !== null && (posV < 0 || posV > 100)) return 'Posesión visitante debe estar entre 0 y 100.';
-    if (posL !== null && posV !== null && posL + posV !== 100) return 'La posesión de ambos equipos debe sumar 100.';
-    if (paL  !== null && (paL  < 0 || paL  > 100)) return 'Precisión de pase local debe estar entre 0 y 100.';
-    if (paV  !== null && (paV  < 0 || paV  > 100)) return 'Precisión de pase visitante debe estar entre 0 y 100.';
-
-    return null; // sin errores
+    if (estado !== 'jugado') return null;
+    const campos = {
+      tiros_local: 'Tiros local', tiros_puerta_local: 'Tiros a puerta local',
+      posesion_local: 'Posesión local', pase_local: 'Precisión de pase local',
+      tiros_visitante: 'Tiros visita', tiros_puerta_visitante: 'Tiros a puerta visita',
+      posesion_visitante: 'Posesión visita', pase_visitante: 'Precisión de pase visita'
+    };
+    const valores = {};
+    for (const [id, etiqueta] of Object.entries(campos)) {
+      const el = panel.querySelector('#' + id);
+      if (!el || String(el.value).trim() === '') { valores[id] = null; continue; }
+      const r = enteroNoNegativo(el.value, etiqueta, 100);
+      if (!r.ok) return r.error;
+      valores[id] = r.valor;
+    }
+    if (valores.tiros_puerta_local !== null && valores.tiros_local !== null &&
+        valores.tiros_puerta_local > valores.tiros_local) {
+      return 'Tiros a puerta local no puede superar los tiros totales.';
+    }
+    if (valores.tiros_puerta_visitante !== null && valores.tiros_visitante !== null &&
+        valores.tiros_puerta_visitante > valores.tiros_visitante) {
+      return 'Tiros a puerta visitante no puede superar los tiros totales.';
+    }
+    if (valores.posesion_local !== null && valores.posesion_visitante !== null &&
+        valores.posesion_local + valores.posesion_visitante !== 100) {
+      return 'La posesión de ambos equipos debe sumar 100.';
+    }
+    return null;
   }
 
   async function guardarResultado(p, panel) {
-    const val = id => panel.querySelector(id) ? Number(panel.querySelector(id).value) || 0 : 0;
-    const camposStats = ['tiros_local', 'tiros_puerta_local', 'posesion_local', 'pase_local',
-      'tiros_visitante', 'tiros_puerta_visitante', 'posesion_visitante', 'pase_visitante'];
-
-    let golesLocal = val('#g-local'), golesVisita = val('#g-visita');
-    const estado = panel.querySelector('#estado') ? panel.querySelector('#estado').value : 'jugado';
-    const esCorreccion = !!p.estado && p.estado !== 'pendiente';
-    const motivoEl = panel.querySelector('#motivo');
-    const motivo = esCorreccion ? String((motivoEl && motivoEl.value) || '').trim() : null;
-
-    if (esCorreccion && !motivo) {
-      GL.notificar('Indica el motivo de la corrección antes de guardar.', 'advertencia'); return;
-    }
-
-    if (GL.esResolucionExpulsion({ estado })) {
-      const r = GL.resultado({ estado });
-      golesLocal = r.gf; golesVisita = r.gc;
-    }
-
-    // ── Validaciones frontend ────────────────────────────────
-    if (!Number.isInteger(golesLocal) || !Number.isInteger(golesVisita) ||
-        golesLocal < 0 || golesVisita < 0 || golesLocal > 99 || golesVisita > 99) {
-      GL.notificar('Los goles deben ser enteros entre 0 y 99.', 'advertencia'); return;
-    }
-
-    const errStats = validarStats(panel, estado);
-    if (errStats) { GL.notificar(errStats, 'advertencia'); return; }
-
-    // Captura obligatoria en partidos normales (modo manual sin datos de IA)
-    if (estado === 'jugado' && !Mod.archivo && !p.captura_url && !Mod.datosIA) {
-      GL.notificar('La captura es obligatoria para validar el resultado. Subí la imagen del partido.', 'advertencia');
+    if (Mod.guardando) return;
+    if (!GL.esAdmin()) {
+      GL.notificar('Solo el administrador puede registrar o corregir resultados.', 'error');
       return;
     }
 
+    /* El bloqueo se activa antes del primer await: dos clics rápidos o dos
+       pestañas del mismo formulario no pueden alcanzar la RPC dos veces. */
+    Mod.guardando = true;
     const btn = panel.querySelector('#guardar');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Guardando…'; }
+    if (btn) btn.disabled = true;
 
     try {
-      // ── Subir captura primero si hay archivo ─────────────
+      const esCorreccion = !!p && !!p.estado && p.estado !== 'pendiente';
+      const selEstado = panel.querySelector('#estado');
+      const estado = selEstado ? selEstado.value : 'jugado';
+      if (!ESTADOS_GUARDABLES.includes(estado)) {
+        GL.notificar('Ese estado no puede guardarse desde Resultados. Las expulsiones se registran al cerrar la jornada.', 'advertencia');
+        return;
+      }
+
+      const motivoEl = panel.querySelector('#motivo');
+      const motivo = esCorreccion ? String((motivoEl && motivoEl.value) || '').trim() : null;
+      if (esCorreccion && !motivo) {
+        GL.notificar('Indica el motivo de la corrección antes de guardar.', 'advertencia');
+        return;
+      }
+
+      const valor = selector => {
+        const el = panel.querySelector(selector);
+        return el ? el.value : '';
+      };
+      const marcador = validarMarcador(valor('#g-local'), valor('#g-visita'), estado);
+      if (!marcador.ok) { GL.notificar(marcador.error, 'advertencia'); return; }
+
+      const errStats = validarStats(panel, estado);
+      if (errStats) { GL.notificar(errStats, 'advertencia'); return; }
+
+      if (estado === 'jugado' && !Mod.archivo && !p.captura_url && !Mod.datosIA) {
+        GL.notificar('La captura es obligatoria para validar el resultado. Subí la imagen del partido.', 'advertencia');
+        return;
+      }
+
+      /* Releer el partido justo antes de escribir: evita duplicados y carreras. */
+      let actuales = [];
+      try {
+        actuales = await GL.partidos({ torneo_id: GL.torneoId() });
+      } catch (e) {
+        GL.notificar('No se pudo verificar el partido antes de guardar. No se realizó ningún cambio.', 'error');
+        return;
+      }
+      const problema = verificarPartido(p, actuales, esCorreccion);
+      if (problema) { GL.notificar(problema, 'advertencia'); return; }
+
+      const datos = {
+        golesLocal: marcador.golesLocal, golesVisita: marcador.golesVisita,
+        estado, motivo
+      };
+      if (!(await confirmarCambio(resumenCambio(p, datos, esCorreccion)))) {
+        GL.notificar('Guardado cancelado. No se modificó ningún dato.', 'info');
+        return;
+      }
+
+      if (btn) btn.innerHTML = '<span class="spinner"></span>Guardando…';
       let capturaUrl = p.captura_url || null;
       if (Mod.archivo) {
-        if (!['image/jpeg', 'image/png'].includes(Mod.archivo.type))
+        if (!['image/jpeg', 'image/png'].includes(Mod.archivo.type)) {
           throw new Error('Solo se aceptan imágenes JPG o PNG.');
-        if (Mod.archivo.size > 5 * 1024 * 1024)
+        }
+        if (Mod.archivo.size > CONFIG.MAX_CAPTURA_BYTES) {
           throw new Error('La captura no puede superar 5 MB.');
-        const ext  = Mod.archivo.type === 'image/png' ? 'png' : 'jpg';
-        const ruta = GL.torneo().id + '/' + p.id + '-' + Date.now() + '.' + ext;
-        const up   = await sb.storage.from(CONFIG.BUCKET_CAPTURAS).upload(ruta, Mod.archivo,
+        }
+        const ext = Mod.archivo.type === 'image/png' ? 'png' : 'jpg';
+        const ruta = GL.torneoId() + '/' + p.id + '-' + Date.now() + '.' + ext;
+        const up = await sb.storage.from(CONFIG.BUCKET_CAPTURAS).upload(ruta, Mod.archivo,
           { upsert: true, contentType: Mod.archivo.type });
         if (up.error) throw new Error('No se pudo subir la captura: ' + up.error.message);
         capturaUrl = sb.storage.from(CONFIG.BUCKET_CAPTURAS).getPublicUrl(ruta).data.publicUrl;
       }
 
-      // ── Construir objeto de stats ────────────────────────
       const stats = {};
-      camposStats.forEach(c => {
+      ['tiros_local', 'tiros_puerta_local', 'posesion_local', 'pase_local',
+       'tiros_visitante', 'tiros_puerta_visitante', 'posesion_visitante', 'pase_visitante'].forEach(c => {
         const el = panel.querySelector('#' + c);
-        stats[c] = (el && el.value !== '') ? Number(el.value) : null;
+        stats[c] = (el && String(el.value).trim() !== '') ? Number(el.value) : null;
       });
 
-      // ── Llamar al RPC transaccional ──────────────────────
       const user = (await sb.auth.getUser()).data.user;
       const { data, error } = await sb.rpc('gl_guardar_resultado', {
         p_partido_id:      p.id,
         p_torneo_id:       GL.torneoId(),
-        p_goles_local:     golesLocal,
-        p_goles_visitante: golesVisita,
+        p_goles_local:     marcador.golesLocal,
+        p_goles_visitante: marcador.golesVisita,
         p_estado:          estado,
         p_captura_url:     capturaUrl,
+        /* El wrapper endurecido ignora este valor y usa auth.uid(); se envía
+           únicamente por compatibilidad con despliegues anteriores. */
         p_ingresado_por:   user ? user.id : null,
-        p_motivo:          motivo, // null = ingreso inicial; texto = corrección con motivo
+        p_motivo:          motivo,
         p_stats:           stats
       });
 
-      if (error) throw new Error(error.message);
-      if (data && !data.ok) throw new Error(data.error);
+      if (error) throw new Error(error.message || 'El servidor no confirmó el guardado.');
+      respuestaConfirmada(data);
 
-      // ── Auditoría ────────────────────────────────────────
-      GL.auditoria && GL.auditoria.registrar(
-        data.es_correccion ? 'resultado_corregido' : 'resultado_ingresado',
-        'partido', p.id,
-        {
-          local:            GL.nombreJugador(p.local_id),
-          visitante:        GL.nombreJugador(p.visitante_id),
-          goles_local:      golesLocal,
-          goles_visitante:  golesVisita,
-          estado,
-          jornada:          p.jornada,
-          anterior:         data.anterior || null,
-          nuevo:            golesLocal + '-' + golesVisita,
-          captura:          !!capturaUrl
+      /* La auditoría es complementaria: el RPC ya registra motivo e identidad.
+         Un fallo aquí no debe convertir un guardado real en error visible. */
+      try {
+        if (GL.auditoria && GL.auditoria.registrar) {
+          await GL.auditoria.registrar(esCorreccion ? 'resultado_corregido' : 'resultado_ingresado',
+            'partido', p.id, {
+              local: GL.nombreJugador(p.local_id),
+              visitante: GL.nombreJugador(p.visitante_id),
+              goles_local: marcador.golesLocal,
+              goles_visitante: marcador.golesVisita,
+              estado,
+              jornada: p.jornada,
+              anterior: esCorreccion ? GL.resultado(p).texto : null,
+              nuevo: marcador.golesLocal + '-' + marcador.golesVisita,
+              motivo: motivo || null,
+              captura: !!capturaUrl
+            });
         }
-      );
+      } catch (e) {
+        console.warn('Auditoría de resultado no registrada:', e);
+      }
 
-      GL.notificar('Resultado guardado y tabla actualizada.', 'exito');
+      if (esCorreccion) Mod.corregidos.add(p.id);
+      GL.notificar(esCorreccion
+        ? 'Corrección guardada. Tabla, estadísticas y cuadro actualizados.'
+        : 'Resultado registrado. Tabla, estadísticas y cuadro actualizados.', 'exito');
       Mod.partidoId = null; Mod.archivo = null; Mod.datosIA = null;
       await Mod.render(document.getElementById('vista'));
-
     } catch (e) {
       console.error(e);
       GL.notificar(GL.mensaje(e, 'guardar', 'los resultados'), 'error');
+    } finally {
+      Mod.guardando = false;
       if (btn) { btn.disabled = false; btn.innerHTML = icono('save', 18) + 'Confirmar y Guardar'; }
     }
   }
+
+  /* API pura para pruebas unitarias: sin DOM, sin Supabase y sin efectos. */
+  Mod.enteroNoNegativo = enteroNoNegativo;
+  Mod.validarMarcador = validarMarcador;
+  Mod.verificarPartido = verificarPartido;
+  Mod.deduplicar = deduplicar;
+  Mod.resumenCambio = resumenCambio;
+  Mod.confirmarCambio = confirmarCambio;
+  Mod.respuestaConfirmada = respuestaConfirmada;
+  Mod.validarStats = validarStats;
+  Mod.guardarResultado = guardarResultado;
+  Mod.estadosGuardables = ESTADOS_GUARDABLES.slice();
 
   Modulos.resultados = Mod;
 })();

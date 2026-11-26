@@ -55,6 +55,17 @@ test('navegación visible: “Cuadro de partidos” sustituye a “Fixture”', 
   expect(texto).not.toContain('Fixture');
 });
 
+test('diseño responsive: sin desbordamiento horizontal en la vista pública', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('#sidebar');
+  await page.waitForLoadState('networkidle').catch(() => {});
+  const medidas = await page.evaluate(() => ({
+    documento: document.documentElement.scrollWidth,
+    ventana: window.innerWidth
+  }));
+  expect(medidas.documento).toBeLessThanOrEqual(medidas.ventana + 1);
+});
+
 test('accesibilidad: sin violaciones críticas', async ({ page }) => {
   test.skip(!EMAIL || !CLAVE, 'Faltan credenciales de administrador en el entorno');
   await entrar(page);

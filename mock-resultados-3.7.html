@@ -103,6 +103,7 @@
       badge:function(texto,tono,ico){return '<span class="badge '+esc(tono||'neutral')+'">'+(ico?icono(ico,14):'')+esc(texto)+'</span>'},
       asegurarAdmin:function(){return Promise.resolve(true)},
       esAdmin:function(){return true},esSuperAdmin:function(){return true},
+      confirmar:function(){return Promise.resolve(true)},
       conAccion:function(btn,nombre,fn){try{return fn()}catch(e){console.error(e);throw e}},
       invalidar:function(){},
       cargarContexto:function(){if(modo==='carga')return esperar(1400);return Promise.resolve(this.ctx)},
@@ -112,7 +113,11 @@
       grupo:function(id){return G[id]||null},letraGrupo:function(g){var n=String((g&&g.nombre)||'').match(/[A-Za-z]$/);return n?n[0].toUpperCase():'A'},
       jugador:function(id){return J[id]||null},nombreJugador:function(id){var j=J[id];return j?j.nombre_usuario:'Por definir'},
       esResolucionExpulsion:function(o){return String(o.estado||'').indexOf('expulsion')===0},
-      resultado:function(o){return o.estado==='expulsion_local'?{gf:1,gc:0}:{gf:0,gc:1}},
+      resultado:function(o){var e=o&&o.estado,gf=Number(o&&o.goles_local)||0,gc=Number(o&&o.goles_visitante)||0;
+        if(e==='walkover_local'){gf=3;gc=0}if(e==='walkover_visitante'){gf=0;gc=3}
+        if(e==='doble_ausencia'){gf=0;gc=0}if(e==='expulsion_local'){gf=1;gc=0}
+        if(e==='expulsion_visitante'){gf=0;gc=1}
+        return {gf:gf,gc:gc,pendiente:e==='pendiente',texto:e==='pendiente'?'—':gf+' - '+gc,estado:ESTADOS_PARTIDO[e]||ESTADOS_PARTIDO.pendiente}},
       auditoria:{registrar:function(tipo,entidad,id,datos){window.__audit.push({tipo:tipo,entidad:entidad,id:id,datos:datos})}}
     };
   </script>

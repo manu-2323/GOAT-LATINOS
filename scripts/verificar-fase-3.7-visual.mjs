@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { Buffer } from 'node:buffer';
 
 const base = 'file:///C:/Users/manue/AppData/Local/Temp/opencode/GOAT-LATINOS-deploy';
-const out = 'docs/capturas-fase-3.7';
+const out = 'docs/capturas-fase-3.15';
 fs.mkdirSync(out, { recursive: true });
 
 const PNG = Buffer.from(
@@ -20,6 +20,7 @@ const resultados = {
   capturas: [],
   responsive: [],
   filtros: null,
+  historial: null,
   formulario: null,
   ia: null,
   estados: null,
@@ -122,6 +123,7 @@ for (const width of [320, 375, 390, 430, 768, 1024, 1366, 1920]) {
   resultados.responsive.push({ width, ...(await metricas(page)) });
   if (width === 1366) await captura(page, 'escritorio');
   if (width === 390) await captura(page, 'movil');
+  if (width === 1920) await captura(page, 'ancho-1920');
   await page.close();
 }
 
@@ -255,6 +257,27 @@ for (const width of [320, 375, 390, 430, 768, 1024, 1366, 1920]) {
   await reduced.close();
 }
 
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await abrir(page, 390, 844);
+  await page.locator('[data-vista="historial"]').click();
+  await page.waitForSelector('#lista-resultados .r7-partido-h');
+  const total = await page.locator('#lista-resultados .r7-partido-h:not([hidden])').count();
+  await captura(page, 'historial-movil');
+  await page.locator('#r7-h-jornada').selectOption('7');
+  await page.locator('#r7-h-estado').selectOption('jugado');
+  const filtrados = await page.locator('#lista-resultados .r7-partido-h:not([hidden])').count();
+  await page.locator('#r7-h-buscar').fill('MESSI');
+  const porNombre = await page.locator('#lista-resultados .r7-partido-h:not([hidden])').count();
+  await page.locator('#r7-h-buscar').fill('no-existe');
+  const vacio = await page.locator('#r7-h-vacio:not([hidden])').count();
+  await captura(page, 'historial-vacio');
+  await page.locator('#r7-h-vacio [data-r7-limpiar-h]').click();
+  const trasLimpiar = await page.locator('#lista-resultados .r7-partido-h:not([hidden])').count();
+  resultados.historial = { total, filtrados, porNombre, vacio, trasLimpiar };
+  await page.close();
+}
+
 await browser.close();
 fs.writeFileSync(`${out}/verificacion-despues.json`, JSON.stringify(resultados, null, 2));
 console.log(JSON.stringify({
@@ -265,6 +288,7 @@ console.log(JSON.stringify({
     desbordes: r.desbordesInternos.length, traslapes: r.traslapes
   })),
   filtros: resultados.filtros,
+  historial: resultados.historial,
   formulario: resultados.formulario,
   ia: resultados.ia,
   estados: resultados.estados,
