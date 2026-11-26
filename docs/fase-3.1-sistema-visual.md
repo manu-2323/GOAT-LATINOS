@@ -105,7 +105,7 @@ No se editaron `index.html`, `css/estilos.css` ni módulos JS.
 
 1. **3.2** — cargar tokens y migrar shell, navegación, botones, inputs y foco.
 2. **3.3** — migrar tablas, marcadores, badges, KPIs y gráficos al nuevo rol de marca; aplicar `tabular-nums`.
-3. **3.4** — migrar modales, onboarding, notificaciones y exportación PNG; retirar Rajdhani y los glifos sueltos.
+3. **3.4** — migrar modales, onboarding, notificaciones y exportación PNG; retirar Rajdhani y los glifos sueltos. La exportación PNG **no** se migró: sigue como deuda P2-03/FASE 3.21.
 4. Revisión visual en pantallas reales y verificación de contraste antes de dar por cerrada cada subfase.
 
 ---

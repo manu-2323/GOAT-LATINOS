@@ -1,5 +1,9 @@
 # GOATS LATINOS · Release 1.2.0
 
+> Paleta de este release histórico. Desde FASE 3.1 el sistema canónico es `css/tokens-3.1.css`
+> (`#0B0D10`, `#14171B`, `#20252B`, `#E11D35`, Inter); Rajdhani queda sólo en exportaciones PNG
+> pendientes (deuda P2-03). Antes de ejecutar los comandos: `npm ci`.
+
 ## Cambios principales
 
 1. **Mensajes y estados**: capa `js/core/ui-estados.js` con `GL.mensaje()`, `GL.mensajeCarga()`, `GL.conAccion()` y `GL.estado()` (cargando / contenido / vacío / error). El error técnico se registra en consola y nunca se muestra al usuario. `GL.error()` ya no incluye el bloque «Ver detalle técnico».

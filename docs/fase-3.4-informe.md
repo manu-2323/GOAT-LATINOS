@@ -185,5 +185,5 @@ Interacciones verificadas:
 1. No hay `GL_ADMIN_EMAIL` / `GL_ADMIN_PASS`: los E2E con login real siguen desactivados.
 2. No hay PostgreSQL local: `supabase/tests/fase-2.3.sql` sigue sin ejecutarse; FASE 2.3 no está en producción.
 3. Las pruebas visuales usan mocks locales; no dependen de Supabase remoto.
-4. `js/modulos/exportar-png.js` conserva Rajdhani y la paleta anterior; su migración quedó fuera de este dashboard.
+4. `js/modulos/exportar-png.js` conserva Rajdhani y la paleta anterior; su migración quedó fuera de este dashboard y sigue pendiente (deuda P2-03).
 5. Los cambios SQL/preexistentes visibles en `git status` pertenecen a FASE 2.x y no fueron tocados.

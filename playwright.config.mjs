@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173';
+const puerto = new URL(baseURL).port || '4173';
+
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 180000,
@@ -8,13 +11,15 @@ export default defineConfig({
   retries: 0,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL,
+    launchOptions: process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {},
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure'
   },
   webServer: {
-    command: 'python3 -m http.server 4173 --bind 127.0.0.1',
-    url: 'http://127.0.0.1:4173',
+    command: `"${process.execPath}" scripts/servir-local-3.6.mjs`,
+    env: { PORT: puerto },
+    url: baseURL,
     reuseExistingServer: true,
     timeout: 30000
   },

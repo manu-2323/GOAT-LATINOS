@@ -1,5 +1,6 @@
-import { chromium } from '@playwright/test';
 import fs from 'node:fs';
+import path from 'node:path';
+import { RAIZ, lanzarNavegadorVisual } from './lib-verificacion-visual.mjs';
 
 const correo = process.env.GL_ADMIN_EMAIL;
 const clave = process.env.GL_ADMIN_PASS;
@@ -8,12 +9,10 @@ if (!correo || !clave) {
   process.exit(1);
 }
 
-const out = 'docs/capturas-fase-3.6';
+const out = path.resolve(RAIZ, 'docs/capturas-fase-3.6');
+const base = (process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4173').replace(/\/$/, '');
 fs.mkdirSync(out, { recursive: true });
-const browser = await chromium.launch({
-  headless: true,
-  executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-});
+const browser = await lanzarNavegadorVisual();
 const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
 await page.addInitScript(() => { try { localStorage.clear(); } catch (e) { /* modo privado */ } });
 const errores = [];
@@ -24,7 +23,7 @@ page.on('requestfailed', r => fallosRed.push(r.url() + ' :: ' + (r.failure()?.er
 page.on('response', r => { if (r.status() >= 400) fallosRed.push(r.status() + ' ' + r.url()); });
 
 try {
-  await page.goto('http://127.0.0.1:4173/#administracion', { waitUntil: 'load' });
+  await page.goto(base + '/#administracion', { waitUntil: 'load' });
   await page.waitForSelector('#auth', { timeout: 30000 });
   await page.locator('#auth [data-modo="admin"]').last().click({ force: true });
   await page.waitForSelector('#form-admin');

@@ -1,5 +1,8 @@
 # Informe de publicación — FASE 3.9
 
+> Documento histórico de la rama `feature/telefonia-1.2.1-migration`; integrada en `main` en FASE
+> 3.10 (`fase-3.10-informe-integracion-main.md`). Conservar commits y hashes originales.
+
 Fecha: 2026-11-26
 
 Repositorio: `manu-2323/GOAT-LATINOS`

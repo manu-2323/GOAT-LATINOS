@@ -1,5 +1,9 @@
 # QA de horarios internacionales — 1.0.12
 
+> Documento histórico de 1.0.12. La `zona_horaria` no estaba expuesta en la vista posterior
+> (`supabase/migration-seguridad-2.3.sql`); el estado vigente es `CONFIG.VERSION = 1.3.3` con
+> caché `?v=3.19.0`. No reescribir las mediciones ni los hashes de esta evidencia.
+
 Versión local: **1.0.12**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
 Probado en `http://localhost:4173/` (servidor estático del repo) con el anon key público.
 
@@ -7,8 +11,8 @@ Probado en `http://localhost:4173/` (servidor estático del repo) con el anon ke
 
 - `public.jugadores.zona_horaria` (texto IANA, `NOT NULL`, default `America/Managua`) y
   restricción de formato. Backfill de 24 jugadores por `pais`.
-- `public.jugadores_publicos` recreada con `zona_horaria`; sigue sin `email`, `telefono`,
-  `user_id`, `rol` ni `super_admin`.
+- `public.jugadores_publicos` recreada con `zona_horaria` **(afirmación 1.0.12; hoy no la expone)**;
+  sigue sin `email`, `telefono`, `user_id`, `rol` ni `super_admin`.
 - `GL._zonaResuelta`, `zonaPorPais`, `zonaJugador`, `partesEnZona`, `momentoReferencia`,
   `horaEnZona`, `offsetZona`, `horarioZona`, `horarioJugador`, `horarioZonaDetalle`,
   `etiquetaZona`, `opcionesZonaHoraria`, `actualizarZona` y `notaHorarios`.
@@ -16,7 +20,8 @@ Probado en `http://localhost:4173/` (servidor estático del repo) con el anon ke
   `public.partidos`, por eso el texto dice “horarios estimados”, nunca una fecha inventada.
 - Consumidores actualizados: registro, perfil, fixture, “Partidos de hoy”, mensajes de WhatsApp,
   administración y la Edge Function `admin-crear-jugador`.
-- `CONFIG.VERSION` y los 12 `?v=` de `index.html` pasaron a `1.0.12`.
+- `CONFIG.VERSION` y los 12 `?v=` de `index.html` pasaron a `1.0.12` (valor histórico; el vigente
+  es `1.3.3` con CSS `?v=3.19.0`).
 
 ## Verificación de base de datos
 
@@ -25,7 +30,7 @@ Probado en `http://localhost:4173/` (servidor estático del repo) con el anon ke
 | Migración `migration-zonas-horarias.sql` | aplicada sin errores |
 | `jugadores.zona_horaria` | `text`, `NOT NULL`, default `America/Managua` |
 | Backfill | 24/24 jugadores con zona según país (AR, BO, CL, CO, CR, EC, GT, HN, MX, NI, PA, PE, VE) |
-| Vista pública `jugadores_publicos` | expone `zona_horaria`; 200 con anon key |
+| Vista pública `jugadores_publicos` | expone `zona_horaria` (histórico; hoy no la expone); 200 con anon key |
 | Columnas sensibles en la vista | siguen ausentes (`email` → 400) |
 
 ## Verificación en navegador (consola sin errores)

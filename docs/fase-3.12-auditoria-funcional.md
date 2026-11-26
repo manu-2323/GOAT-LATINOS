@@ -1,5 +1,8 @@
 # FASE 3.12 — Auditoría funcional integral
 
+> Nota de vigencia: las referencias a “invitados” son históricas. Sin sesión, la app muestra el
+> overlay de acceso; no hay modo invitado operativo (`CONFIGURACION.md` §7 y auditoría 3.18).
+
 ## 1. Estado inicial y alcance
 
 - Repositorio: `main`, limpio y sincronizado con `origin/main` en `27864ed81764ae5007a0d93e8289008abd79c7dc`.

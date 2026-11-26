@@ -47,15 +47,96 @@
     'jugador_expulsado','operacion_completada'
   ]);
 
+  /* ── Identidad estable de una notificación ─────────────────────────
+     El texto visible NO es el identificador principal. La clave se arma con
+     tipo + torneo + jugador + el dato estructural correspondiente (jornada,
+     sanción, día). La lectura de texto queda sólo como respaldo de filas
+     históricas creadas antes de existir esta clave. */
+  const SEP = '|';
+
+  function _valor(v) {
+    return v === null || v === undefined ? '' : String(v);
+  }
+
+  function _diaDeNotificacion(n) {
+    const fila = n || {};
+    return _valor(fila.dia || _valor(fila.created_at).slice(0, 10)) || new Date().toISOString().slice(0, 10);
+  }
+
+  function _jornadaDeNotificacion(n) {
+    const fila = n || {};
+    const candidatos = [
+      fila.jornada_numero, fila.jornada, fila.numero_jornada,
+      fila.metadata && fila.metadata.jornada,
+      fila.datos && fila.datos.jornada
+    ];
+    for (const valor of candidatos) {
+      const numero = Number(valor);
+      if (Number.isInteger(numero) && numero > 0) return numero;
+    }
+    /* Respaldo para filas históricas: anteriormente se comparaba Big/Little
+       Endian de texto ('Jornada' vs 'jornada'); aquí la búsqueda es insensible
+       a mayúsculas y lee tanto título como cuerpo. */
+    const texto = _valor(fila.titulo) + ' ' + _valor(fila.cuerpo);
+    const coincide = texto.match(/\bjornada\s*#?\s*(\d{1,3})\b/i);
+    return coincide ? Number(coincide[1]) : null;
+  }
+
+  function _claveNotificacion(n) {
+    const fila = n || {};
+    const tipo = _valor(fila.tipo);
+    if (!tipo) return '';
+    const torneoId = _valor(fila.torneo_id ||
+      (typeof GL !== 'undefined' && GL.torneo ? (GL.torneo() || {}).id : null));
+    const jugadorId = _valor(fila.jugador_id ||
+      (typeof Auth !== 'undefined' && Auth.jugador ? Auth.jugador.id : null));
+    const base = [tipo, torneoId, jugadorId];
+
+    if (tipo === 'jornada_abierta') {
+      const jornada = _jornadaDeNotificacion(fila);
+      return jornada ? base.concat('j' + jornada).join(SEP) : '';
+    }
+    if (tipo === 'sancion_aplicada' || tipo === 'suspension') {
+      const sancionId = fila.sancion_id || fila.entidad_id ||
+        (fila.metadata && fila.metadata.sancion_id);
+      if (sancionId) return base.concat('s' + sancionId).join(SEP);
+      const texto = (_valor(fila.titulo) + ' ' + _valor(fila.cuerpo)).trim().toLowerCase();
+      return texto ? base.concat('legado', texto).join(SEP) : '';
+    }
+    if (tipo === 'clasifica_eliminatorias') return base.join(SEP);
+    if (tipo === 'perfil_pendiente') {
+      return base.concat('d' + _diaDeNotificacion(fila), 'sin_grupo').join(SEP);
+    }
+    if (tipo === 'jornada_por_cerrar') {
+      return base.concat('d' + _diaDeNotificacion(fila)).join(SEP);
+    }
+    if (tipo === 'resultado_publicado' || tipo === 'partido_pendiente') {
+      const partidoId = fila.partido_id || fila.entidad_id ||
+        (fila.metadata && fila.metadata.partido_id);
+      return partidoId ? base.concat('p' + partidoId).join(SEP) : '';
+    }
+    return '';
+  }
+
   /* ── Estado del módulo ──────────────────────────────────────────── */
   const Mod = {
     titulo: 'Notificaciones',
     _panelAbierto: false,
     _cache:    [],
+    _historial: [],
+    _claves:   new Set(),
     _sinLeer:  0,
     _filtro:   'todas',
     _realtime: null,
     _elVista:  null,
+    _generando: null,
+    _cargando: null,
+    _badgeCargadoPara: null,
+
+    _existe(clave, alternativa) {
+      return !!(clave && Mod._claves.has(clave)) ||
+        !!(alternativa && Mod._claves.has(alternativa));
+    },
 
     /* ── Vista principal (página completa) ── */
     async render(el) {
@@ -71,89 +152,136 @@
       Mod._suscribirRealtime();
     },
 
-    /* ── Carga desde Supabase ── */
+    /* ── Carga desde Supabase ──
+       La vista muestra como máximo 80 filas, pero la deduplicación consulta
+       TODO el historial del jugador: el viejo `.limit(80)` permitía generar
+       duplicados cuando la notificación existente caía fuera del bloque. */
     async _cargar() {
+      if (Mod._cargando) return Mod._cargando;
+      Mod._cargando = Mod._cargarInterno()
+        .finally(() => { Mod._cargando = null; });
+      return Mod._cargando;
+    },
+
+    async _cargarInterno() {
       if (!Auth.jugador) return;
       const { data, error } = await sb.from('notificaciones')
-        .select('*')
+        .select('id,jugador_id,torneo_id,tipo,titulo,cuerpo,link_hash,leida,created_at')
         .eq('jugador_id', Auth.jugador.id)
-        .order('created_at', { ascending: false })
-        .limit(80);
+        .order('created_at', { ascending: false });
       if (!error && data) {
-        Mod._cache   = data;
-        Mod._sinLeer = data.filter(n => !n.leida).length;
+        Mod._historial = data;
+        Mod._cache     = data.slice(0, 80);
+        Mod._sinLeer   = data.filter(n => !n.leida).length;
+        Mod._claves    = new Set(data.map(n => _claveNotificacion(n)).filter(Boolean));
       } else if (error) {
         console.warn('[Notif] carga:', error.message);
       }
       await Mod._generarLocales();
     },
 
-    /* ── Genera notificaciones desde el contexto GL ── */
+    /* ── Genera notificaciones desde el contexto GL ──
+       La promesa en curso se reutiliza: dos cargas consecutivas o dos clics
+       rápidos no pueden iniciar dos inserciones desde el mismo cliente. */
     async _generarLocales() {
+      if (Mod._generando) return Mod._generando;
+      Mod._generando = Mod._generarLocalesInterno()
+        .finally(() => { Mod._generando = null; });
+      return Mod._generando;
+    },
+
+    async _generarLocalesInterno() {
       if (!Auth.jugador || !GL.torneo()) return;
       const jid  = Auth.jugador.id;
       const tid  = GL.torneo().id;
       const hoy  = new Date().toISOString().slice(0, 10);
       const nuevas = [];
 
-      /* Jornada abierta */
+      /* Jornada abierta: identidad estable por tipo + torneo + jugador + jornada.
+         El texto visible sólo se usa como respaldo para filas históricas. */
       const jornadaActual = GL.jornadaActual();
       if (jornadaActual) {
-        const ya = Mod._cache.some(n =>
-          n.tipo === 'jornada_abierta' &&
-          (n.cuerpo || '').includes('Jornada ' + jornadaActual.numero));
-        if (!ya) nuevas.push({
+        const numero = jornadaActual.numero;
+        const titulo = 'Jornada ' + numero + ' abierta';
+        const cuerpo = 'Tu jornada ' + numero + ' se encuentra abierta. Consultá tus partidos y coordiná con tu rival.';
+        const clave = _claveNotificacion({
+          tipo: 'jornada_abierta', torneo_id: tid, jugador_id: jid,
+          jornada_numero: numero, titulo, cuerpo
+        });
+        if (!Mod._existe(clave)) nuevas.push({
           tipo: 'jornada_abierta',
-          titulo: 'Jornada ' + jornadaActual.numero + ' abierta',
-          cuerpo: 'Tu jornada ' + jornadaActual.numero + ' se encuentra abierta. Consultá tus partidos y coordiná con tu rival.',
-          link_hash: 'fixture'
+          titulo, cuerpo,
+          link_hash: 'fixture',
+          jornada_numero: numero,
+          torneo_id: tid,
+          jugador_id: jid,
+          _clave: clave
         });
       }
 
-      /* Sanciones */
+      /* Sanciones: usa el ID de la sanción cuando existe; el texto sólo se
+         mantiene como clave de respaldo para notificaciones históricas. */
       const misSanciones = (GL.ctx.sanciones || []).filter(s => s.jugador_id === jid);
       misSanciones.forEach(s => {
-        const ya = Mod._cache.some(n =>
-          (n.tipo === 'sancion_aplicada' || n.tipo === 'suspension') &&
-          (n.cuerpo || '').includes(s.id || s.motivo || ''));
-        if (!ya) {
-          const grave = s.tipo === 'grave' || s.tipo === 'muy_grave';
-          nuevas.push({
-            tipo: grave ? 'suspension' : 'sancion_aplicada',
-            titulo: grave ? 'Suspensión aplicada' : 'Sanción aplicada',
-            cuerpo: (s.motivo || 'Sin detalle') +
-              (s.puntos_descuento ? ' · Descuento: -' + s.puntos_descuento + ' pts' : '') +
-              (s.partidos_suspension ? ' · Suspendido ' + s.partidos_suspension + ' partido(s).' : ''),
-            link_hash: 'perfil'
-          });
-        }
+        const grave = s.tipo === 'grave' || s.tipo === 'muy_grave';
+        const tipo  = grave ? 'suspension' : 'sancion_aplicada';
+        const titulo = grave ? 'Suspensión aplicada' : 'Sanción aplicada';
+        const cuerpo = (s.motivo || 'Sin detalle') +
+          (s.puntos_descuento ? ' · Descuento: -' + s.puntos_descuento + ' pts' : '') +
+          (s.partidos_suspension ? ' · Suspendido ' + s.partidos_suspension + ' partido(s).' : '');
+        const clave = _claveNotificacion({
+          tipo, torneo_id: tid, jugador_id: jid,
+          sancion_id: s.id, titulo, cuerpo
+        });
+        const legado = _claveNotificacion({
+          tipo, torneo_id: tid, jugador_id: jid, titulo, cuerpo
+        });
+        if (!Mod._existe(clave, legado)) nuevas.push({
+          tipo, titulo, cuerpo,
+          link_hash: 'perfil',
+          sancion_id: s.id || null,
+          torneo_id: tid,
+          jugador_id: jid,
+          _clave: clave,
+          _claveLegado: legado
+        });
       });
 
-      /* Clasificación a eliminatorias */
+      /* Clasificación a eliminatorias: una sola notificación por jugador/torneo. */
       const pos = GL.posicion ? GL.posicion(jid) : null;
       if (pos && pos <= 6) {
-        const ya = Mod._cache.some(n => n.tipo === 'clasifica_eliminatorias');
-        if (!ya) nuevas.push({
+        const clave = _claveNotificacion({
+          tipo: 'clasifica_eliminatorias', torneo_id: tid, jugador_id: jid
+        });
+        if (!Mod._existe(clave)) nuevas.push({
           tipo: 'clasifica_eliminatorias',
           titulo: '¡Estás clasificado!',
           cuerpo: 'Ocupás la posición ' + pos + ' — clasificás directamente a eliminatorias. ¡Seguí así!',
-          link_hash: 'eliminatorias'
+          link_hash: 'eliminatorias',
+          torneo_id: tid,
+          jugador_id: jid,
+          _clave: clave
         });
       }
 
       /* ── Alertas admin ── */
       if (GL.esAdmin()) {
-        /* Jugadores sin grupo */
+        /* Jugadores sin grupo: una alerta por día, torneo y administrador. */
         const sinGrupo = GL.jugadoresSinGrupo ? GL.jugadoresSinGrupo() : [];
         if (sinGrupo.length) {
-          const ya = Mod._cache.some(n =>
-            n.tipo === 'perfil_pendiente' && (n.cuerpo||'').includes('sin grupo') &&
-            (n.created_at||'').startsWith(hoy));
-          if (!ya) nuevas.push({
+          const clave = _claveNotificacion({
+            tipo: 'perfil_pendiente', torneo_id: tid, jugador_id: jid,
+            dia: hoy, created_at: new Date().toISOString()
+          });
+          if (!Mod._existe(clave)) nuevas.push({
             tipo: 'perfil_pendiente',
             titulo: sinGrupo.length + ' jugador(es) sin grupo',
             cuerpo: sinGrupo.length + ' jugador(es) están registrados pero sin grupo asignado. Asignalos desde Administración.',
-            link_hash: 'administracion'
+            link_hash: 'administracion',
+            torneo_id: tid,
+            jugador_id: jid,
+            dia: hoy,
+            _clave: clave
           });
         }
 
@@ -166,18 +294,26 @@
           !jornadasCerr.has(n) &&
           partidos.filter(p=>p.jornada===n).every(p=>p.estado!=='pendiente'));
         if (listasParaCerrar.length) {
-          const ya = Mod._cache.some(n =>
-            n.tipo === 'jornada_por_cerrar' && (n.created_at||'').startsWith(hoy));
-          if (!ya) nuevas.push({
+          const clave = _claveNotificacion({
+            tipo: 'jornada_por_cerrar', torneo_id: tid, jugador_id: jid,
+            dia: hoy, created_at: new Date().toISOString()
+          });
+          if (!Mod._existe(clave)) nuevas.push({
             tipo: 'jornada_por_cerrar',
             titulo: 'Jornada(s) lista(s) para cerrar',
             cuerpo: 'Las jornadas ' + listasParaCerrar.join(', ') + ' tienen todos sus partidos resueltos. Podés cerrarlas.',
-            link_hash: 'jornadas'
+            link_hash: 'jornadas',
+            torneo_id: tid,
+            jugador_id: jid,
+            dia: hoy,
+            _clave: clave
           });
         }
       }
 
-      /* Guardar en Supabase */
+      /* Guardar en Supabase. La clave se registra en memoria en cuanto la RPC
+         responde OK; ésta es una mitigación de cliente, NO idempotencia del
+         servidor (esa requiere una restricción única en la base de datos). */
       for (const n of nuevas) {
         try {
           const { error } = await sb.rpc('gl_crear_notificacion', {
@@ -189,13 +325,21 @@
             p_link_hash:  n.link_hash || null
           });
           if (!error) {
-            Mod._cache.unshift({
+            const fila = {
               id: 'local_' + Date.now() + '_' + Math.random(),
               jugador_id: jid, torneo_id: tid,
               tipo: n.tipo, titulo: n.titulo, cuerpo: n.cuerpo,
               link_hash: n.link_hash, leida: false,
-              created_at: new Date().toISOString()
-            });
+              created_at: new Date().toISOString(),
+              jornada_numero: n.jornada_numero || null,
+              sancion_id: n.sancion_id || null,
+              dia: n.dia || null
+            };
+            if (n._clave) Mod._claves.add(n._clave);
+            if (n._claveLegado) Mod._claves.add(n._claveLegado);
+            Mod._historial.unshift(fila);
+            Mod._cache.unshift(fila);
+            if (Mod._cache.length > 80) Mod._cache.pop();
             Mod._sinLeer++;
           }
         } catch (e) { console.warn('[Notif] local:', e); }
@@ -215,7 +359,11 @@
         }, payload => {
           const nueva = payload.new;
           if (!Mod._cache.find(n => n.id === nueva.id)) {
+            const clave = _claveNotificacion(nueva);
+            if (clave) Mod._claves.add(clave);
+            Mod._historial.unshift(nueva);
             Mod._cache.unshift(nueva);
+            if (Mod._cache.length > 80) Mod._cache.pop();
             if (!nueva.leida) Mod._sinLeer++;
             Mod._actualizarBadge();
             /* Tocar la vista si está abierta */
@@ -570,6 +718,11 @@
         p_link_hash:  linkHash || null
       });
     } catch (e) { console.warn('[Notif global]', e); }
+  };
+
+  Mod._pruebas = {
+    clave: _claveNotificacion,
+    jornadaDe: _jornadaDeNotificacion
   };
 
   Modulos.notificaciones = Mod;

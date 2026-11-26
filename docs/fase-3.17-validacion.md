@@ -1,5 +1,9 @@
 # FASE 3.17 — Revisión puntual de seguridad y continuidad
 
+> La actualización documental de `CONFIGURACION.md` fue parcial: FASE 3.18 detectó versión 1.0.16,
+> `admin-bootstrap` en el listado y ausencia de `admin-promover`; se corrigió en FASE 3.19. En 3.18
+> el inventario remoto era de 7 funciones `ACTIVE`, con `admin-bootstrap` retirada en código.
+
 ## Criterio
 
 Seguridad **proporcional al riesgo**, no seguridad por acumulación de medidas. La fase se limitó a revisar los riesgos importantes, corregir los que son reales y demostrables, dejar documentado el resto y no frenar el desarrollo de funcionalidades.

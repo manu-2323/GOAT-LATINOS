@@ -1,5 +1,8 @@
 # FASE 3.16 — Auditoría, corrección y cierre del módulo Administración
 
+> Documento histórico. El cierre posterior está en `fase-3.17-validacion.md`; la revisión del estado
+> real en `fase-3.18-auditoria-backlog.md`. La ventana de clave pendiente aquí se resolvió en 3.17.
+
 ## Resumen ejecutivo
 
 Se auditó el módulo **Administración** de GOAT-LATINOS para dejar un cierre confiable y predecible sin tocar backend. La corrección se limitó al cliente (`js`/`css`), al arnés de pruebas y a la documentación. Se conservaron identificadores, `data-*` y rutas existentes para no romper integraciones.

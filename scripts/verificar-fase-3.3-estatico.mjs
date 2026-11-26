@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import postcss from 'postcss';
 
-const base = process.cwd();
+const base = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const leer = rel => fs.readFileSync(path.join(base, rel), 'utf8');
 const fallos = [];
 const avisos = [];

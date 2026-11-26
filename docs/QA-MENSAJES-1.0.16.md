@@ -1,5 +1,9 @@
 # QA — Mensajes verificados 1.0.16
 
+> Documento histórico de 1.0.16. El estado vigente es `CONFIG.VERSION = 1.3.3`
+> (`docs/CONFIGURACION.md` y `docs/fase-3.17-validacion.md`). Conservar los valores `1.0.16` y el
+> nombre `migration-mensajes-1.0.16.sql` como evidencia de esa fecha.
+
 ## Alcance
 
 El generador de WhatsApp deja de usar la franja fija `11:00–21:00` y pasa a leer datos reales de Supabase. Si falta alguno, la vista previa se bloquea y copiar, descargar y enviar quedan desactivados.

@@ -1,5 +1,7 @@
 # Informe de integración definitiva en `main` y publicación — FASE 3.10
 
+> Documento histórico: estado al cierre de FASE 3.10. Le preceden 3.9 y le siguen 3.11–3.19.
+
 Fecha: 2026-11-26
 Repositorio: `manu-2323/GOAT-LATINOS`
 Estado: integración completada, publicación verificada y rama de respaldo conservada.

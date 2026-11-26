@@ -1,5 +1,8 @@
 # Diagnóstico del aviso de configuración de base de datos — post FASE 3.10
 
+> Documento histórico: el error `42703` se corrigió en FASE 3.11
+> (`fase-3.11-informe-correccion-esquema-telefonia.md`). No alterar el diagnóstico original.
+
 Fecha: 2026-11-26
 Repositorio: `manu-2323/GOAT-LATINOS`
 Sitio analizado: https://manu-2323.github.io/GOAT-LATINOS/

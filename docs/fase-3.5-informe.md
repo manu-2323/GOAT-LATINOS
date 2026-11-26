@@ -113,7 +113,7 @@ Comparación “antes → después” en el arnés: fuentes menores de 12 px `7 
 
 - Ninguno dentro del alcance de FASE 3.5.
 - No existe ficha individual en el módulo Jugadores dentro de `admin.js`; no se creó una nueva funcionalidad de perfil ni se modificó `perfil.js`.
-- `js/modulos/exportar-png.js` conserva Rajdhani y la paleta anterior: hallazgo heredado, migración prevista fuera de esta fase.
+- `js/modulos/exportar-png.js` conserva Rajdhani y la paleta anterior: hallazgo heredado, migración prevista fuera de esta fase y deuda vigente en 3.19.
 - `supabase/tests/fase-2.3.sql` sigue sin ejecutarse por falta de PostgreSQL local: hallazgo heredado de FASE 2.3, no bloquea esta fase.
 
 ---

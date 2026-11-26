@@ -1,8 +1,10 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = process.cwd();
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const puerto = Number(process.env.PORT || 4173);
 const tipos = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -17,7 +19,7 @@ http.createServer((req, res) => {
   const url = decodeURIComponent((req.url || '/').split('?')[0]);
   const rel = url === '/' ? 'index.html' : url.replace(/^\/+/, '');
   const archivo = path.resolve(root, rel);
-  if (!archivo.startsWith(root)) {
+  if (archivo !== root && !archivo.startsWith(root + path.sep)) {
     res.writeHead(403).end('Forbidden');
     return;
   }
@@ -31,4 +33,4 @@ http.createServer((req, res) => {
       'Cache-Control': 'no-store'
     }).end(datos);
   });
-}).listen(4173, '127.0.0.1', () => console.log('Servidor local 3.6 en http://127.0.0.1:4173'));
+}).listen(puerto, '127.0.0.1', () => console.log('Servidor local 3.6 en http://127.0.0.1:' + puerto));

@@ -110,7 +110,7 @@
         '<div class="seccion-head">' +
           '<div class="seccion-titulo">' +
             '<h2>' + icono('shield-check', 20) + ' Auditoría</h2>' +
-            '<p>Registro inmutable de todas las operaciones administrativas</p>' +
+            '<p>Eventos disponibles para consulta; cobertura parcial y solo lectura</p>' +
           '</div>' +
           '<div class="seccion-acciones">' +
             GL.badge('SOLO LECTURA', 'neutral', 'lock') +
@@ -121,10 +121,10 @@
 
         /* ── Métricas ── */
         '<div class="aud-metricas">' +
-          _metCard('Total de registros', total,     'activity',  'neutral', 'Histórico completo') +
+          _metCard('Total de registros', total,     'activity',  'neutral', 'En esta vista') +
           _metCard('Hoy',               contHoy,    'clock',     contHoy > 0 ? 'blue' : 'neutral', 'Registros de hoy') +
           _metCard('Operaciones fallidas', contFallos, 'circle-x', contFallos > 0 ? 'rojo' : 'neutral', 'En esta vista') +
-          _metCard('Admins activos',    adminsAct,  'users',     'neutral', 'Últimos 25 registros') +
+          _metCard('Admins activos',    adminsAct,  'users',     'neutral', 'En esta vista') +
         '</div>' +
 
         /* ── Filtros ── */

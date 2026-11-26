@@ -1,14 +1,15 @@
-import { chromium } from '@playwright/test';
 import fs from 'node:fs';
+import path from 'node:path';
+import {
+  ANCHOS, RAIZ, bloquearExternos, iniciarServidorVisual, lanzarNavegadorVisual
+} from './lib-verificacion-visual.mjs';
 
-const base = 'file:///C:/Users/manue/AppData/Local/Temp/opencode/GOAT-LATINOS-deploy';
-const out = 'docs/capturas-fase-3.6';
+const servidor = await iniciarServidorVisual();
+const base = servidor.url;
+const out = path.resolve(RAIZ, process.env.GL_CAPTURAS_DIR || '', 'docs/capturas-fase-3.6');
 fs.mkdirSync(out, { recursive: true });
 
-const browser = await chromium.launch({
-  headless: true,
-  executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-});
+const browser = await lanzarNavegadorVisual();
 
 const resultados = {
   capturas: [],
@@ -23,7 +24,7 @@ const resultados = {
 };
 
 async function abrir(page, width, height, estado = 'datos') {
-  await page.route(/^https?:\/\//, route => route.abort());
+  await bloquearExternos(page);
   await page.setViewportSize({ width, height });
   await page.goto(base + '/mock-equipos-3.6.html?estado=' + estado, { waitUntil: 'load' });
   if (estado === 'carga') {
@@ -105,7 +106,7 @@ for (const [estado, nombre] of [['datos', 'con-datos'], ['vacio', 'vacio'], ['ca
   await page.close();
 }
 
-for (const width of [320, 375, 390, 430, 768, 1024, 1366, 1920]) {
+for (const width of ANCHOS) {
   const page = await browser.newPage({ viewport: { width, height: width < 500 ? 844 : 900 } });
   await abrir(page, width, width < 500 ? 844 : 900);
   resultados.responsive.push({ width, ...(await metricas(page)) });
@@ -217,6 +218,7 @@ for (const width of [320, 375, 390, 430, 768, 1024, 1366, 1920]) {
 }
 
 await browser.close();
+await servidor.cerrar();
 fs.writeFileSync(`${out}/verificacion-despues.json`, JSON.stringify(resultados, null, 2));
 console.log(JSON.stringify({
   capturas: resultados.capturas.length,

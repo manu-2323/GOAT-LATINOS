@@ -1,10 +1,10 @@
 /* Genera el informe + manual de usuario en PDF a partir de las capturas reales. */
-import { chromium } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { RAIZ, lanzarNavegadorVisual } from './lib-verificacion-visual.mjs';
 
-const ROOT = resolve(process.cwd());
-const manifest = JSON.parse(readFileSync(resolve(ROOT, 'docs/capturas/manifiesto.json'), 'utf8'));
+const manifest = JSON.parse(readFileSync(path.resolve(RAIZ, 'docs/capturas/manifiesto.json'), 'utf8'));
 const img = nombre => {
   const item = manifest.find(x => x.nombre === nombre);
   return item ? `<img src="${item.archivo}" alt="${item.ruta}">` : '';
@@ -135,14 +135,14 @@ ${capturasTamanyo.map(c => `<div class="fig"><img src="${c.archivo}" alt="${c.no
 <p>Para aplicar la migración: <code>supabase db push</code> o ejecutar <code>supabase/migration-telefonos-1.2.0.sql</code> en el SQL Editor de Supabase. El código funciona igual si todavía no se aplica, usando la columna histórica <code>telefono</code>.</p>
 </body></html>`;
 
-const htmlPath = resolve(ROOT, 'docs/GOAT-LATINOS-Informe-y-Manual-1.2.0.html');
+const htmlPath = path.resolve(RAIZ, 'docs/GOAT-LATINOS-Informe-y-Manual-1.2.0.html');
 writeFileSync(htmlPath, html);
-const navegador = await chromium.launch({ args: ['--no-sandbox'] });
+const navegador = await lanzarNavegadorVisual();
 const pagina = await navegador.newPage();
-await pagina.goto('file://' + htmlPath);
+await pagina.goto(pathToFileURL(htmlPath).href);
 await pagina.waitForTimeout(1200);
 await pagina.pdf({
-  path: resolve(ROOT, 'docs/GOAT-LATINOS-Informe-y-Manual-1.2.0.pdf'),
+  path: path.resolve(RAIZ, 'docs/GOAT-LATINOS-Informe-y-Manual-1.2.0.pdf'),
   format: 'A4', printBackground: true, preferCSSPageSize: true
 });
 await navegador.close();

@@ -1,27 +1,40 @@
 # GOATS LATINOS · League Manager — Configuración
 
-Versión actual: **1.0.16**. Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`.
+Versión funcional actual: **1.3.3** (`CONFIG.VERSION`, FASE 3.19; CSS con `?v=3.19.0`).
+Proyecto Supabase: `zmjzlvsdlfzmhptmtmjx`. Las secciones históricas conservan las versiones de su fecha.
 
 ## 1. Arranque
 
-Abrí `index.html` directamente (funciona con `file://`) o servilo con cualquier servidor estático.
-No hay npm, build ni frameworks. Las credenciales públicas (URL y anon key) ya están en
-`js/core/config.js`. Las librerías `supabase.js`, `chart.umd.js` y `exportar-png.js` son locales.
-
-Si querés servirlo con HTTPS local:
+La app en producción no requiere build ni frameworks; las librerías `supabase.js`,
+`chart.umd.js` y `exportar-png.js` son locales y las credenciales públicas (URL y anon key) ya
+están en `js/core/config.js`. Para reproducir el entorno de pruebas se recomienda servirla por HTTP:
 
 ```bash
-cd C:\Users\manue\OneDrive\Desktop\proyecto-GOAT-LATINO
-npx --yes serve . -l 4173
+cd <raiz-del-repositorio>
+python3 -m http.server 4173 --bind 127.0.0.1
+# alternativa sin Python:
+node scripts/servir-local-3.6.mjs
 ```
 
-> `npx` es solo una opción para servir archivos estáticos; la app no depende de npm para funcionar.
+También se puede abrir `index.html` con `file://` para una revisión rápida, pero los arneses
+visuales y E2E usan HTTP local. `npx --yes serve . -l 4173` sigue siendo una opción, no una
+dependencia: las herramientas de desarrollo se instalan por separado con `npm ci`.
+
+Los arneses no contienen rutas personales: resuelven la raíz desde `import.meta.url`, usan
+`PLAYWRIGHT_BASE_URL` (por defecto `http://127.0.0.1:4173`) y aceptan `CHROME_PATH` para un
+navegador del sistema. Con Chromium gestionado por Playwright, definir `PLAYWRIGHT_BROWSERS_PATH`
+antes de `npx playwright install chromium`. Anchos verificados: 320, 375, 390, 768, 1024, 1280,
+1366 y 1920 px. `GL_CAPTURAS_DIR` permite redirigir las capturas generadas a otra carpeta sin
+sobrescribir evidencias históricas.
 
 ## 2. Base de datos
 
 El SQL está en `supabase/` y, salvo la migración 7, es idempotente. `migration-hardening-rpcs.sql`
 se aplica **una sola vez** porque renombra funciones (repetirla daría error de “función no existe”).
 Ejecutalo en Supabase → SQL Editor en este orden:
+
+> Lista histórica de migraciones base. El estado posterior se documenta en los informes 3.11 y
+> 3.12; FASE 3.19 no amplía ni reordena esta sección ni ejecuta migraciones en producción.
 
 1. `configuracion-completa.sql` — torneo, grupos A/B, columna `numero`, `email`, RLS base y bucket `capturas-partidos`.
 2. `migration-numero-jugador.sql` — compatibilidad con el número del jugador.
@@ -109,7 +122,8 @@ No reescribas los valores actuales salvo rotación intencional.
   **5 intentos fallidos por correo durante 15 minutos**. El navegador nunca compara la clave.
 - Después de validar, el cliente hace `signInWithPassword` con la misma clave, recarga el perfil y
   cierra la sesión si la fila no es administrador. La sesión de Supabase es el único estado de acceso.
-- `admin-bootstrap` quedó **retirado y desactivado**: ya no contiene clave fija ni crea administradores.
+- `admin-bootstrap` quedó **retirado del flujo y sin clave**: ya no crea administradores y responde
+  `403`. Según FASE 3.18 sigue `ACTIVE` en producción; borrarlo o redesplegarlo requiere autorización.
 - Ambos administradores tienen `rol='admin'`, por lo que acceden a **todos los módulos** —incluido
   Calendario, Jornadas, Resultados, Mensajes y Administración— y conservan su fila original de jugador,
   con grupo, partidos y estadísticas personales intactos.
@@ -130,12 +144,13 @@ where user_id = (select id from auth.users where lower(email) = lower('TU_EMAIL@
 
 ## 4. Edge Functions
 
-Hay **7 funciones desplegadas**. Desde la CLI (con `--yes` para entornos no interactivos):
+Según FASE 3.18 hay **7 funciones `ACTIVE`**, de las cuales **6 son operativas**. `admin-bootstrap`
+sigue desplegada, pero está retirada en código y sólo responde `403`: **no se redespliega**. Desde la
+CLI (con `--yes` para entornos no interactivos):
 
 ```bash
 supabase functions deploy analizar-captura --yes
 supabase functions deploy admin-crear-jugador --yes
-supabase functions deploy admin-bootstrap --yes
 supabase functions deploy admin-promover --yes
 supabase functions deploy admin-gestionar-admins --yes
 supabase functions deploy admin-obtener-clave --yes
@@ -146,7 +161,8 @@ supabase functions deploy eliminar-cuenta --yes
 |---|---|
 | `analizar-captura` | Valida sesión de admin, acepta JPG/PNG de hasta 5 MB y llama a **Gemini Flash-Lite** (`gemini-3.5-flash-lite:generateContent`) con thinking mínimo y timeout de 18 s. El modelo 2.0 fue retirado por Google y 3.8 Flash tiene una latencia excesiva para esta extracción. Devuelve exactamente 10 campos numéricos: goles, tiros, tiros a puerta, posesión y pases de ambos equipos. |
 | `admin-crear-jugador` | Crea cuenta Auth y fila en `jugadores` con Service Role verificando que quien llama es admin. Si falla la BD, borra el usuario creado. |
-| `admin-bootstrap` | Retirada en 1.0.18. Devuelve 403 y no contiene clave: el acceso usa la RPC `gl_validar_acceso_admin`. |
+| `admin-bootstrap` | Retirada en 1.0.18. Sigue `ACTIVE` en producción pero devuelve `403` y no contiene clave: el acceso usa la RPC `gl_validar_acceso_admin`. No redesplegar ni borrar sin autorización. |
+| `admin-promover` | Promueve o revoca privilegios de administrador; exige JWT de superadministrador y registra en `admin_audit_log`. No incorpora AAL2/MFA. |
 | `admin-gestionar-admins` | Alta y baja de administradores, solo para `super_admin`. Bloquea auto-despromoción, quitar al principal y dejar menos de un admin. |
 | `admin-obtener-clave` | Desde 3.17 responde `410` con instrucciones; no lee ni devuelve `ADMIN_PASSWORD`. El botón «Ver clave» fue retirado del panel. |
 | `eliminar-cuenta` | Borra cuenta Auth, fila de jugador, partidos, clasificación, sanciones, membresías y avatar. Exige escribir `ELIMINAR`. Bloquea borrar al `super_admin` o al último admin. |
@@ -155,7 +171,7 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 
 ## 5. Flujo recomendado del admin
 
-1. Ejecutá el SQL de la sección 2, aplicá `supabase/migration-admin-1.0.18.sql`, configurá los secrets y desplegá las siete funciones.
+1. Ejecutá el SQL de la sección 2, aplicá `supabase/migration-admin-1.0.18.sql`, configurá los secrets y desplegá las funciones operativas listadas en §4; `admin-bootstrap` no se redespliega.
 2. Entrá con **Acceso de administrador** usando uno de los dos correos autorizados y la clave compartida.
 3. Administración → Configuración: revisá nombre, temporada y jornadas (22).
 4. Administración → Jugadores: agregá a los 12 jugadores de cada grupo (o esperá a que se registren).
@@ -214,7 +230,8 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Backend**: la columna existe en `public.jugadores`; el alta desde administración envía la
   zona y la Edge Function la valida con `Intl` antes de insertar. La vista pública
   `public.jugadores_publicos` **no expone `zona_horaria`**: el administrativo lee la tabla
-  completa y el invitado resuelve la zona desde `pais` con `GL.zonaJugador()`.
+  completa; cuando una vista pública no trae `zona_horaria`, el cliente deriva la zona desde
+  `pais` con `GL.zonaJugador()`. No hay modo invitado operativo (§7).
 - **Novatos**: notas con el horario local y su offset (`UTC-06:00`), selector con nombres de
   ciudad y mensaje de ayuda si todavía no eligieron zona.
 
@@ -296,8 +313,10 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
   por zona horaria real de cada participante.
 - **Estadísticas globales**: top 5 de goles, vallas, victorias, diferencia y posesión; rachas;
   head-to-head; gráfico Chart.js local y exportación PNG.
-- **Administración**: distinción de `Administrador principal`, pestaña restringida a `super_admin`,
-  consulta de clave y columnas de horario/contacto/rol en la tabla de jugadores.
+- **Administración (histórico 1.0.5)**: distinción de `Administrador principal`, pestaña restringida
+  a `super_admin`, consulta de clave y columnas de horario/contacto/rol en la tabla de jugadores.
+  La consulta de clave se retiró en 3.17 (`docs/fase-3.17-validacion.md`); la exportación PNG
+  conserva estilos heredados, deuda P2-03 prevista para FASE 3.21.
 - **IA**: Gemini Flash-Lite (`gemini-3.5-flash-lite`, modelo 2.0 retirado por Google) reemplaza a la integración anterior; toast con icono animado
   `Analizando captura con Gemini AI...`.
 

@@ -129,6 +129,12 @@ const GL = {
 
   modulo(id) {
     const ruta = 'js/modulos/' + id + '.js?v=' + encodeURIComponent(CONFIG.VERSION);
+    /* Un módulo ya registrado no vuelve a cargarse: evita IIFE duplicados,
+       suscripciones Realtime repetidas y eventos registrados dos veces. */
+    if ((window.Modulos || {})[id]) {
+      GL._scripts[ruta] = GL._scripts[ruta] || Promise.resolve();
+      return GL._scripts[ruta].then(() => window.Modulos[id]);
+    }
     return GL.cargarScript(ruta).then(() => (window.Modulos || {})[id]);
   },
 

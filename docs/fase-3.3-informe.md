@@ -136,7 +136,7 @@ Comparación observable: antes los botones `.sec/.peligro/.verde` medían 40 px 
 
 ## F. Pendientes
 
-1. `js/modulos/exportar-png.js` conserva Rajdhani y la paleta anterior porque la exportación PNG quedó explícitamente fuera de FASE 3.2/3.3 (migración prevista para FASE 3.4).
+1. `js/modulos/exportar-png.js` conserva Rajdhani y la paleta anterior porque la exportación PNG quedó explícitamente fuera de FASE 3.2/3.3; la migración **no** se ejecutó en 3.4 y sigue como deuda P2-03.
 2. No hay PostgreSQL local: `supabase/tests/fase-2.3.sql` sigue sin ejecutarse y FASE 2.3 no está en producción (heredado de fases anteriores).
 3. Los E2E con login real siguen desactivados por ausencia de `GL_ADMIN_EMAIL` / `GL_ADMIN_PASS`.
 4. Las pantallas que dependen de datos remotos no se probaron contra Supabase; la evidencia visual usa el arnés local con mocks.

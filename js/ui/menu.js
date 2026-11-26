@@ -60,6 +60,7 @@ const NAV_MOVIL_MAS = [
   { id: 'fixture',               corto: 'Cuadro',            icono: 'calendar',               nivel: 'publico' },
   { id: 'eliminatorias',        corto: 'Eliminatorias',      icono: 'git-merge',               nivel: 'publico' },
   { id: 'dashboard-admin',      corto: 'Control',            icono: 'layout-dashboard',        nivel: 'admin'   },
+  { id: 'jornadas',             corto: 'Jornadas',           icono: 'flag',                    nivel: 'admin'   },
   { id: 'mensajes',             corto: 'Mensajes',           icono: 'message-square',          nivel: 'admin'   },
   { id: 'resultados',           corto: 'Resultados',         icono: 'clipboard-check',         nivel: 'admin'   },
   { id: 'administracion',       corto: 'Administración',     icono: 'shield',                  nivel: 'admin'   },
@@ -214,17 +215,26 @@ function cerrarPanelMas() {
 function pintarCampana() {
   const btn = document.getElementById('btn-notif');
   if (!btn) return;
-  if (Auth.usuario && !GL.esAdmin()) {
+  if (Auth.usuario) {
+    /* Jugadores y administradores reciben alertas: la campana debe ser visible
+       para ambos. La consulta de conteo se hace una sola vez por jugador. */
     btn.style.display = '';
     btn.onclick = () => {
       GL.modulo('notificaciones').then(m => m && m.abrirPanel()).catch(console.warn);
     };
-    // Cargar conteo inicial
+    const idJugador = Auth.jugador && Auth.jugador.id;
     GL.modulo('notificaciones').then(m => {
-      if (m) { m._cargar().then(() => m._actualizarBadge()); }
+      if (!m) return;
+      if (m._badgeCargadoPara !== idJugador) {
+        m._badgeCargadoPara = idJugador;
+        m._cargar().then(() => m._actualizarBadge()).catch(() => {});
+      } else {
+        m._actualizarBadge();
+      }
     }).catch(() => {});
   } else {
     btn.style.display = 'none';
+    btn.onclick = null;
   }
 }
 
