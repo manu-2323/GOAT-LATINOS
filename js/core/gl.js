@@ -611,7 +611,11 @@ const GL = {
     if (m.includes('abort'))
       return 'La solicitud fue interrumpida' + ctx + '. Intentá recargar la página.';
 
-    // Autenticación / sesión
+    // Autenticación / sesión. Antes del match genérico de "supabase": un
+    // refresh token vencido NO es un problema de configuración de la BD.
+    if (m.includes('refresh token') || m.includes('invalid login credentials') ||
+        m.includes('email not confirmed') || m.includes('user not found'))
+      return 'Tu sesión venció o las credenciales no son válidas. Cerrá sesión y volvé a ingresar.';
     if (m.includes('jwt') || m.includes('token') || m.includes('session') || m.includes('unauthorized') || m.includes('401'))
       return 'Tu sesión expiró. Cerrá sesión, volvé a ingresar e intenta de nuevo.';
     if (m.includes('403') || m.includes('forbidden') || m.includes('row-level security'))
@@ -955,10 +959,20 @@ const GL = {
         GL.consultar('clasificacion', q => q.order('pts', { ascending: false })),
         esPublico ? sinDatos : GL.consultar('sanciones', q => q.order('created_at', { ascending: false }))
       ]);
-      const error = torneos.error || grupos.error || jugadores.error || miembros.error || jornadas.error || clasificacion.error || sanciones.error;
-      if (error) {
-        console.warn('Contexto GL:', error.message);
-        if (GL._notificaciones++ === 0) GL.notificar('Supabase respondió con un error. Revisa las políticas RLS y tu conexión.', 'advertencia');
+      /* FASE 3.12 (ampliación): identificar QUÉ consulta falló. El texto genérico
+         que contenía "Supabase" se traducía como "problema de configuración",
+         aunque el error real fuera de esquema, RLS o autenticación. */
+      const consultasContexto = [
+        ['torneos', torneos], ['grupos', grupos], ['jugadores', jugadores],
+        ['grupo_jugadores/sanciones', miembros], ['jornadas', jornadas],
+        ['clasificacion', clasificacion], ['sanciones', sanciones]
+      ];
+      const fallo = consultasContexto.find(([, r]) => r && r.error);
+      if (fallo) {
+        console.warn('Contexto GL: falló la consulta de ' + fallo[0], fallo[1].error);
+        if (GL._notificaciones++ === 0) {
+          GL.notificar('No se pudo cargar ' + fallo[0] + '. El detalle real está en la consola; revisa permisos y estructura.', 'advertencia');
+        }
       }
       const torneo = (torneos.data || [])[0] || t || null;
       const tid = torneo && torneo.id;

@@ -4,9 +4,15 @@
 let _tokenVista = 0;
 let _rutaActual = 'tabla';
 
+/* FASE 3.12 (ampliación): la entrada de la app es el panel principal cuando
+   hay sesión; la Tabla sigue siendo la puerta pública para invitados. */
+function rutaPorDefecto() {
+  return (typeof Auth !== 'undefined' && Auth && Auth.usuario) ? 'inicio' : 'tabla';
+}
+
 function rutaActual() {
   const id = location.hash.replace('#', '').split('/')[0];
-  return itemNav(id) ? id : 'tabla';
+  return itemNav(id) ? id : rutaPorDefecto();
 }
 
 /* Acceso obligatorio: ninguna vista se renderiza sin una sesión válida. */
@@ -19,7 +25,8 @@ function exigirLogin(destino) {
   PantallaAuth.mostrar(async () => {
     try { await Promise.all([GL.cargarPaises(true), GL.cargarContexto(true)]); } catch (e) { console.warn(e); }
     dibujarMenu(); pintarSesion(); pintarTemporada();
-    await mostrar(ruta);
+    // Si no había una ruta explícita en la URL, entrar al panel principal.
+    await mostrar(destino || (location.hash ? rutaActual() : rutaPorDefecto()));
   });
 }
 
@@ -28,7 +35,7 @@ async function mostrar(id) {
     exigirLogin(id);
     return;
   }
-  const item = itemNav(id) || itemNav('tabla');
+  const item = itemNav(id) || itemNav(rutaPorDefecto()) || itemNav('tabla');
   const archivo = item.modulo || item.id;
   const nivel = item.nivel || 'publico';
   const vista = document.getElementById('vista');
@@ -156,13 +163,19 @@ async function arrancar() {
 window.addEventListener('hashchange', () => mostrar(rutaActual()));
 window.addEventListener('gl:auth', async () => {
   dibujarMenu(); pintarSesion();
-  try { await GL.cargarContexto(true); } catch (e) { console.warn(e); }
+  // FASE 3.12 (ampliación): sin sesión no se consulta el contexto; un evento
+  // SIGNED_OUT del refresco de token no debe disparar lecturas prematuras.
+  try { if (Auth.usuario) await GL.cargarContexto(true); } catch (e) { console.warn(e); }
   pintarTemporada();
   if (PantallaAuth.obligatorio && !Auth.usuario) {
     exigirLogin(_rutaActual);
     return;
   }
   if (Auth.usuario && PantallaAuth.overlay) PantallaAuth.ocultar(false);
+  if (Auth.usuario && !location.hash) {
+    _rutaActual = rutaPorDefecto();
+    location.hash = _rutaActual;
+  }
   await mostrar(_rutaActual);
   // Mostrar tour de bienvenida al nuevo jugador (solo una vez)
   if (Auth.usuario && !GL.esAdmin() && window.OnboardingTour) {

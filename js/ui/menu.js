@@ -6,6 +6,9 @@ const Modulos = {};
 window.Modulos = Modulos;
 
 const SECCIONES = [
+  { titulo: 'Inicio', items: [
+    { id: 'inicio', nombre: 'Inicio', icono: 'house', nivel: 'jugador', modulo: 'inicio' }
+  ]},
   { titulo: 'Competencia', items: [
     { id: 'tabla',        nombre: 'Tabla',          icono: 'layout-list',  nivel: 'publico' },
     { id: 'calendario',   nombre: 'Calendario',     icono: 'calendar-days', nivel: 'publico' },
@@ -30,17 +33,30 @@ const SECCIONES = [
 
 // Los 4 accesos fijos siempre visibles en la barra móvil
 const NAV_MOVIL_FIJOS = [
-  { id: 'tabla',        corto: 'Tabla',     icono: 'layout-list'  },
-  { id: 'calendario',   corto: 'Calendario', icono: 'calendar-days' },
-  { id: 'estadisticas', corto: 'Stats',     icono: 'bar-chart-2'  },
-  { id: 'eliminatorias',corto: 'Copa',      icono: 'git-merge'    }
+  { id: 'inicio',       corto: 'Inicio',    icono: 'house',        nivel: 'jugador' },
+  { id: 'tabla',        corto: 'Tabla',     icono: 'layout-list',  nivel: 'publico' },
+  { id: 'calendario',   corto: 'Calendario', icono: 'calendar-days', nivel: 'publico' },
+  { id: 'estadisticas', corto: 'Stats',     icono: 'bar-chart-2',  nivel: 'publico' },
+  { id: 'eliminatorias',corto: 'Copa',      icono: 'git-merge',    nivel: 'publico' }
 ];
+
+// En móvil se mantiene un único acceso principal: Inicio para usuarios con
+// sesión, Tabla para invitados. El resto de fijos se calcula en dibujarNavMovil().
+function navMovilFijos() {
+  const fijos = NAV_MOVIL_FIJOS.filter(i => i.id !== 'inicio' && i.id !== 'tabla' && nivelPermitido(i.nivel));
+  const principal = Auth.usuario
+    ? NAV_MOVIL_FIJOS.find(i => i.id === 'inicio')
+    : NAV_MOVIL_FIJOS.find(i => i.id === 'tabla');
+  return [principal].concat(fijos);
+}
 
 // Ítems del panel "Más" — se filtran por nivel de acceso en tiempo real
 const NAV_MOVIL_MAS = [
+  { id: 'inicio',               corto: 'Inicio',             icono: 'house',                   nivel: 'jugador' },
   { id: 'perfil',               corto: 'Mi perfil',          icono: 'user',                    nivel: 'jugador' },
   { id: 'notificaciones',       corto: 'Notificaciones',     icono: 'bell',                    nivel: 'jugador' },
   { id: 'estadisticas-globales',corto: 'Stats globales',     icono: 'chart-no-axes-column-increasing', nivel: 'publico' },
+  { id: 'tabla',                 corto: 'Tabla',             icono: 'layout-list',            nivel: 'publico' },
   { id: 'fixture',               corto: 'Fixture',           icono: 'calendar',               nivel: 'publico' },
   { id: 'eliminatorias',        corto: 'Eliminatorias',      icono: 'git-merge',               nivel: 'publico' },
   { id: 'dashboard-admin',      corto: 'Control',            icono: 'layout-dashboard',        nivel: 'admin'   },
@@ -67,7 +83,9 @@ function nivelPermitido(nivel) {
 function dibujarMenu() {
   const nav = document.getElementById('navegacion');
   if (!nav) return;
-  const actual = (location.hash || '#tabla').replace('#', '');
+  const actual = location.hash
+    ? location.hash.replace('#', '').split('/')[0]
+    : (typeof rutaPorDefecto === 'function' ? rutaPorDefecto() : 'tabla');
   nav.innerHTML = SECCIONES.map(sec => {
     const items = sec.items.filter(i => nivelPermitido(i.nivel));
     if (!items.length) return '';
@@ -84,12 +102,14 @@ function dibujarMenu() {
 function dibujarNavMovil() {
   const nav = document.getElementById('nav-movil');
   if (!nav) return;
-  const actual = (location.hash || '#tabla').replace('#', '');
+  const actual = location.hash
+    ? location.hash.replace('#', '').split('/')[0]
+    : (typeof rutaPorDefecto === 'function' ? rutaPorDefecto() : 'tabla');
 
   // Detectar si el ítem activo está dentro del panel "Más"
   const activoEnMas = NAV_MOVIL_MAS.some(x => x.id === actual);
 
-  const fijosHTML = NAV_MOVIL_FIJOS.map(item => {
+  const fijosHTML = navMovilFijos().map(item => {
     // Si el ítem fijo es el activo, marcarlo; si es "eliminatorias" es público siempre
     const activo = item.id === actual;
     return '<a href="#' + item.id + '" data-id="' + item.id + '" class="nav-movil-link' +
@@ -118,7 +138,9 @@ function abrirPanelMas() {
   // Cerrar si ya está abierto
   document.getElementById('panel-mas-fondo') && cerrarPanelMas();
 
-  const actual = (location.hash || '#tabla').replace('#', '');
+  const actual = location.hash
+    ? location.hash.replace('#', '').split('/')[0]
+    : (typeof rutaPorDefecto === 'function' ? rutaPorDefecto() : 'tabla');
   const esAdmin = GL.esAdmin();
 
   const itemsVisibles = NAV_MOVIL_MAS.filter(x => nivelPermitido(x.nivel));

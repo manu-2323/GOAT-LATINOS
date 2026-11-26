@@ -3,7 +3,7 @@ import AxeBuilder from '@axe-core/playwright';
 
 const EMAIL = process.env.GL_ADMIN_EMAIL || '';
 const CLAVE = process.env.GL_ADMIN_PASS || '';
-const RUTAS = ['tabla', 'calendario', 'fixture', 'estadisticas', 'estadisticas-globales',
+const RUTAS = ['inicio', 'tabla', 'calendario', 'fixture', 'estadisticas', 'estadisticas-globales',
   'eliminatorias', 'resultados', 'jornadas', 'administracion', 'mensajes', 'auditoria',
   'dashboard-admin', 'perfil', 'notificaciones'];
 
@@ -26,8 +26,10 @@ async function entrar(page) {
 test('navegación y estados: sin pantallas en blanco', async ({ page }) => {
   test.skip(!EMAIL || !CLAVE, 'Faltan credenciales de administrador en el entorno');
   await entrar(page);
+  await page.waitForFunction(() => location.hash === '#inicio' &&
+    !!document.querySelector('#vista .ini-pantalla'), null, { timeout: 30000 });
   const titulos = {
-    tabla: 'Tabla de Posiciones', calendario: 'Calendario y programación',
+    inicio: 'Panel principal', tabla: 'Tabla de Posiciones', calendario: 'Calendario y programación',
     fixture: 'Calendario de la liga', estadisticas: 'Estadísticas de la jornada',
     'estadisticas-globales': 'Estadísticas Globales', eliminatorias: 'Eliminatorias',
     resultados: 'Carga de resultados', jornadas: 'Jornadas', administracion: 'Jugadores',
@@ -48,7 +50,7 @@ test('navegación y estados: sin pantallas en blanco', async ({ page }) => {
 test('accesibilidad: sin violaciones críticas', async ({ page }) => {
   test.skip(!EMAIL || !CLAVE, 'Faltan credenciales de administrador en el entorno');
   await entrar(page);
-  for (const ruta of ['tabla', 'resultados', 'administracion', 'perfil']) {
+  for (const ruta of ['inicio', 'tabla', 'resultados', 'administracion', 'perfil']) {
     await page.evaluate(h => { location.hash = h; }, ruta);
     await page.waitForFunction(() => !document.querySelector('#vista [aria-busy="true"]'), null, { timeout: 30000 });
     await page.waitForTimeout(900);
