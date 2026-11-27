@@ -6,9 +6,9 @@ const CONFIG = {
   SUPABASE_URL: 'https://zmjzlvsdlfzmhptmtmjx.supabase.co',
   SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptanpsdnNkbGZ6bWhwdG10bWp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0ODE4MDIsImV4cCI6MjExMTA1NzgwMn0.4FosjYMKwl3n6ab-8Zw48lwxdmk1NQzsHAxynNFiRoA',
   NOMBRE_LIGA: 'GOATS LATINOS',
-  /* URL pública real de GitHub Pages. Se envía como emailRedirectTo para que
+  /* URL pública real de Cloudflare Pages. Se envía como emailRedirectTo para que
      Supabase Auth nunca devuelva el enlace de confirmación a la raíz. */
-  SITE_URL: 'https://manu-2323.github.io/GOAT-LATINOS/',
+  SITE_URL: 'https://goat-latinos.pages.dev/',
   VERSION: '1.6.0',
   LIBPHONENUMBER_VERSION: '1.13.17',
   BUCKET_CAPTURAS: 'capturas-partidos',

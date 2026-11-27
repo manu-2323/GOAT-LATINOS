@@ -346,14 +346,14 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 | El correo dice “Lo verificaremos al crear la cuenta” | Comportamiento normal: no enumeramos correos; `signUp` informa si ya existe. |
 | La tabla no muestra banderas | Revisá que `paises` tenga filas activas y que `flagcdn.com` sea accesible. |
 | El gráfico no aparece | Confirmá que `librerias/chart.umd.js` esté presente y que `index.html` lo cargue antes de los módulos. |
-| El enlace de confirmación cae en 404 | Usá siempre `https://manu-2323.github.io/GOAT-LATINOS/`. La raíz `https://manu-2323.github.io/` no publica la app. Si el correo es viejo, pedí uno nuevo desde **¿No te llegó el correo de confirmación?** en el acceso. |
+| El enlace de confirmación cae en 404 | Usá siempre `https://goat-latinos.pages.dev/`. GitHub Pages sigue como respaldo en `https://manu-2323.github.io/GOAT-LATINOS/`. Si el correo es viejo, pedí uno nuevo desde **¿No te llegó el correo de confirmación?** en el acceso. |
 | «Supabase no pudo enviar el correo de confirmación» | Límite real de envío de correo de Supabase (SMTP integrado). No repitas el registro ni el reenvío; esperá a que se restablezca. La respuesta no incluye hora exacta. |
 | «Creando…» se queda en alta administrativa | Antes no había timeout ni `finally`. Ahora el botón se rehabilita solo; si el correo queda como «resultado desconocido», revisá la lista de jugadores antes de volver a crear. |
 
 ## 16. Confirmación de correo 1.3.8
 
-- **URL pública**: `CONFIG.SITE_URL = https://manu-2323.github.io/GOAT-LATINOS/`. `Auth.registrar()` y `Auth.reenviarConfirmacion()` envían ese valor como `emailRedirectTo`, de modo que el correo no dependa de la página desde la que se hizo el registro.
-- **Configuración remota**: `supabase config pull` (solo lectura) confirma `auth.site_url` y `auth.additional_redirect_urls` apuntando a esa misma URL; no hizo falta cambiar Dashboard, SMTP, plantillas ni credenciales.
+- **URL pública**: `CONFIG.SITE_URL = https://goat-latinos.pages.dev/`. `Auth.registrar()` y `Auth.reenviarConfirmacion()` envían ese valor como `emailRedirectTo`, de modo que el correo no dependa de la página desde la que se hizo el registro.
+- **Configuración remota**: en Supabase Auth, `Site URL = https://goat-latinos.pages.dev/` y `Redirect URLs` conserva temporalmente `https://manu-2323.github.io/GOAT-LATINOS/` para correos ya enviados. No se cambiaron SMTP, plantillas ni credenciales.
 - **Retorno del enlace**: `Auth.consumirCallback()` distingue éxito, expiración y enlace inválido antes de que `detectSessionInUrl` limpie el fragmento. Los errores se muestran en la pantalla de acceso con texto propio y se limpia la URL; un retorno válido muestra “Correo confirmado”.
 - **Recuperación**: el acceso ofrece **¿No te llegó el correo de confirmación?** y llama a `auth.resend({ type: 'signup' })` con el mismo `emailRedirectTo`. No crea cuentas, no cambia correos ni contraseñas.
 - **Cuentas ya registradas**: el enlace antiguo no se reescribe. Si el token ya se usó o venció, se solicita un correo nuevo con la misma dirección; la cuenta y su perfil siguen iguales.

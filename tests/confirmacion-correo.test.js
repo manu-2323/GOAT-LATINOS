@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-const URL_PUBLICA = 'https://manu-2323.github.io/GOAT-LATINOS/';
+const URL_PUBLICA = 'https://goat-latinos.pages.dev/';
 const leer = ruta => readFileSync(resolve(process.cwd(), ruta), 'utf8');
 
 function clienteFalso(signUp) {

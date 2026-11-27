@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const raiz = process.cwd();
 const leer = ruta => readFileSync(resolve(raiz, ruta), 'utf8');
 const codigoAuth = leer('js/ui/auth.js');
-const URL_PUBLICA = 'https://manu-2323.github.io/GOAT-LATINOS/';
+const URL_PUBLICA = 'https://goat-latinos.pages.dev/';
 
 const telFalso = {
   prefijo: () => '505',
