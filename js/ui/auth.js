@@ -206,6 +206,9 @@ const PantallaAuth = {
           PantallaAuth.aviso = 'Contraseña actualizada. Ingresá con tu nueva contraseña.';
           try { await Auth.salir(); }
           catch (e) { console.warn('[auth] cierre tras recuperación:', e); }
+          /* exigirLogin() no repinta si el overlay ya existe: acá sí hay que
+             reemplazarlo para volver al formulario de ingreso. */
+          await PantallaAuth.mostrar(PantallaAuth.alEntrar);
           GL.notificar('Contraseña actualizada. Ingresá con tu nueva contraseña.', 'exito', 'check-circle-2');
         } catch (e) {
           err.textContent = e.message;

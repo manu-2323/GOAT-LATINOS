@@ -241,6 +241,9 @@ describe('Recuperación de contraseña — pantallas', () => {
     expect(cliente.llamadas.signOut).toHaveLength(1);
     expect(pantalla.modo).toBe('entrar');
     expect(pantalla.aviso).toContain('Contraseña actualizada');
+    expect(document.querySelector('#form-entrar')).not.toBeNull();
+    expect(document.querySelector('#form-recuperar')).toBeNull();
+    expect(document.querySelector('[role="alert"]').textContent).toContain('Contraseña actualizada');
   });
 
   it('un enlace vencido ofrece volver al ingreso sin quedar atrapado', async () => {
