@@ -346,3 +346,12 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 | El correo dice “Lo verificaremos al crear la cuenta” | Comportamiento normal: no enumeramos correos; `signUp` informa si ya existe. |
 | La tabla no muestra banderas | Revisá que `paises` tenga filas activas y que `flagcdn.com` sea accesible. |
 | El gráfico no aparece | Confirmá que `librerias/chart.umd.js` esté presente y que `index.html` lo cargue antes de los módulos. |
+| El enlace de confirmación cae en 404 | Usá siempre `https://manu-2323.github.io/GOAT-LATINOS/`. La raíz `https://manu-2323.github.io/` no publica la app. Si el correo es viejo, pedí uno nuevo desde **¿No te llegó el correo de confirmación?** en el acceso. |
+
+## 16. Confirmación de correo 1.3.8
+
+- **URL pública**: `CONFIG.SITE_URL = https://manu-2323.github.io/GOAT-LATINOS/`. `Auth.registrar()` y `Auth.reenviarConfirmacion()` envían ese valor como `emailRedirectTo`, de modo que el correo no dependa de la página desde la que se hizo el registro.
+- **Configuración remota**: `supabase config pull` (solo lectura) confirma `auth.site_url` y `auth.additional_redirect_urls` apuntando a esa misma URL; no hizo falta cambiar Dashboard, SMTP, plantillas ni credenciales.
+- **Retorno del enlace**: `Auth.consumirCallback()` distingue éxito, expiración y enlace inválido antes de que `detectSessionInUrl` limpie el fragmento. Los errores se muestran en la pantalla de acceso con texto propio y se limpia la URL; un retorno válido muestra “Correo confirmado”.
+- **Recuperación**: el acceso ofrece **¿No te llegó el correo de confirmación?** y llama a `auth.resend({ type: 'signup' })` con el mismo `emailRedirectTo`. No crea cuentas, no cambia correos ni contraseñas.
+- **Cuentas ya registradas**: el enlace antiguo no se reescribe. Si el token ya se usó o venció, se solicita un correo nuevo con la misma dirección; la cuenta y su perfil siguen iguales.

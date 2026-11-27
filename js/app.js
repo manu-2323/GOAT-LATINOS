@@ -147,7 +147,16 @@ async function arrancar() {
   dibujarMenu();
   pintarSesion();
 
+  /* Se lee ANTES de iniciar para que el aviso ya exista si el evento gl:auth
+     pinta el acceso; la URL se limpia recién después de procesar el fragmento. */
+  const avisoAuth = Auth.consumirCallback ? Auth.consumirCallback(undefined, false) : null;
+  if (avisoAuth && avisoAuth.error) PantallaAuth.aviso = avisoAuth.mensaje;
   try { await Auth.iniciar(); } catch (e) { console.warn(e); }
+  if (Auth.limpiarCallbackUrl) Auth.limpiarCallbackUrl();
+  if (avisoAuth && Auth.usuario) {
+    GL.notificar(avisoAuth.mensaje, avisoAuth.error ? 'advertencia' : 'exito',
+      avisoAuth.error ? 'triangle-alert' : 'check-circle-2');
+  }
   if (!Auth.usuario) {
     exigirLogin(rutaActual());
     return;

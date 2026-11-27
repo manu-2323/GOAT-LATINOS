@@ -8,6 +8,8 @@ const PantallaAuth = {
   alEntrar: null,
   overlay: null,
   obligatorio: false,
+  /* Aviso de la vuelta del enlace de confirmación (expirado, inválido, etc.). */
+  aviso: null,
   _timers: {},
 
   campoClave(id, etiqueta, auto) {
@@ -36,6 +38,9 @@ const PantallaAuth = {
        Sin esta barrera, dos esperas resueltas creaban dos overlays con el
        mismo id y formularios duplicados en el acceso. */
     document.querySelectorAll('#auth.auth').forEach(x => x.remove());
+    const avisoHtml = PantallaAuth.aviso
+      ? '<div class="auth-error" role="alert">' + esc(PantallaAuth.aviso) + '</div>'
+      : '';
     const o = document.createElement('div');
     o.className = 'auth'; o.id = 'auth';
     const esAdmin = PantallaAuth.modo === 'admin';
@@ -60,6 +65,8 @@ const PantallaAuth = {
             PantallaAuth.campoClave('en-clave', 'Contraseña', 'current-password') +
             '<div class="auth-error" id="en-error"></div>' +
             '<button class="btn auth-ancho" type="submit">Ingresar</button>' +
+            '<button type="button" class="auth-enlace" id="en-reenviar">¿No te llegó el correo de confirmación?</button>' +
+            '<div class="auth-error" id="en-reenvio-estado" aria-live="polite"></div>' +
           '</form>' +
           '<p class="auth-cambiar">¿Todavía no tenés cuenta? <button type="button" class="auth-enlace" data-modo="registro">Registrate</button></p>' +
           '<p class="auth-cambiar" style="margin-top:4px"><button type="button" class="auth-enlace" data-modo="admin">Acceso de administrador</button></p>'
@@ -96,7 +103,7 @@ const PantallaAuth = {
       '<div class="auth-marco">' +
         '<div class="auth-logo"><strong><span class="oro">GOATS</span> LATINOS</strong>' +
         '<small>LEAGUE MANAGER</small></div>' +
-        '<div class="auth-caja">' + cuerpo + '</div>' +
+        '<div class="auth-caja">' + avisoHtml + cuerpo + '</div>' +
         '<p class="auth-pie">' + (esAdmin
           ? 'Ingresá con un correo habilitado para administración. La RPC del servidor valida correo y clave antes de iniciar sesión.'
           : 'Al registrarte quedarás pendiente de aprobación hasta que el administrador te asigne a un grupo.') + '</p>' +
@@ -118,6 +125,7 @@ const PantallaAuth = {
 
     const ocupado = (form, si) => form.querySelectorAll('button,input,select').forEach(x => x.disabled = si);
     const exito = (mensaje, ico) => {
+      PantallaAuth.aviso = null;
       PantallaAuth.ocultar();
       if (mensaje) GL.notificar(mensaje, 'exito', ico || 'check-circle-2');
       if (PantallaAuth.alEntrar) PantallaAuth.alEntrar();
@@ -142,6 +150,27 @@ const PantallaAuth = {
           await Auth.entrar(o.querySelector('#en-correo').value.trim(), o.querySelector('#en-clave').value);
           exito();
         } catch (e) { err.textContent = e.message; ocupado(form, false); }
+      });
+
+      /* Recuperación de una cuenta pendiente: reenvía el correo sin crear
+         otra cuenta ni pedir la contraseña para este paso. */
+      o.querySelector('#en-reenviar').addEventListener('click', async () => {
+        const estado = o.querySelector('#en-reenvio-estado');
+        const boton = o.querySelector('#en-reenviar');
+        const correo = o.querySelector('#en-correo').value.trim();
+        estado.textContent = '';
+        estado.className = 'auth-error';
+        if (!correo) { estado.textContent = 'Ingresá tu correo para reenviar la confirmación.'; return; }
+        boton.disabled = true;
+        estado.textContent = 'Enviando…';
+        try {
+          await Auth.reenviarConfirmacion(correo);
+          estado.textContent = 'Te enviamos un nuevo enlace. Revisá tu correo y la carpeta de spam.';
+          estado.className = 'campo-estado bien';
+        } catch (e) {
+          estado.textContent = e.message;
+          estado.className = 'auth-error';
+        } finally { boton.disabled = false; }
       });
     } else {
       const nombre = o.querySelector('#rg-nombre');

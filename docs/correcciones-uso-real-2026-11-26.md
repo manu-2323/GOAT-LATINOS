@@ -125,3 +125,48 @@ La validación es de código y DOM simulado (jsdom). No se probó en un disposit
 3. No hay prueba en dispositivo móvil físico; la cobertura es jsdom y revisión de eventos/CSS.
 4. Otros formularios modales mantienen su comportamiento previo; las nuevas opciones están disponibles en el helper para aplicarlas caso por caso.
 5. No se afirma ausencia de errores desconocidos fuera de lo revisado.
+
+---
+
+## 8. Segunda corrección: retorno del correo de confirmación (1.3.8)
+
+### Hallazgo
+
+- Supabase Auth envió correctamente el correo `Confirm your email address` (`mailer_autoconfirm: false`).
+- Los logs de Auth muestran el `signup` con `referer: https://manu-2323.github.io/` y, después, un `GET /verify` con `status=303` y `user_signedup`. Es decir: **el enlace sí confirmó la cuenta**.
+- Los clics posteriores devuelven `403 Email link is invalid or has expired` (`One-time token not found`): el token de un solo uso ya había sido consumido.
+- El retorno del primer enlace apuntaba a la raíz `https://manu-2323.github.io/`, que responde **404 / Site not found**. La ruta publicada es `https://manu-2323.github.io/GOAT-LATINOS/` (HTTP 200).
+- `supabase config pull` (solo lectura, sin escrituras) confirma que la configuración remota actual ya tiene:
+  - `auth.site_url = "https://manu-2323.github.io/GOAT-LATINOS/"`
+  - `auth.additional_redirect_urls = ["https://manu-2323.github.io/GOAT-LATINOS/"]`
+- No hizo falta cambiar Site URL, Redirect URLs, SMTP, plantillas ni credenciales.
+
+### Cambio de código
+
+- `js/core/config.js`: nueva clave `CONFIG.SITE_URL` con la URL pública exacta; `VERSION=1.3.8`.
+- `js/core/supabase.js`: `signUp()` y `auth.resend()` envían `emailRedirectTo: CONFIG.SITE_URL`. Así el correo vuelve a la app aunque el registro se haya iniciado desde otra URL.
+- `js/core/supabase.js`: `consumirCallback()` captura los parámetros del fragmento antes de que `detectSessionInUrl` los limpie y traduce `otp_expired` / `access_denied` a mensajes claros en español.
+- `js/app.js`: el aviso se lee antes de `Auth.iniciar()` (para que ya esté visible si se pinta el acceso) y `limpiarCallbackUrl()` se ejecuta recién después de procesar la sesión, sin quitarle el token al cliente.
+- `js/app.js`: muestra “Correo confirmado” en un retorno válido y deja un aviso visible en el acceso cuando el enlace venció o no es válido; ya no hay pantalla vacía ni error genérico.
+- `js/ui/auth.js`: botón **¿No te llegó el correo de confirmación?** en el acceso, que reenvía el correo con el mismo `emailRedirectTo` sin crear otra cuenta.
+- `index.html`: cache-busting `1.3.8` para `config.js`, `gl.js`, `supabase.js`, `menu.js`, `auth.js` y `app.js`. CSS permanece en `3.23.0`.
+
+### Verificación
+
+| Verificación | Resultado |
+|---|---|
+| `vitest run` | **20 archivos, 244 pruebas, `EXIT=0`**. |
+| `tests/confirmacion-correo.test.js` (nuevo) | 11 pruebas: URL pública, `emailRedirectTo` en `signUp`, reenvío con el mismo retorno, validación de correo, mensajes de vencido/inválido/confirmado, ausencia de aviso en carga normal, orden de arranque y limpieza del fragmento. |
+| `git -c core.whitespace=cr-at-eol diff --check` | Sin errores. |
+| HTTP en GitHub Pages | `/` → 404; `/GOAT-LATINOS/` y `/GOAT-LATINOS/index.html` → 200. |
+| Logs de Auth | Confirmación real del token confirmada; rechazo posterior por token ya usado, no por configuración de Supabase. |
+
+### Limitación
+
+No se envió un correo real: el usuario prohibió registrar cuentas de prueba con correos reales. La comprobación es de código, mocks de Supabase y logs ya generados. El enlace viejo no se puede reparar: hay que pedir uno nuevo con la misma dirección de correo.
+
+---
+
+## 9. Consulta: qué hace «Expulsar»
+
+`Expulsar` **no elimina** la fila de `jugadores` ni la cuenta de Supabase. Marca al jugador como `activo=false`, `rol='expulsado'` y `suspendido=true`, inserta la sanción correspondiente y resuelve sus partidos pendientes como `1-0` en contra (`js/modulos/admin.js:2713-2720`, `:2920-2926`). La baja real es otra acción distinta: **Eliminar jugador**, que llama a la Edge Function `eliminar-cuenta` (`js/modulos/admin.js:1690-1710`).

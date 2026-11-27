@@ -190,7 +190,7 @@ describe('GOATS LATINOS 1.2.1 — teléfonos en frontend', () => {
     expect(cliente.llamadas.signUp[0].options.data).not.toHaveProperty('telefono_verificado');
 
     const codigo = frontendAuth();
-    expect(codigo).toContain('options: { data: metadata }');
+    expect(codigo).toContain('options: { data: metadata, emailRedirectTo: CONFIG.SITE_URL }');
     expect(codigo).toContain('_crearPerfilDesdeMetadata');
     expect(leer('js/ui/auth.js')).toContain('resultado.requiereConfirmacion');
   });

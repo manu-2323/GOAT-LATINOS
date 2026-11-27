@@ -5,6 +5,24 @@
 const configurado = typeof supabase !== 'undefined' &&
   /^https:\/\//.test(CONFIG.SUPABASE_URL) && CONFIG.SUPABASE_KEY.indexOf('PEGA_AQUI') === -1;
 
+/* Se lee ANTES de crear el cliente: con detectSessionInUrl:true, Supabase
+   puede consumir y limpiar el fragmento al inicializarse. Solo se captura;
+   la URL no se modifica hasta que la sesión ya fue procesada. */
+const AUTH_CALLBACK = (() => {
+  const parametros = {};
+  try {
+    const juntar = texto => {
+      new URLSearchParams(String(texto || '').replace(/^[?#]/, ''))
+        .forEach((valor, clave) => { parametros[clave] = valor; });
+    };
+    if (typeof location !== 'undefined') {
+      juntar(location.search);
+      juntar(location.hash);
+    }
+  } catch (e) { /* entorno sin URL: no hay callback que procesar */ }
+  return parametros;
+})();
+
 const sb = configurado ? supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 }) : null;
@@ -27,10 +45,68 @@ const Auth = {
   /* Estado explícito para la UI cuando la cuenta Auth existe pero el perfil
      no pudo completarse (por ejemplo, teléfono en poder de otro jugador). */
   perfilPendienteTelefono: null,
+  /* Aviso visible tras volver del enlace de confirmación de Supabase. */
+  avisoCallback: null,
 
   /* 1.2.1 — Un único cliente (inyectable en pruebas, nunca privilegiado).
      telefono_verificado`: eso solo lo confirma una persona, jamás isValid(). */
   _cliente() { return Auth._sb || sb; },
+
+  /* El enlace viejo puede traer error=access_denied&error_code=otp_expired en
+     el fragmento. Nunca se muestra texto del correo sin escapar: se traduce
+     a un mensaje propio y se limpia la URL para no repetirlo en cada carga. */
+  consumirCallback(parametros, limpiar = true) {
+    const p = parametros && typeof parametros === 'object' ? parametros : AUTH_CALLBACK;
+    const hayError = !!(p.error || p.error_code || p.error_description);
+    const esConfirmacion = !hayError && !!(p.type === 'signup' || p.access_token);
+    if (!hayError && !esConfirmacion) return null;
+
+    let mensaje;
+    if (hayError) {
+      const codigo = String(p.error_code || p.error || '').toLowerCase();
+      const detalle = String(p.error_description || '').toLowerCase();
+      if (codigo === 'otp_expired' || detalle.includes('expired') || detalle.includes('expir')) {
+        mensaje = 'El enlace de confirmación venció o ya se usó. Tu cuenta no se modificó: ingresá con tu correo y contraseña o pedí un enlace nuevo desde el acceso.';
+      } else if (codigo === 'access_denied' || detalle.includes('invalid')) {
+        mensaje = 'Ese enlace de confirmación no es válido. No cambies tu correo ni crees otra cuenta: usá el acceso normal o pedí un enlace nuevo.';
+      } else {
+        mensaje = 'No se pudo confirmar el correo con ese enlace. Tu cuenta sigue igual: probá ingresar o solicitá un nuevo correo de confirmación.';
+      }
+    } else {
+      mensaje = 'Correo confirmado. ¡Bienvenido a la liga!';
+    }
+
+    Auth.avisoCallback = hayError ? mensaje : null;
+    if (limpiar) Auth.limpiarCallbackUrl();
+    return { error: hayError, mensaje };
+  },
+
+  limpiarCallbackUrl() {
+    try {
+      if (typeof history !== 'undefined' && history.replaceState) {
+        history.replaceState(history.state, '', location.pathname + location.search);
+      } else if (typeof location !== 'undefined') {
+        location.hash = '';
+      }
+    } catch (e) { /* jsdom o navegador sin History API */ }
+  },
+
+  /* Reenvío público: no crea cuentas ni cambia correos; Supabase responde de
+     forma genérica. Se fuerza la misma URL de retorno que en el registro. */
+  async reenviarConfirmacion(correo) {
+    if (!Auth._cliente()) throw new Error('Supabase no está configurado.');
+    const email = String(correo || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Ingresá un correo válido.');
+    if (typeof Auth._cliente().auth.resend !== 'function') {
+      throw new Error('El reenvío no está disponible en este cliente.');
+    }
+    const { error } = await Auth._cliente().auth.resend({
+      email, type: 'signup',
+      options: { emailRedirectTo: CONFIG.SITE_URL }
+    });
+    if (error) throw new Error(Auth.traducir(error.message));
+    return true;
+  },
 
   /* 2.3 — Los metadatos los escribe el usuario. Solo se aceptan países del
      catálogo; el resto de campos sensibles siempre los fija PostgreSQL. */
@@ -56,7 +132,7 @@ const Auth = {
       usuarioId: (creado.user && creado.user.id) || null,
       correoEnviado: requiereConfirmacion,
       mensaje: requiereConfirmacion
-        ? 'Cuenta de autenticación creada. Revisá tu correo para confirmarla; el perfil de jugador se completará cuando inicies sesión.'
+        ? 'Cuenta de autenticación creada. Revisá tu correo para confirmarla; el perfil de jugador se completará cuando inicies sesión. Si no te llega, usá «Reenviar confirmación» en el acceso.'
         : 'Cuenta creada. ¡Bienvenido a la liga!',
       metadata: {
         nombre_usuario: meta.nombre_usuario || meta.nombre || '',
@@ -382,7 +458,7 @@ const Auth = {
     };
     const { data, error } = await Auth._cliente().auth.signUp({
       email, password: clave,
-      options: { data: metadata }
+      options: { data: metadata, emailRedirectTo: CONFIG.SITE_URL }
     });
     if (error) throw new Error(Auth.traducir(error.message));
     if (!data || !data.user) throw new Error('No se pudo crear la cuenta de autenticación. Revisá los datos e intentá de nuevo.');
@@ -706,7 +782,8 @@ const Auth = {
     if (m.includes('at least')) return 'La contraseña es demasiado corta.';
     if (m.includes('rate limit') || m.includes('too many')) return 'Demasiados intentos. Esperá un momento y volvé a probar.';
     if (m.includes('invalid format') || m.includes('valid email')) return 'El correo no es válido.';
-    if (m.includes('email not confirmed')) return 'Confirmá tu correo electrónico antes de ingresar.';
+    if (m.includes('email not confirmed')) return 'Confirmá tu correo electrónico antes de ingresar. Si no recibiste el enlace, usá «Reenviar confirmación» en el acceso.';
+    if (m.includes('email link is invalid') || m.includes('one-time token') || m.includes('expired')) return 'El enlace de confirmación venció o no es válido. Pedí uno nuevo desde el acceso.';
     if (m.includes('failed to fetch') || m.includes('network')) return 'No hay conexión con el servidor. Revisá tu internet.';
     if (m.includes('row-level security') || m.includes('permission denied')) return 'No tenés permisos para realizar esta acción.';
     return 'No se pudo completar la acción: ' + msg;
