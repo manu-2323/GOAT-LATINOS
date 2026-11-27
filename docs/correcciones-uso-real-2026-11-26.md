@@ -378,3 +378,10 @@ Entra a `Mi Perfil` y ve el perfil completo con sus datos, estadísticas e histo
 - **Real (solo lectura):** se verificó el registro de FABIAN10 y sus relaciones con `auth.users`, `torneos`, `grupos` y `grupo_jugadores`. No se modificaron datos, RLS, GRANT/REVOKE, RPC, Edge Functions ni Auth. No se aplicó ninguna migración SQL.
 - **Aislado:** nueva suite `tests/perfil-sin-grupo-1.4.2.test.js` con 19 pruebas para los 16 escenarios solicitados; suite completa **25 archivos / 334 pruebas, `EXIT=0`**; `node --check` sin errores y `diff --check` sin avisos.
 - **Pendiente:** no se usaron cuentas reales para probar contraseña, perfil ajeno, confirmación telefónica ni inscripción. La revisión visual en escritorio/móvil con una sesión real sigue siendo manual; las pruebas validan las clases adaptativas y media queries existentes. `supabase/migration-participantes-1.4.1.sql` sigue sin aplicarse y requiere aprobación expresa.
+
+### Publicación
+
+- **Commit:** `3aa683cc955d8d2747f7fa1bb556749bd4e8f748` — `fix(perfil): mostrar el perfil sin depender del grupo`. Push directo a `main`, sin ramas auxiliares ni reescritura de historial.
+- **GitHub Actions:** run `45929725618`, `pages build and deployment`, `head_sha=3aa683cc955d8d2747f7fa1bb556749bd4e8f748`; `status=completed`, `conclusion=success`. Detalle: https://github.com/manu-2323/GOAT-LATINOS/actions/runs/45929725618
+- **GitHub Pages:** https://manu-2323.github.io/GOAT-LATINOS/ sirve `VERSION: '1.4.2'`, seis scripts con `?v=1.4.2`, ninguno con `?v=1.4.1`, y el `js/modulos/perfil.js` público ya no contiene `pendienteDeGrupo()` e incluye la tarjeta `Pertenencia al torneo`.
+- **Backend:** no se desplegó ninguna Edge Function ni se aplicó SQL. `admin-crear-jugador` permanece en la versión `14` aprobada anteriormente.
