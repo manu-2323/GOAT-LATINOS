@@ -9,7 +9,7 @@ const CONFIG = {
   /* URL pública real de GitHub Pages. Se envía como emailRedirectTo para que
      Supabase Auth nunca devuelva el enlace de confirmación a la raíz. */
   SITE_URL: 'https://manu-2323.github.io/GOAT-LATINOS/',
-  VERSION: '1.3.8',
+  VERSION: '1.3.9',
   LIBPHONENUMBER_VERSION: '1.13.17',
   BUCKET_CAPTURAS: 'capturas-partidos',
   BUCKET_AVATARES: 'avatares',
@@ -18,6 +18,9 @@ const CONFIG = {
   JORNADA_PLAYOFF_FIN: 30,
   MAX_CAPTURA_BYTES: 5 * 1024 * 1024,
   MAX_AVATAR_BYTES: 2 * 1024 * 1024,
+  /* Timeouts LOCALES de la interfaz; NO son límites ni tiempos de Supabase. */
+  TIMEOUT_REGISTRO: 30000,
+  TIMEOUT_CREAR_JUGADOR: 45000,
   /* Horario deportivo de referencia: 11:00 a 21:00 en America/Managua.
      Todos los demás horarios se calculan con Intl.DateTimeFormat. */
   ZONA_REFERENCIA: 'America/Managua',

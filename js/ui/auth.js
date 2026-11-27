@@ -30,6 +30,16 @@ const PantallaAuth = {
     iniciarIconos();
   },
 
+  /* 1.3.9 — Tiempo máximo LOCAL de espera. No afirma cuánto tarda Supabase:
+     solo evita que el formulario quede esperando para siempre. */
+  conTimeout(promesa, ms, mensaje) {
+    let id;
+    const limite = new Promise((_, rechazar) => {
+      id = setTimeout(() => rechazar(new Error(mensaje)), ms);
+    });
+    return Promise.race([promesa, limite]).finally(() => clearTimeout(id));
+  },
+
   async mostrar(alEntrar) {
     if (alEntrar) PantallaAuth.alEntrar = alEntrar;
     PantallaAuth.ocultar(false);
@@ -181,6 +191,9 @@ const PantallaAuth = {
       const estadoCorreo = o.querySelector('#rg-correo-estado');
       const estadoClave = o.querySelector('#rg-clave-estado');
       let nombreOk = false;
+      let enviando = false;
+      let correoRegistrado = null;
+      let correoSinResultado = null;
 
       const verificarNombre = () => {
         clearTimeout(PantallaAuth._timers.nombre);
@@ -228,6 +241,24 @@ const PantallaAuth = {
 
       nombre.addEventListener('input', verificarNombre);
       correo.addEventListener('input', verificarCorreo);
+      correo.addEventListener('input', () => {
+        /* Cambiar la dirección habilita un nuevo intento; repetir la misma
+           dirección no vuelve a registrar aunque la respuesta se haya perdido. */
+        const actual = correo.value.trim().toLowerCase();
+        let cambio = false;
+        if (correoRegistrado && actual !== correoRegistrado) {
+          correoRegistrado = null;
+          cambio = true;
+        }
+        if (correoSinResultado && actual !== correoSinResultado) {
+          correoSinResultado = null;
+          cambio = true;
+        }
+        if (cambio) {
+          const aviso = o.querySelector('#rg-error');
+          if (aviso) aviso.textContent = '';
+        }
+      });
       clave.addEventListener('input', verificarClave);
 
       /* ---- Sistema de teléfono internacional (libphonenumber-js 1.13.17) ---- */
@@ -300,8 +331,18 @@ const PantallaAuth = {
 
       o.querySelector('#form-registro').addEventListener('submit', async ev => {
         ev.preventDefault();
+        if (enviando) return;
         const err = o.querySelector('#rg-error'); err.textContent = '';
         const form = ev.target;
+        const correoActual = correo.value.trim().toLowerCase();
+        if (correoRegistrado && correoActual === correoRegistrado) {
+          err.textContent = 'Ya enviamos el correo a esta dirección. Usá «¿No te llegó el correo de confirmación?» en el acceso. Si querés otra dirección, cambiá el correo y volvé a enviar.';
+          return;
+        }
+        if (correoSinResultado && correoActual === correoSinResultado) {
+          err.textContent = 'No sabemos con certeza si esa dirección ya fue creada. No repitas el registro: revisá tu correo o usá «¿No te llegó el correo de confirmación?» en el acceso. Para otro intento, cambiá el correo.';
+          return;
+        }
         if (!nombreOk) { err.textContent = 'Esperá a que el nombre aparezca como disponible.'; return; }
         if (!zonaSelect.value) { err.textContent = 'Elegí tu ciudad o zona horaria para ver los horarios correctos.'; return; }
         if (clave.value.length < 8) { err.textContent = 'La contraseña debe tener al menos 8 caracteres.'; return; }
@@ -311,28 +352,46 @@ const PantallaAuth = {
           err.textContent = 'Corregí el teléfono antes de continuar.';
           return;
         }
+        /* Se marca ANTES de llamar: si la respuesta se pierde, un segundo
+           clic con el mismo correo no puede crear otra cuenta. */
+        correoSinResultado = correoActual;
+        enviando = true;
         ocupado(form, true);
         try {
-          const resultado = await Auth.registrar(
-            nombre.value.trim(),
-            correo.value.trim(),
-            clave.value,
-            paisSelect.value,
-            {
-              visual:  _telefono.nacional,
-              e164:    _telefono.e164,
-              paisTel: _telefono.pais,
-              validoPlan: true
-            },
-            zonaSelect.value
+          const resultado = await PantallaAuth.conTimeout(
+            Auth.registrar(
+              nombre.value.trim(),
+              correo.value.trim(),
+              clave.value,
+              paisSelect.value,
+              {
+                visual:  _telefono.nacional,
+                e164:    _telefono.e164,
+                paisTel: _telefono.pais,
+                validoPlan: true
+              },
+              zonaSelect.value
+            ),
+            CONFIG.TIMEOUT_REGISTRO,
+            'La respuesta tardó demasiado. No repitas el registro: es posible que la cuenta ya se haya creado. Revisá tu correo o usá «¿No te llegó el correo de confirmación?» en el acceso.'
           );
+          correoSinResultado = null;
           if (resultado && resultado.requiereConfirmacion) {
+            correoRegistrado = correoActual;
             err.textContent = resultado.mensaje;
             ocupado(form, false);
             return;
           }
           exito('Cuenta creada. ¡Bienvenido a la liga!', 'check-circle-2');
-        } catch (e) { err.textContent = e.message; ocupado(form, false); }
+        } catch (e) {
+          err.textContent = e.message;
+          /* Solo una respuesta explícita de "ya existe" permite reutilizar la
+             dirección; ante error de red/429/timeout queda la barrera. */
+          if (/ya está registrado/i.test(e.message)) correoSinResultado = null;
+          ocupado(form, false);
+        } finally {
+          enviando = false;
+        }
       });
     }
   },

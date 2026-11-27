@@ -130,7 +130,7 @@ describe('FASE 3.16 — auditoría de Administración', () => {
   });
 
   it('renueva el cache-busting y evita cargar módulos dos veces', () => {
-    expect(codigoConfig).toMatch(/VERSION: '1\.3\.[12345678]'/);
+    expect(codigoConfig).toMatch(/VERSION: '1\.3\.[123456789]'/);
     expect(codigoIndex).toMatch(/\?v=3\.(16|17|19|20|23)\.0/);
     expect(codigoIndex).toMatch(/onboarding-admin\.js\?v=1\.2\.[12]/);
     expect(codigoIndex).not.toMatch(/<script src="js\/modulos\/(auditoria|dashboard-admin|notificaciones)\.js\?v=/);

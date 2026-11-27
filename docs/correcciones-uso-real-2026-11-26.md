@@ -170,3 +170,86 @@ No se envió un correo real: el usuario prohibió registrar cuentas de prueba co
 ## 9. Consulta: qué hace «Expulsar»
 
 `Expulsar` **no elimina** la fila de `jugadores` ni la cuenta de Supabase. Marca al jugador como `activo=false`, `rol='expulsado'` y `suspendido=true`, inserta la sanción correspondiente y resuelve sus partidos pendientes como `1-0` en contra (`js/modulos/admin.js:2713-2720`, `:2920-2926`). La baja real es otra acción distinta: **Eliminar jugador**, que llama a la Edge Function `eliminar-cuenta` (`js/modulos/admin.js:1690-1710`).
+
+---
+
+## 10. Tercera corrección: «Demasiados intentos» al registrar (1.3.9)
+
+### Causa exacta
+
+- Los logs de Auth (`supabase logs --remote --service auth --since 24h`, solo lectura) muestran seis respuestas reales `429` en `POST /auth/v1/signup`:
+  - `00:48:58Z`, `00:49:04Z`, `00:49:21Z`, `00:50:51Z` para `manuelperezcanales999@gmail.com`.
+  - `00:51:59Z`, `00:53:03Z` para `claudecode1exponencial@gmail.com`.
+  - Todas con `error: "429: email rate limit exceeded"` y `error_code: "over_email_send_rate_limit"`, desde la misma IP y con referer `https://manu-2323.github.io/GOAT-LATINOS/`.
+- Por lo tanto **no era un error genérico inventado por GOAT-LATINOS**: Supabase devolvió un límite real de envío de correo. La aplicación lo pasaba por `Auth.traducir()` → «Demasiados intentos. Esperá un momento y volvé a probar.», que era demasiado genérico y recomendaba reintentar.
+- Antes de esos 429 hubo un `/signup` con `status=200` y acción `user_repeated_signup` a las `00:42:42Z` y tres `/resend` con `status=200` (`00:40:18Z`, `00:41:18Z`, `00:45:04Z`). Es decir, hubo intentos repetidos por la misma dirección; no hay evidencia de un solo clic generando varios `signUp`.
+- No hay listeners duplicados: `app.js` registra `hashchange` y `gl:auth` una sola vez; `PantallaAuth.mostrar()` sustituye el overlay antes de enlazar eventos.
+- No hay reintentos automáticos en el cliente: ni el bundle de Supabase ni `Auth.registrar()` reenvían un `signUp` fallido.
+
+### Solicitudes por clic
+
+| Acción | Solicitudes |
+|---|---|
+| Escribir el nombre | `POST /rest/v1/rpc/gl_nombre_disponible` con debounce de 500 ms (varias veces mientras se escribe). |
+| Un clic en `Registrar` | 1 RPC de disponibilidad adicional + **1 `POST /auth/v1/signup`**. No hay segunda llamada a `signUp`. |
+| Reenviar confirmación | 1 `POST /auth/v1/resend`, con el botón deshabilitado durante la espera. |
+
+### Corrección de código
+
+- `js/ui/auth.js`: bloquea el formulario durante el envío, mantiene una bandera `enviando` y recuerda el correo ya enviado; pulsar `Registrar` otra vez con la misma dirección no crea otra cuenta. Cambiar el correo permite un nuevo intento.
+- `js/ui/auth.js`: si la respuesta se pierde, hay un timeout o llega un error de red/429, la dirección queda marcada como «resultado desconocido»: un segundo clic con el mismo correo no vuelve a registrar. Solo una respuesta explícita de «ya está registrado» libera esa dirección.
+- `js/core/config.js`: `TIMEOUT_REGISTRO = 30000` y `TIMEOUT_CREAR_JUGADOR = 45000` son tiempos máximos **locales de la interfaz**, no límites ni tiempos de Supabase. Al vencer se avisa y se bloquea el reintento ciego.
+- `js/core/supabase.js`: bandera `_registrando` y `_reenviando` como barrera adicional contra llamadas concurrentes.
+- `js/core/supabase.js`: el error de Supabase se traduce con su código (`over_email_send_rate_limit`) y se distingue de un 429 genérico, de un fallo de conexión, de un correo inválido, de una contraseña corta y de una cuenta existente. Ya no aparece «Demasiados intentos…» ni se recomienda pulsar repetidamente.
+- `index.html`: cache-busting `1.3.9`. No se cambiaron reglas RLS, RPC, datos, contraseñas ni cuentas.
+
+### Verificación
+
+| Verificación | Resultado |
+|---|---|
+| `vitest run` | **22 archivos, 271 pruebas, `EXIT=0`**. |
+| `tests/registro-rate-limit.test.js` (nuevo) | 15 pruebas: un clic → una llamada, dos envíos rápidos sin duplicado, bloqueo del botón, barrera del núcleo, liberación tras error (incluido 429), resultado desconocido y timeout local, mensajes de límite de correo/429/red/correo/cuenta, reenvío sin duplicados, retorno de Gmail y login sin cambios. |
+| `git -c core.whitespace=cr-at-eol diff --check` | Sin errores. |
+| Logs remotos | 429 reales confirmados; no se modificó ninguna configuración de Supabase. |
+
+### Límites y espera
+
+- `supabase config pull` (solo lectura) confirma `auth.email.max_frequency = "1m0s"` para la frecuencia por usuario. El código observado fue `over_email_send_rate_limit`, que coincide con el límite de envío de correo del proyecto documentado por Supabase, no con ese temporizador por usuario; por eso no se atribuyó el 429 a `max_frequency`.
+- Según la documentación de Supabase, el proveedor de correo integrado permite **2 correos por hora por proyecto**. `config.toml` no expone `rate_limit_email_sent` y no se consultó el Management API, así que el valor exacto configurado en producción no está verificado; no se cambió.
+- Para aumentar o configurar ese límite haría falta **SMTP propio o Send Email hook** y autorización explícita. Consecuencias: credenciales/secrets nuevas, posible costo y entrega dependiente del proveedor. **No se aplicó.**
+- Los logs consultados no muestran `Retry-After` ni hora de restablecimiento; el texto del error tampoco la indica. No se debe inventar un tiempo: el usuario debe esperar a que se restablezca el límite y no repetir el envío. El valor de `max_frequency` sí es observable localmente (1 minuto), pero no se usó para explicar este incidente.
+
+---
+
+## 11. Cuarta corrección: alta administrativa sin «Creando…» eterno (1.3.9)
+
+### Diagnóstico
+
+- Al pulsar **Crear** se llama a `sb.functions.invoke('admin-crear-jugador', { body })` (`js/modulos/admin.js`). No se usa `auth.admin.createUser()` desde el navegador: la Edge Function `supabase/functions/admin-crear-jugador/index.ts` crea el usuario con Service Role (`admin.auth.admin.createUser`, `email_confirm: true`) y después inserta en `jugadores` y `grupo_jugadores`.
+- Un clic produce 1 petición de creación a la Edge Function. Dentro de ella hay 1 `getUser` del administrador, 1 consulta de rol, 1 `createUser` y 2 inserciones. Después el navegador registra la auditoría (`getUser` + RPC), recarga siete contextos, partidos y el perfil. No hay listeners duplicados ni reintentos automáticos.
+- La causa del «Creando…» era de interfaz: el botón se deshabilitaba y se rotulaba antes del primer `await`, y solo se restauraba en `catch`. No había timeout, `AbortController` ni `finally`; si `invoke`, la lectura del cuerpo del error, la auditoría o la recarga no resolvían, el botón quedaba bloqueado para siempre. El alta rápida de Nueva Temporada tenía el mismo defecto.
+- Los logs remotos de Edge Functions de las últimas 24 h solo muestran `booted`/`shutdown`: no hay una invocación fallida capturada. El bloqueo se explica por el código, no por un error remoto confirmado.
+
+### Corrección de cliente
+
+- `ejecutarCreacion()` centraliza la llamada con un guard `enCurso` y un mapa local por correo: dos clics rápidos, o dos entradas de UI distintas, no duplican la Edge Function.
+- `conTimeout()` acota la llamada (45 s), la lectura del error (5 s), la auditoría (5 s) y la recarga (45 s). Son tiempos máximos **locales de la interfaz**, no tiempos prometidos por Supabase.
+- `finally` rehabilita el botón si sigue en el DOM y restaura el texto «Crear jugador».
+- Si el servidor confirma, la dirección se libera antes de la auditoría y la recarga. Si la respuesta se pierde o hay timeout/429/red, el correo queda marcado como «resultado desconocido»: otro clic no crea otra cuenta. Solo un «ya registrado» explícito permite reutilizar la dirección.
+- `resultadoInvoke()` exige `ok !== false` y ausencia de `error`; antes cualquier respuesta 2xx se trataba como éxito.
+- `clasificarErrorCreacion()` distingue teléfono duplicado, correo registrado, nombre duplicado, límite de solicitudes, permisos y error genérico. Corrige el fallo previo que etiquetaba como «correo duplicado» un conflicto `jugadores_e164_canonicalizado_uniq`.
+- La auditoría guarda el `user_id` devuelto por la función; antes se guardaba `null` porque se leía una clave inexistente (`jugador_id`).
+
+### Riesgo que NO se corrigió en cliente
+
+- La Edge Function crea el usuario Auth antes que las filas y no es atómica. Si falla la inserción en `grupo_jugadores`, su `catch` elimina el usuario Auth pero no la fila `jugadores` ya insertada; si falla `deleteUser`, puede quedar un usuario Auth sin jugador. Evitar por completo cuentas incompletas exige modificar y redesplegar esa Edge Function: compensación completa (borrar también la fila) o idempotencia por correo con una respuesta explícita del tipo `ya_existente` / `rollback_fallido`. **No se aplicó** porque requiere autorización para cambiar y desplegar una función de producción.
+
+### Verificación
+
+| Verificación | Resultado |
+|---|---|
+| `vitest run` | **22 archivos, 271 pruebas, `EXIT=0`**. |
+| `tests/registro-rate-limit.test.js` | 15 pruebas de registro público con mocks: un clic, doble clic, timeout, límite, red, cuenta existente, reenvío y regresiones de Gmail/login. |
+| `tests/creacion-admin-segura.test.js` (nuevo) | 12 pruebas AISLADAS con mocks: creación confirmada, doble clic, reintento con otro correo, respuesta perdida, `ok:false`, correo ya registrado, teléfono duplicado, límite, permisos, botón y timeouts. No crea cuentas reales. |
+| `git -c core.whitespace=cr-at-eol diff --check` | Sin errores. |
+| Logs remotos | 429 reales confirmados en registro público; sin invocaciones fallidas de la Edge Function en las últimas 24 h. No se modificó configuración de Supabase. |

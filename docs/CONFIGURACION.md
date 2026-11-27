@@ -347,6 +347,8 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 | La tabla no muestra banderas | Revisá que `paises` tenga filas activas y que `flagcdn.com` sea accesible. |
 | El gráfico no aparece | Confirmá que `librerias/chart.umd.js` esté presente y que `index.html` lo cargue antes de los módulos. |
 | El enlace de confirmación cae en 404 | Usá siempre `https://manu-2323.github.io/GOAT-LATINOS/`. La raíz `https://manu-2323.github.io/` no publica la app. Si el correo es viejo, pedí uno nuevo desde **¿No te llegó el correo de confirmación?** en el acceso. |
+| «Supabase no pudo enviar el correo de confirmación» | Límite real de envío de correo de Supabase (SMTP integrado). No repitas el registro ni el reenvío; esperá a que se restablezca. La respuesta no incluye hora exacta. |
+| «Creando…» se queda en alta administrativa | Antes no había timeout ni `finally`. Ahora el botón se rehabilita solo; si el correo queda como «resultado desconocido», revisá la lista de jugadores antes de volver a crear. |
 
 ## 16. Confirmación de correo 1.3.8
 
@@ -355,3 +357,22 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Retorno del enlace**: `Auth.consumirCallback()` distingue éxito, expiración y enlace inválido antes de que `detectSessionInUrl` limpie el fragmento. Los errores se muestran en la pantalla de acceso con texto propio y se limpia la URL; un retorno válido muestra “Correo confirmado”.
 - **Recuperación**: el acceso ofrece **¿No te llegó el correo de confirmación?** y llama a `auth.resend({ type: 'signup' })` con el mismo `emailRedirectTo`. No crea cuentas, no cambia correos ni contraseñas.
 - **Cuentas ya registradas**: el enlace antiguo no se reescribe. Si el token ya se usó o venció, se solicita un correo nuevo con la misma dirección; la cuenta y su perfil siguen iguales.
+
+## 17. Registro sin duplicados 1.3.9
+
+- **Una sola llamada**: la UI bloquea el formulario desde el inicio del envío y `Auth.registrar()` tiene una barrera `_registrando` que rechaza registros concurrentes. Un clic produce una llamada a `signUp()`; además se consulta `gl_nombre_disponible` para validar el nombre en servidor.
+- **Sin reenvíos duplicados**: `Auth.reenviarConfirmacion()` usa `_reenviando` además del botón deshabilitado.
+- **Después de enviar el correo**: repetir `Registrar` con la misma dirección solo muestra un aviso; cambiar el correo habilita un nuevo intento.
+- **Resultado desconocido**: si la respuesta se pierde, hay un timeout o falla la red, esa dirección queda bloqueada para nuevos registros hasta que se cambie el correo. Así un segundo clic no crea otra cuenta.
+- **Errores**: `over_email_send_rate_limit` / `email rate limit exceeded` se explican como límite de proveedor de correo; un 429 genérico se describe como límite de solicitudes. Ninguno inventa un tiempo de espera ni recomienda pulsar repetidamente. Conexión, correo, contraseña y cuenta existente mantienen mensajes distintos.
+- **Timeout local**: `CONFIG.TIMEOUT_REGISTRO = 30000` ms. Es una guardia de la interfaz, no un tiempo prometido por Supabase; al vencer se avisa y no se reintenta automáticamente.
+- **No se modificaron** SMTP, plantillas, Site URL, Redirect URLs, rate limits de producción, RLS ni datos reales.
+
+## 18. Alta administrativa sin bloqueos 1.3.9
+
+- **Flujo real**: `Administración → Añadir jugador` y el alta rápida de Nueva Temporada llaman a la Edge Function `admin-crear-jugador` (`js/modulos/admin.js`). El navegador no usa Service Role; la función crea el usuario Auth con `admin.auth.admin.createUser` y luego inserta `jugadores` y `grupo_jugadores`.
+- **Un clic**: una sola llamada a la Edge Function. Dentro de ella: validación del administrador, `createUser` y dos inserciones. Después: auditoría y recarga del contexto. No hay duplicados ni reintentos automáticos.
+- **Sin «Creando…» eterno**: la llamada, la lectura del error, la auditoría y la recarga tienen timeout local (`CONFIG.TIMEOUT_CREAR_JUGADOR = 45000` ms; lectura/auditoría 5000 ms). `finally` rehabilita el botón y restaura «Crear jugador».
+- **Sin doble cuenta**: un guard `enCurso` y un mapa por correo bloquean un segundo clic. Si el servidor confirma, la dirección se libera; si la respuesta se pierde o hay timeout/429/red, queda como «resultado desconocido» y solo se permite otro correo.
+- **Errores claros**: se distinguen teléfono duplicado, correo ya registrado, nombre duplicado, límite de solicitudes, permisos y error genérico. Ya no se etiqueta un teléfono duplicado como correo duplicado.
+- **Pendiente externo (no aplicado)**: la Edge Function no es atómica; si falla la última inserción puede dejar una fila `jugadores` sin usuario, o un usuario Auth sin fila si falla la compensación. Corregirlo exige modificar y desplegar esa función con autorización explícita.

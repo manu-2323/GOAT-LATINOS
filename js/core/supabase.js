@@ -47,6 +47,10 @@ const Auth = {
   perfilPendienteTelefono: null,
   /* Aviso visible tras volver del enlace de confirmación de Supabase. */
   avisoCallback: null,
+  /* 1.3.9 — Un solo registro/reenvío en vuelo. La UI ya deshabilita el botón,
+     pero esto evita duplicados si otra llamada llega antes de que termine. */
+  _registrando: false,
+  _reenviando: false,
 
   /* 1.2.1 — Un único cliente (inyectable en pruebas, nunca privilegiado).
      telefono_verificado`: eso solo lo confirma una persona, jamás isValid(). */
@@ -95,17 +99,26 @@ const Auth = {
      forma genérica. Se fuerza la misma URL de retorno que en el registro. */
   async reenviarConfirmacion(correo) {
     if (!Auth._cliente()) throw new Error('Supabase no está configurado.');
+    if (Auth._reenviando) {
+      throw new Error('Ya hay un correo en envío. Esperá a que termine antes de volver a pedirlo.');
+    }
     const email = String(correo || '').trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Ingresá un correo válido.');
     if (typeof Auth._cliente().auth.resend !== 'function') {
       throw new Error('El reenvío no está disponible en este cliente.');
     }
-    const { error } = await Auth._cliente().auth.resend({
-      email, type: 'signup',
-      options: { emailRedirectTo: CONFIG.SITE_URL }
-    });
-    if (error) throw new Error(Auth.traducir(error.message));
-    return true;
+    Auth._reenviando = true;
+    try {
+      const { error } = await Auth._cliente().auth.resend({
+        email, type: 'signup',
+        options: { emailRedirectTo: CONFIG.SITE_URL }
+      });
+      if (error) {
+        const detalle = error.code ? error.message + ' (' + error.code + ')' : error.message;
+        throw new Error(Auth.traducir(detalle));
+      }
+      return true;
+    } finally { Auth._reenviando = false; }
   },
 
   /* 2.3 — Los metadatos los escribe el usuario. Solo se aceptan países del
@@ -132,7 +145,7 @@ const Auth = {
       usuarioId: (creado.user && creado.user.id) || null,
       correoEnviado: requiereConfirmacion,
       mensaje: requiereConfirmacion
-        ? 'Cuenta de autenticación creada. Revisá tu correo para confirmarla; el perfil de jugador se completará cuando inicies sesión. Si no te llega, usá «Reenviar confirmación» en el acceso.'
+        ? 'Cuenta de autenticación creada. Revisá tu correo para confirmarla; el perfil de jugador se completará cuando inicies sesión. Si no te llega, usá «¿No te llegó el correo de confirmación?» en el acceso. No repitas el registro con el mismo correo.'
         : 'Cuenta creada. ¡Bienvenido a la liga!',
       metadata: {
         nombre_usuario: meta.nombre_usuario || meta.nombre || '',
@@ -421,9 +434,20 @@ const Auth = {
     return Promise.resolve(false);
   },
 
+  /* 1.3.9 — Un único registro en curso, incluso si la UI fallara al bloquear
+     el botón. Es una barrera local; no crea ni elimina cuentas. */
+  async registrar(...args) {
+    if (Auth._registrando) {
+      throw new Error('Ya hay un registro en curso. Esperá a que termine antes de volver a intentarlo.');
+    }
+    Auth._registrando = true;
+    try { return await Auth._registrarInterno(...args); }
+    finally { Auth._registrando = false; }
+  },
+
   /* Registro: la cuenta de autenticación y el perfil se crean por pasos.
      Un teléfono duplicado nunca se disfraza de éxito ni borra usuarios de Auth. */
-  async registrar(nombreJuego, correo, clave, pais, telefono, zonaHoraria) {
+  async _registrarInterno(nombreJuego, correo, clave, pais, telefono, zonaHoraria) {
     if (!Auth._cliente()) throw new Error('Supabase no está configurado.');
     const nombre = GL.seguroTexto(nombreJuego).slice(0, 24);
     if (nombre.length < 3) throw new Error('El nombre debe tener al menos 3 caracteres.');
@@ -460,7 +484,10 @@ const Auth = {
       email, password: clave,
       options: { data: metadata, emailRedirectTo: CONFIG.SITE_URL }
     });
-    if (error) throw new Error(Auth.traducir(error.message));
+    if (error) {
+      const detalle = error.code ? error.message + ' (' + error.code + ')' : error.message;
+      throw new Error(Auth.traducir(detalle));
+    }
     if (!data || !data.user) throw new Error('No se pudo crear la cuenta de autenticación. Revisá los datos e intentá de nuevo.');
 
     /* Confirmación de correo: no hay sesión y NO se crea el perfil todavía.
@@ -780,10 +807,23 @@ const Auth = {
     if (m.includes('invalid login') || m.includes('invalid credentials')) return 'Correo o contraseña incorrectos.';
     if (m.includes('already registered') || m.includes('ya está registrado')) return 'Ese correo ya está registrado. Inicia sesión.';
     if (m.includes('at least')) return 'La contraseña es demasiado corta.';
-    if (m.includes('rate limit') || m.includes('too many')) return 'Demasiados intentos. Esperá un momento y volvé a probar.';
-    if (m.includes('invalid format') || m.includes('valid email')) return 'El correo no es válido.';
-    if (m.includes('email not confirmed')) return 'Confirmá tu correo electrónico antes de ingresar. Si no recibiste el enlace, usá «Reenviar confirmación» en el acceso.';
-    if (m.includes('email link is invalid') || m.includes('one-time token') || m.includes('expired')) return 'El enlace de confirmación venció o no es válido. Pedí uno nuevo desde el acceso.';
+    if (m.includes('email_address_invalid') || m.includes('invalid format') || m.includes('valid email')) {
+      return 'El correo no es válido. Revisá la dirección e intentá de nuevo.';
+    }
+    if (m.includes('email not confirmed')) {
+      return 'Confirmá tu correo electrónico antes de ingresar. Si no recibiste el enlace, usá «¿No te llegó el correo de confirmación?» en el acceso.';
+    }
+    if (m.includes('email link is invalid') || m.includes('one-time token') || m.includes('expired')) {
+      return 'El enlace de confirmación venció o no es válido. Pedí uno nuevo desde el acceso.';
+    }
+    /* 1.3.9 — El límite de envío de correo de Supabase no es lo mismo que un
+       límite de solicitudes por IP. La respuesta no trae hora de restablecimiento. */
+    if (m.includes('over_email_send_rate_limit') || m.includes('email rate limit exceeded')) {
+      return 'Supabase no pudo enviar el correo de confirmación: alcanzó el límite de su proveedor de correo. No repitas el registro ni el reenvío; esperá a que se restablezca. La respuesta no indica el tiempo exacto. Podés pedir uno nuevo desde el acceso más tarde.';
+    }
+    if (m.includes('rate limit') || m.includes('too many') || m.includes('429')) {
+      return 'Supabase limitó las solicitudes por ahora. La respuesta no indicó cuánto tiempo falta; no repitas el envío y volvé a intentar más tarde.';
+    }
     if (m.includes('failed to fetch') || m.includes('network')) return 'No hay conexión con el servidor. Revisá tu internet.';
     if (m.includes('row-level security') || m.includes('permission denied')) return 'No tenés permisos para realizar esta acción.';
     return 'No se pudo completar la acción: ' + msg;
