@@ -349,3 +349,32 @@ Se trabajó directamente en `main`, sin ramas auxiliares, sin nueva cadena de fa
 - **GitHub Pages:** https://manu-2323.github.io/GOAT-LATINOS/ sirve `js/core/config.js` con `VERSION: '1.4.1'` y `index.html` con seis scripts `?v=1.4.1` y ninguno `?v=1.4.0`.
 - **Edge Function:** solo se desplegó `admin-crear-jugador` (`--yes` autorizado por el usuario) en `zmjzlvsdlfzmhptmtmjx`. Quedó en versión `14`, `verify_jwt=true` y `ezbr_sha256=eb0bd2789c88bc746f135d798810db7efd72f55b127ba5f9e9e2ac55c5dae022`. Una invocación anónima de solo validación devolvió `HTTP 400` con `{"ok":false,"estado":"error_validacion","mensaje":"Sesión inválida",...}`; no se creó ni modificó ningún dato. Las demás funciones no se desplegaron.
 - **SQL:** `supabase/migration-participantes-1.4.1.sql` quedó versionada como propuesta, **sin ejecutar**. No se aplicó ninguna migración en producción.
+
+---
+
+## 14. Sexta corrección: el perfil no depende del grupo (1.4.2)
+
+### Causa exacta
+
+La versión `1.4.1` distinguía correctamente «sin perfil» de «perfil sin grupo», pero seguía usando la ausencia de grupo como una pantalla sustituta: en `js/modulos/perfil.js`, si existía `Auth.jugador`, el jugador no era administrador y `GL.grupoDeJugador(Auth.jugador.id)` devolvía `null`, el módulo renderizaba `pendienteDeGrupo()` y retornaba antes del perfil completo. El botón «Reintentar carga del grupo» repetía la misma consulta y no cambiaba la asignación real.
+
+Consulta remota de solo lectura sobre FABIAN10: el jugador existe (`f35fa5f0-743f-43e8-8238-494bdd8c7efa`), tiene `user_id` vinculado a `auth.users`, `rol='jugador'`, `activo=true`, `torneo_id` igual al torneo activo `GOATS LATINOS · 2026` y **0 filas** en `grupo_jugadores`. Por tanto, el bloqueo era exclusivamente de UI, no de identidad, permisos ni datos faltantes.
+
+### Cambios de código
+
+- `js/modulos/perfil.js`: se eliminó el retorno anticipado por falta de grupo. Todo jugador autenticado con perfil ve encabezado, estadísticas, historial, próximo partido y Head to head.
+- La pertenencia pasó a ser una tarjeta compacta `Pertenencia al torneo`: `Pendiente de asignación`, `Perteneces al Grupo A/B del torneo GOATS LATINOS · 2026`. Se calcula desde `GL.grupoDeJugador(j.id)` y el torneo activo; no hay texto fijo por grupo ni dependencia de `localStorage`.
+- Sin grupo, clasificación y puesto usan un id inexistente (`__sin_grupo__`) en lugar de `null`, para no mezclar todas las tablas del torneo. El selector de Head to head se deshabilita y no ofrece rivales de otros grupos; al cambiar de grupo se descarta cualquier rival obsoleto.
+- El propio perfil usa la fila completa de `Auth.jugador` (incluye zona horaria y teléfono) en lugar de la vista pública `jugadores_publicos`, de modo que `Editar perfil` precarga datos reales. El guardado sigue siendo `UPDATE jugadores WHERE id = Auth.jugador.id`: no crea otro registro ni expone rol, grupo, torneo, sanciones ni identificadores internos.
+- El cambio de contraseña existente no se duplicó; `Auth.cambiarContrasena()` sigue siendo el único mecanismo.
+- Versiones: `CONFIG.VERSION = '1.4.2'` y seis scripts con `?v=1.4.2`. CSS no cambió (`3.23.0`).
+
+### Resultado para FABIAN10
+
+Entra a `Mi Perfil` y ve el perfil completo con sus datos, estadísticas e historial. La única diferencia es la tarjeta `Pendiente de asignación` con el texto «Tu perfil está activo. Un administrador te asignará a un grupo cuando corresponda.». Cuando pase a Grupo A o B, la tarjeta mostrará la pertenencia real del torneo activo en el siguiente render, sin otro cambio de código.
+
+### Real / aislado / pendiente
+
+- **Real (solo lectura):** se verificó el registro de FABIAN10 y sus relaciones con `auth.users`, `torneos`, `grupos` y `grupo_jugadores`. No se modificaron datos, RLS, GRANT/REVOKE, RPC, Edge Functions ni Auth. No se aplicó ninguna migración SQL.
+- **Aislado:** nueva suite `tests/perfil-sin-grupo-1.4.2.test.js` con 19 pruebas para los 16 escenarios solicitados; suite completa **25 archivos / 334 pruebas, `EXIT=0`**; `node --check` sin errores y `diff --check` sin avisos.
+- **Pendiente:** no se usaron cuentas reales para probar contraseña, perfil ajeno, confirmación telefónica ni inscripción. La revisión visual en escritorio/móvil con una sesión real sigue siendo manual; las pruebas validan las clases adaptativas y media queries existentes. `supabase/migration-participantes-1.4.1.sql` sigue sin aplicarse y requiere aprobación expresa.

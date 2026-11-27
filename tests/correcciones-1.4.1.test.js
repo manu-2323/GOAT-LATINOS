@@ -71,9 +71,10 @@ function glPerfil({ sinGrupo = true } = {}) {
     skeleton: () => '',
     accesoDenegado: () => '',
     cargarContexto: async () => {},
-    torneo: () => ({ id: 't-1' }),
+    torneo: () => ({ id: 't-1', nombre: 'GOATS LATINOS', temporada: '2026' }),
     esAdmin: () => false,
     grupoDeJugador: () => sinGrupo ? null : { id: 'g-1', nombre: 'Grupo A' },
+    letraGrupo: g => String((g && g.nombre) || '').replace(/^Grupo\s+/i, ''),
     partidos: async () => [],
     jugador: () => null,
     grupos: () => [],
@@ -84,7 +85,11 @@ function glPerfil({ sinGrupo = true } = {}) {
     banderaHTML: () => '',
     etiquetaZona: () => '',
     horarioJugador: () => '',
-    badge: () => '',
+    zonaJugador: () => 'America/Managua',
+    tel: { e164Jugador: () => '', paisJugador: () => 'NI', esValido: () => false },
+    mensaje: e => String((e && e.message) || e),
+    error: () => '',
+    badge: texto => '<span>' + String(texto ?? '') + '</span>',
     vacio: () => '',
     linkWhatsapp: () => '',
     signo: v => String(v),
@@ -102,7 +107,7 @@ afterEach(() => {
 });
 
 describe('1.4.1 — perfil incompleto', () => {
-  it('un perfil existente sin grupo no se presenta como registro incompleto', async () => {
+  it('un perfil existente sin grupo muestra el perfil completo y solo informa la asignación pendiente', async () => {
     const Auth = {
       usuario: { id: 'u-1', email: 'juan@example.com', user_metadata: { nombre_usuario: 'JUAN' } },
       jugador: { id: 'j-1', rol: 'jugador', nombre_usuario: 'JUAN' },
@@ -113,10 +118,15 @@ describe('1.4.1 — perfil incompleto', () => {
     await mod.render(el);
 
     expect(el.textContent).not.toContain('Tu registro aún no está completo');
-    expect(el.textContent).toContain('Tu perfil ya está creado');
-    expect(el.textContent.toLowerCase()).toContain('grupo');
+    expect(el.textContent).not.toContain('Tu perfil ya está creado');
+    expect(el.textContent).toContain('Perfil del jugador');
+    expect(el.textContent).toContain('JUAN');
+    expect(el.textContent).toContain('Pendiente de asignación');
+    expect(el.textContent).toContain('Tu perfil está activo. Un administrador te asignará a un grupo cuando corresponda.');
+    expect(el.querySelector('[data-editar]')).not.toBeNull();
     expect(el.querySelector('[data-actualizar-nombre]')).toBeNull();
-    expect(el.querySelector('[data-reintentar-perfil]')).not.toBeNull();
+    expect(el.querySelector('[data-reintentar-perfil]')).toBeNull();
+    expect(el.querySelector('#h2h-rival').disabled).toBe(true);
   });
 
   it('sin perfil conserva el estado de recuperación telefónica', async () => {
@@ -313,11 +323,12 @@ describe('1.4.1 — navegación sin refresh', () => {
 });
 
 describe('1.4.1 — versión pública', () => {
-  it('mantiene el historial y publica 1.4.1 en config y cache-busting', () => {
+  it('mantiene el historial y publica 1.4.2 en config y cache-busting', () => {
     const config = leer('js/core/config.js');
     const index = leer('index.html');
-    expect(config).toContain("VERSION: '1.4.1'");
-    expect(index.match(/\?v=1\.4\.1/g)).toHaveLength(6);
+    expect(config).toContain("VERSION: '1.4.2'");
+    expect(index.match(/\?v=1\.4\.2/g)).toHaveLength(6);
+    expect(index).not.toContain('?v=1.4.1');
     expect(index).not.toContain('?v=1.4.0');
   });
 });

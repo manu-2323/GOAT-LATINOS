@@ -13,13 +13,11 @@
       try {
         await GL.cargarContexto(true);
         if (!GL.torneo()) { el.innerHTML = GL.vacio('No hay torneo activo todavía.', 'trophy', null); iniciarIconos(); return; }
-        /* Un perfil creado y vinculado NO es un registro incompleto. La
-           ausencia de grupo en el torneo activo es un estado distinto: solo
-           falta una asignación administrativa, no una carga de datos. */
+        /* El perfil pertenece al jugador; el grupo pertenece a la competición.
+           Un perfil creado SIEMPRE se muestra completo, con o sin asignación. */
         const sinPerfil = !Auth.jugador;
-        const sinGrupo = !sinPerfil && !GL.esAdmin() && !GL.grupoDeJugador(Auth.jugador.id);
-        if (sinPerfil || sinGrupo) {
-          el.innerHTML = sinPerfil ? pendiente() : pendienteDeGrupo();
+        if (sinPerfil) {
+          el.innerHTML = pendiente();
           /* 2.2 — Si la cuenta Auth existe pero el perfil no se pudo completar
              por el teléfono, se ofrece recuperación con otro número. */
           const btnRec = el.querySelector('[data-recuperar-telefono]');
@@ -36,22 +34,29 @@
               Mod.render(el);
             }
           });
-          if (sinPerfil) {
-            const btn = el.querySelector('[data-actualizar-nombre]');
-            if (btn) btn.addEventListener('click', () => editarPerfil(el, Auth.jugador || {}));
-          }
+          const btn = el.querySelector('[data-actualizar-nombre]');
+          if (btn) btn.addEventListener('click', () => editarPerfil(el, Auth.jugador || {}));
           iniciarIconos(); return;
         }
         if (!Mod.jugadorId || !(Auth.jugador.rol === 'admin' && Mod.jugadorId !== Auth.jugador.id)) {
           Mod.jugadorId = Auth.jugador.id;
+          Mod.rivalId = null;
         }
-        const j = GL.jugador(Mod.jugadorId) || Auth.jugador;
+        /* El propio perfil usa la fila completa de Auth: la vista pública no
+           incluye zona horaria ni teléfono y dejaría el editor sin precargar. */
+        const j = (Mod.jugadorId === Auth.jugador.id ? Auth.jugador : GL.jugador(Mod.jugadorId)) || Auth.jugador;
         const todos = await GL.partidos({ torneo_id: GL.torneo().id });
         const mios = todos.filter(p => p.local_id === j.id || p.visitante_id === j.id);
         const rend = EST.calcularRendimiento(mios, j.id);
         const grupo = GL.grupoDeJugador(j.id);
-        const fila = GL.clasificacion(grupo && grupo.id).find(c => c.jugador_id === j.id) || {};
-        const pos = GL.posicion(j.id, grupo && grupo.id);
+        /* Un id inexistente evita que `null` signifique "todas las tablas" en
+           GL.clasificacion/GL.posicion: sin grupo no hay fila de competición. */
+        const gid = grupo ? grupo.id : '__sin_grupo__';
+        const fila = GL.clasificacion(gid).find(c => c.jugador_id === j.id) || {};
+        const pos = GL.posicion(j.id, gid);
+        const rivales = (grupo ? GL.jugadores(grupo.id) : []).filter(x => x.id !== j.id);
+        if (Mod.rivalId && !rivales.some(x => x.id === Mod.rivalId)) Mod.rivalId = null;
+        const rivalId = Mod.rivalId;
 
         el.innerHTML =
           '<div class="seccion-head"><div class="seccion-titulo"><h2>Perfil del jugador</h2>' +
@@ -79,9 +84,10 @@
                  ((GL.tel.e164Jugador(j) && (GL.esAdmin() || (Auth.usuario && j.user_id === Auth.usuario.id)))
                   ? GL.linkWhatsapp(j, j.nombre_usuario) : '') +
                 estadoTelefonoHTML(j) +
-                (pos ? GL.badge('Posición ' + pos + ' · Grupo ' + GL.letraGrupo(grupo), 'gold', 'trophy') : '') +
+                (pos ? GL.badge('Posición ' + pos, 'gold', 'trophy') : '') +
                 (j.suspendido || j.activo === false ? GL.badge('Suspendido', 'red', 'triangle-alert') : GL.badge('Activo', 'green', 'circle-check')) +
               '</div></div></div></div>' +
+          pertenenciaHTML(grupo, pos) +
           '<div class="grid cuatro">' +
             statCard('Partidos jugados', 'calendar-days', rend.pj) +
             statCard('Victorias', 'circle-check-big', rend.pg, 'verde-txt') +
@@ -111,11 +117,16 @@
             '<div>' +
               '<div class="card"><div class="card-titulo">' + icono('calendar', 20) + 'Próximo partido</div>' + proximo(todos, j) + '</div>' +
               '<div class="card mt"><div class="card-titulo">' + icono('swords', 20) + 'Head to head</div>' +
-                '<label class="campo"><span>Elegí un rival del grupo</span><select class="input" id="h2h-rival">' +
+                '<label class="campo"><span>' + (grupo ? 'Elegí un rival del grupo' : 'Sin rivales disponibles') + '</span>' +
+                  '<select class="input" id="h2h-rival"' + (rivales.length ? '' : ' disabled') + '>' +
                   '<option value="">Seleccionar…</option>' +
-                  GL.jugadores(grupo && grupo.id).filter(x => x.id !== j.id).map(x =>
-                    '<option value="' + x.id + '"' + (x.id === Mod.rivalId ? ' selected' : '') + '>' + esc(x.nombre_usuario) + '</option>').join('') +
-                '</select></label><div id="h2h-resultado">' + (Mod.rivalId ? h2h(mios, j.id, Mod.rivalId) : '<p class="vacio-mensaje">Elegí un rival para ver el historial.</p>') + '</div>' +
+                  rivales.map(x =>
+                    '<option value="' + x.id + '"' + (x.id === rivalId ? ' selected' : '') + '>' + esc(x.nombre_usuario) + '</option>').join('') +
+                '</select></label><div id="h2h-resultado">' + (rivalId ? h2h(mios, j.id, rivalId) :
+                  '<p class="vacio-mensaje">' + (grupo
+                    ? (rivales.length ? 'Elegí un rival para ver el historial.' : 'No hay rivales disponibles en tu grupo.')
+                    : 'Cuando un administrador te asigne a un grupo, vas a poder comparar tu historial con los rivales del torneo.') +
+                  '</p>') + '</div>' +
               '</div>' +
             '</div>' +
           '</div>';
@@ -124,8 +135,11 @@
         if (sel) sel.addEventListener('change', () => { Mod.jugadorId = sel.value; Mod.rivalId = null; Mod.render(el); });
         const riv = el.querySelector('#h2h-rival');
         if (riv) riv.addEventListener('change', () => {
-          Mod.rivalId = riv.value;
-          el.querySelector('#h2h-resultado').innerHTML = riv.value ? h2h(mios, j.id, riv.value) : '<p class="vacio-mensaje">Elegí un rival para ver el historial.</p>';
+          const elegido = rivales.some(x => x.id === riv.value) ? riv.value : null;
+          Mod.rivalId = elegido;
+          el.querySelector('#h2h-resultado').innerHTML = elegido
+            ? h2h(mios, j.id, elegido)
+            : '<p class="vacio-mensaje">' + (grupo ? 'Elegí un rival para ver el historial.' : 'Cuando un administrador te asigne a un grupo, vas a poder comparar tu historial con los rivales del torneo.') + '</p>';
           iniciarIconos();
         });
         el.querySelector('[data-editar]')?.addEventListener('click', () => editarPerfil(el, j));
@@ -195,17 +209,24 @@
       '</div>';
   }
 
-  /* El perfil existe y está vinculado; lo que falta es pertenencia al grupo
-     del torneo activo. No se ofrece "Completar mi perfil" porque ese botón no
-     crea la asignación y repetirlo no cambia este estado. */
-  function pendienteDeGrupo() {
-    return '<div class="estado-vacio">' + icono('users', 32) +
-      '<h2>Tu perfil ya está creado</h2>' +
-      '<p>Falta que un administrador te asigne a un grupo del torneo activo. ' +
-      'Tus datos están guardados; no hace falta registrarte de nuevo ni recargar la página.</p>' +
-      '<button type="button" class="btn sec" data-reintentar-perfil>' +
-        icono('rotate-cw', 16) + 'Reintentar carga del grupo' +
-      '</button>' +
+  /* La pertenencia es información de la competición: se muestra como una
+     tarjeta compacta dentro del perfil, nunca en lugar del perfil. */
+  function pertenenciaHTML(grupo, pos) {
+    const torneo = GL.torneo() || {};
+    const nombreTorneo = [torneo.nombre, torneo.temporada].filter(Boolean).join(' · ') || 'el torneo activo';
+    if (!grupo) {
+      return '<div class="card tight mt"><div class="card-titulo">' + icono('users', 18) +
+        'Pertenencia al torneo</div>' +
+        '<div class="card-acciones">' + GL.badge('Pendiente de asignación', 'orange', 'hourglass') + '</div>' +
+        '<p class="card-subtitulo">Tu perfil está activo. Un administrador te asignará a un grupo cuando corresponda.</p>' +
+        '</div>';
+    }
+    const letra = esc(GL.letraGrupo(grupo) || '—');
+    return '<div class="card tight mt"><div class="card-titulo">' + icono('users', 18) +
+      'Pertenencia al torneo</div>' +
+      '<div class="card-acciones">' + GL.badge('Grupo ' + letra, 'green', 'users') +
+        (pos ? GL.badge('Puesto ' + pos, 'gold', 'trophy') : '') + '</div>' +
+      '<p class="card-subtitulo">Perteneces al Grupo ' + letra + ' del torneo ' + esc(nombreTorneo) + '.</p>' +
       '</div>';
   }
 

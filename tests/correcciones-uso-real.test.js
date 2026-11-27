@@ -159,13 +159,13 @@ describe('Correcciones de uso real — cierre del modal', () => {
 
 describe('Correcciones de uso real — cache-busting', () => {
   it('renueva la versión de los archivos modificados', () => {
-    expect(leer('js/core/config.js')).toContain("VERSION: '1.4.1'");
+    expect(leer('js/core/config.js')).toContain("VERSION: '1.4.2'");
     const index = leer('index.html');
-    expect(index).toContain('js/core/config.js?v=1.4.1');
-    expect(index).toContain('js/core/gl.js?v=1.4.1');
-    expect(index).toContain('js/core/supabase.js?v=1.4.1');
-    expect(index).toContain('js/ui/menu.js?v=1.4.1');
-    expect(index).toContain('js/ui/auth.js?v=1.4.1');
-    expect(index).toContain('js/app.js?v=1.4.1');
+    expect(index).toContain('js/core/config.js?v=1.4.2');
+    expect(index).toContain('js/core/gl.js?v=1.4.2');
+    expect(index).toContain('js/core/supabase.js?v=1.4.2');
+    expect(index).toContain('js/ui/menu.js?v=1.4.2');
+    expect(index).toContain('js/ui/auth.js?v=1.4.2');
+    expect(index).toContain('js/app.js?v=1.4.2');
   });
 });
