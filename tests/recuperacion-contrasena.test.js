@@ -146,6 +146,19 @@ describe('Recuperación de contraseña — envío y actualización', () => {
     expect(cliente.llamadas.resetPasswordForEmail).toHaveLength(0);
   });
 
+  it('explica el límite de correo sin sugerir reintentos inmediatos', async () => {
+    const cliente = clienteFalso({
+      reset: () => ({
+        error: { message: 'Email rate limit exceeded', code: 'over_email_send_rate_limit' }
+      })
+    });
+    window.Auth._sb = cliente;
+    await expect(window.Auth.solicitarRecuperacion('jugador@example.com'))
+      .rejects.toThrow('alcanzó el límite de su proveedor');
+    await expect(window.Auth.solicitarRecuperacion('jugador@example.com'))
+      .rejects.toThrow('No repitas el pedido');
+  });
+
   it('valida los requisitos antes de llamar a Supabase', async () => {
     const cliente = clienteFalso();
     window.Auth._sb = cliente;

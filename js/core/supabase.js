@@ -168,6 +168,10 @@ const Auth = {
       });
       if (error) {
         const detalle = error.code ? error.message + ' (' + error.code + ')' : error.message;
+        const texto = String(detalle || '').toLowerCase();
+        if (/over_email_send_rate_limit|email rate limit exceeded|rate limit|too many|429/.test(texto)) {
+          throw new Error('Supabase no pudo enviar el correo de recuperación: alcanzó el límite de su proveedor. No repitas el pedido; volvé a intentar más tarde. La respuesta no indica la hora exacta.');
+        }
         throw new Error(Auth.traducir(detalle));
       }
       return true;
