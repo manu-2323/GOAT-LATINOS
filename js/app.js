@@ -201,15 +201,19 @@ async function arrancar() {
   /* Se lee ANTES de iniciar para que el aviso ya exista si el evento gl:auth
      pinta el acceso; la URL se limpia recién después de procesar el fragmento. */
   const avisoAuth = Auth.consumirCallback ? Auth.consumirCallback(undefined, false) : null;
-  if (avisoAuth && avisoAuth.error) PantallaAuth.aviso = avisoAuth.mensaje;
+  const esRecuperacion = !!(avisoAuth && avisoAuth.recuperacion);
+  if (avisoAuth && avisoAuth.error && avisoAuth.mensaje) PantallaAuth.aviso = avisoAuth.mensaje;
+  /* El enlace de recuperación abre su propia pantalla aunque Supabase ya haya
+     iniciado la sesión temporal del callback. */
+  if (esRecuperacion) PantallaAuth.modo = 'recuperar';
   try { await Auth.iniciar(); } catch (e) { console.warn(e); }
   _firmaAuth = firmaSesion();
   if (Auth.limpiarCallbackUrl) Auth.limpiarCallbackUrl();
-  if (avisoAuth && Auth.usuario) {
+  if (avisoAuth && Auth.usuario && !esRecuperacion && avisoAuth.mensaje) {
     GL.notificar(avisoAuth.mensaje, avisoAuth.error ? 'advertencia' : 'exito',
       avisoAuth.error ? 'triangle-alert' : 'check-circle-2');
   }
-  if (!Auth.usuario) {
+  if (esRecuperacion || !Auth.usuario) {
     exigirLogin(rutaActual());
     return;
   }
@@ -235,7 +239,9 @@ window.addEventListener('gl:auth', async e => {
     exigirLogin(_rutaActual);
     return;
   }
-  if (Auth.usuario && PantallaAuth.overlay) PantallaAuth.ocultar(false);
+  /*Durante la recuperación la sesión temporal NO debe cerrar la pantalla
+     donde se escribe la contraseña nueva.*/
+  if (Auth.usuario && PantallaAuth.overlay && PantallaAuth.modo !== 'recuperar') PantallaAuth.ocultar(false);
   if (Auth.usuario && !location.hash) {
     _rutaActual = rutaPorDefecto();
     location.hash = _rutaActual;

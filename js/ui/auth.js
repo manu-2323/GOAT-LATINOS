@@ -54,8 +54,19 @@ const PantallaAuth = {
     const o = document.createElement('div');
     o.className = 'auth'; o.id = 'auth';
     const esAdmin = PantallaAuth.modo === 'admin';
-    const esEntrar = PantallaAuth.modo === 'entrar' || esAdmin;
-    const cuerpo = esAdmin
+    const esRecuperar = PantallaAuth.modo === 'recuperar';
+    const esEntrar = (PantallaAuth.modo === 'entrar' || esAdmin) && !esRecuperar;
+    const cuerpo = esRecuperar
+      ? '<h2>Restablecer contraseña</h2><p>Elegí una nueva contraseña para tu cuenta. Después volvé al ingreso.</p>' +
+        '<form id="form-recuperar">' +
+          PantallaAuth.campoClave('rc-clave', 'Nueva contraseña (mínimo 8 caracteres)', 'new-password') +
+          PantallaAuth.indicador('rc-clave-estado') +
+          PantallaAuth.campoClave('rc-clave2', 'Confirmar nueva contraseña', 'new-password') +
+          '<div class="auth-error" id="rc-error"></div>' +
+          '<button class="btn auth-ancho" type="submit">Guardar nueva contraseña</button>' +
+          '<button type="button" class="auth-enlace" id="rc-volver">Volver al ingreso</button>' +
+        '</form>'
+      : esAdmin
       ? '<h2>Acceso de administrador</h2><p>Ingresá el correo autorizado y la clave de administrador. El servidor valida ambos.</p>' +
         '<form id="form-admin">' +
           '<label>Correo electrónico<input class="input" type="email" id="ad-correo" autocomplete="email" required></label>' +
@@ -77,6 +88,8 @@ const PantallaAuth = {
             '<button class="btn auth-ancho" type="submit">Ingresar</button>' +
             '<button type="button" class="auth-enlace" id="en-reenviar">¿No te llegó el correo de confirmación?</button>' +
             '<div class="auth-error" id="en-reenvio-estado" aria-live="polite"></div>' +
+            '<button type="button" class="auth-enlace" id="en-recuperar">¿Olvidaste tu contraseña?</button>' +
+            '<div class="auth-error" id="en-recuperacion-estado" aria-live="polite"></div>' +
           '</form>' +
           '<p class="auth-cambiar">¿Todavía no tenés cuenta? <button type="button" class="auth-enlace" data-modo="registro">Registrate</button></p>' +
           '<p class="auth-cambiar" style="margin-top:4px"><button type="button" class="auth-enlace" data-modo="admin">Acceso de administrador</button></p>'
@@ -114,7 +127,9 @@ const PantallaAuth = {
         '<div class="auth-logo"><strong><span class="oro">GOATS</span> LATINOS</strong>' +
         '<small>LEAGUE MANAGER</small></div>' +
         '<div class="auth-caja">' + avisoHtml + cuerpo + '</div>' +
-        '<p class="auth-pie">' + (esAdmin
+        '<p class="auth-pie">' + (esRecuperar
+          ? 'El enlace es de un solo uso. Si venció, pedí uno nuevo desde el ingreso.'
+          : esAdmin
           ? 'Ingresá con un correo habilitado para administración. La RPC del servidor valida correo y clave antes de iniciar sesión.'
           : 'Al registrarte quedarás pendiente de aprobación hasta que el administrador te asigne a un grupo.') + '</p>' +
       '</div>';
@@ -141,7 +156,63 @@ const PantallaAuth = {
       if (PantallaAuth.alEntrar) PantallaAuth.alEntrar();
     };
 
-    if (esAdmin) {
+    if (esRecuperar) {
+      const clave = o.querySelector('#rc-clave');
+      const clave2 = o.querySelector('#rc-clave2');
+      const estadoClave = o.querySelector('#rc-clave-estado');
+      const err = o.querySelector('#rc-error');
+
+      const verificarClave = () => {
+        const v = clave.value;
+        if (!v) { PantallaAuth.estado(estadoClave, '', '', ''); return; }
+        const ok = v.length >= 8;
+        const fuerte = ok && /[A-ZÁÉÍÓÚÑ]/.test(v) && /\d/.test(v);
+        PantallaAuth.estado(estadoClave,
+          !ok ? 'La contraseña debe tener al menos 8 caracteres.' :
+            (fuerte ? 'Contraseña segura.' : 'Mínimo 8 caracteres. Sumá mayúsculas y números para mayor seguridad.'),
+          !ok ? 'mal' : (fuerte ? 'bien' : 'neutral'), !ok ? 'circle-x' : 'circle-check-big');
+      };
+      clave.addEventListener('input', verificarClave);
+      clave2.addEventListener('input', () => {
+        if (!clave2.value) return;
+        const ok = clave2.value === clave.value;
+        PantallaAuth.estado(estadoClave,
+          ok ? 'Las contraseñas coinciden.' : 'Las contraseñas no coinciden.',
+          ok ? 'bien' : 'mal', ok ? 'circle-check-big' : 'circle-x');
+      });
+      o.querySelector('#rc-volver').addEventListener('click', () => {
+        PantallaAuth.aviso = null;
+        PantallaAuth.modo = 'entrar';
+        PantallaAuth.mostrar(PantallaAuth.alEntrar);
+      });
+      o.querySelector('#form-recuperar').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        err.textContent = '';
+        if (clave.value.length < 8) {
+          err.textContent = 'La contraseña debe tener al menos 8 caracteres.';
+          return;
+        }
+        if (clave.value !== clave2.value) {
+          err.textContent = 'Las contraseñas no coinciden.';
+          return;
+        }
+        const form = ev.target;
+        ocupado(form, true);
+        try {
+          await Auth.actualizarContrasenaRecuperacion(clave.value, clave2.value);
+          /* Al salir, el evento gl:auth vuelve a mostrar el acceso con este
+             aviso; la sesión temporal del correo no queda activa. */
+          PantallaAuth.modo = 'entrar';
+          PantallaAuth.aviso = 'Contraseña actualizada. Ingresá con tu nueva contraseña.';
+          try { await Auth.salir(); }
+          catch (e) { console.warn('[auth] cierre tras recuperación:', e); }
+          GL.notificar('Contraseña actualizada. Ingresá con tu nueva contraseña.', 'exito', 'check-circle-2');
+        } catch (e) {
+          err.textContent = e.message;
+          ocupado(form, false);
+        }
+      });
+    } else if (esAdmin) {
       o.querySelector('#form-admin').addEventListener('submit', async ev => {
         ev.preventDefault();
         const err = o.querySelector('#ad-error'); err.textContent = '';
@@ -176,6 +247,27 @@ const PantallaAuth = {
         try {
           await Auth.reenviarConfirmacion(correo);
           estado.textContent = 'Te enviamos un nuevo enlace. Revisá tu correo y la carpeta de spam.';
+          estado.className = 'campo-estado bien';
+        } catch (e) {
+          estado.textContent = e.message;
+          estado.className = 'auth-error';
+        } finally { boton.disabled = false; }
+      });
+
+      /* Olvido de contraseña: mensaje genérico para no revelar qué cuentas
+         existen. El enlace vuelve a la misma URL pública del proyecto. */
+      o.querySelector('#en-recuperar').addEventListener('click', async () => {
+        const estado = o.querySelector('#en-recuperacion-estado');
+        const boton = o.querySelector('#en-recuperar');
+        const correo = o.querySelector('#en-correo').value.trim();
+        estado.textContent = '';
+        estado.className = 'auth-error';
+        if (!correo) { estado.textContent = 'Ingresá tu correo para recibir el enlace de recuperación.'; return; }
+        boton.disabled = true;
+        estado.textContent = 'Enviando…';
+        try {
+          await Auth.solicitarRecuperacion(correo);
+          estado.textContent = 'Si la cuenta existe, enviamos un enlace para restablecer la contraseña. Revisá tu correo y la carpeta de spam.';
           estado.className = 'campo-estado bien';
         } catch (e) {
           estado.textContent = e.message;

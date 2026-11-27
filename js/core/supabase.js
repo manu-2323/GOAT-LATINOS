@@ -51,6 +51,7 @@ const Auth = {
      pero esto evita duplicados si otra llamada llega antes de que termine. */
   _registrando: false,
   _reenviando: false,
+  _recuperando: false,
 
   /* 1.2.1 — Un único cliente (inyectable en pruebas, nunca privilegiado).
      telefono_verificado`: eso solo lo confirma una persona, jamás isValid(). */
@@ -62,33 +63,58 @@ const Auth = {
   consumirCallback(parametros, limpiar = true) {
     const p = parametros && typeof parametros === 'object' ? parametros : AUTH_CALLBACK;
     const hayError = !!(p.error || p.error_code || p.error_description);
+    const detalleCrudo = String(p.error_description || '').toLowerCase();
+    /* El enlace de recuperación llega con type=recovery. En errores, Supabase
+       a veces solo deja pistas en error_description: se reconocen sin tocar
+       los mensajes del flujo de confirmación de correo. */
+    const esRecuperacion = String(p.type || '').toLowerCase() === 'recovery' ||
+      p.recuperacion === '1' || p.recuperacion === true ||
+      detalleCrudo.includes('password') || detalleCrudo.includes('recovery') ||
+      detalleCrudo.includes('reset');
     const esConfirmacion = !hayError && !!(p.type === 'signup' || p.access_token);
     if (!hayError && !esConfirmacion) return null;
 
     let mensaje;
     if (hayError) {
       const codigo = String(p.error_code || p.error || '').toLowerCase();
-      const detalle = String(p.error_description || '').toLowerCase();
-      if (codigo === 'otp_expired' || detalle.includes('expired') || detalle.includes('expir')) {
+      const detalle = detalleCrudo;
+      if (esRecuperacion) {
+        if (codigo === 'otp_expired' || detalle.includes('expired') || detalle.includes('expir')) {
+          mensaje = 'El enlace para restablecer tu contraseña venció o ya se usó. Tu contraseña no se modificó. Pedí uno nuevo desde «¿Olvidaste tu contraseña?».';
+        } else if (codigo === 'access_denied' || detalle.includes('invalid')) {
+          mensaje = 'Ese enlace para restablecer tu contraseña no es válido. Tu contraseña no se modificó. Pedí uno nuevo desde el ingreso.';
+        } else {
+          mensaje = 'No se pudo abrir el enlace de recuperación. Tu contraseña sigue igual. Pedí uno nuevo desde el ingreso.';
+        }
+      } else if (codigo === 'otp_expired' || detalle.includes('expired') || detalle.includes('expir')) {
         mensaje = 'El enlace de confirmación venció o ya se usó. Tu cuenta no se modificó: ingresá con tu correo y contraseña o pedí un enlace nuevo desde el acceso.';
       } else if (codigo === 'access_denied' || detalle.includes('invalid')) {
         mensaje = 'Ese enlace de confirmación no es válido. No cambies tu correo ni crees otra cuenta: usá el acceso normal o pedí un enlace nuevo.';
       } else {
         mensaje = 'No se pudo confirmar el correo con ese enlace. Tu cuenta sigue igual: probá ingresar o solicitá un nuevo correo de confirmación.';
       }
+    } else if (esRecuperacion) {
+      /* La sesión del enlace ya viene en la URL: la UI debe pedir la clave
+         nueva, no mostrar el aviso genérico de correo confirmado. */
+      mensaje = null;
     } else {
       mensaje = 'Correo confirmado. ¡Bienvenido a la liga!';
     }
 
     Auth.avisoCallback = hayError ? mensaje : null;
     if (limpiar) Auth.limpiarCallbackUrl();
-    return { error: hayError, mensaje };
+    return { error: hayError, mensaje, recuperacion: esRecuperacion };
   },
 
   limpiarCallbackUrl() {
     try {
       if (typeof history !== 'undefined' && history.replaceState) {
-        history.replaceState(history.state, '', location.pathname + location.search);
+        /* El enlace de recuperación lleva un marcador en la query para poder
+           distinguirlo incluso cuando Supabase solo devuelve un error. Se
+           quita acá para que la próxima carga sea una visita normal. */
+        const url = new URL(location.href);
+        url.searchParams.delete('recuperacion');
+        history.replaceState(history.state, '', url.pathname + url.search);
       } else if (typeof location !== 'undefined') {
         location.hash = '';
       }
@@ -119,6 +145,33 @@ const Auth = {
       }
       return true;
     } finally { Auth._reenviando = false; }
+  },
+
+  /* Recuperación de contraseña: se envía un enlace de un solo uso a la URL
+     pública. La respuesta es genérica para no revelar qué correos existen. */
+  async solicitarRecuperacion(correo) {
+    if (!Auth._cliente()) throw new Error('Supabase no está configurado.');
+    if (Auth._recuperando) {
+      throw new Error('Ya hay un correo de recuperación en envío. Esperá a que termine.');
+    }
+    const email = String(correo || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Ingresá un correo válido.');
+    if (typeof Auth._cliente().auth.resetPasswordForEmail !== 'function') {
+      throw new Error('La recuperación no está disponible en este cliente.');
+    }
+    Auth._recuperando = true;
+    try {
+      const { error } = await Auth._cliente().auth.resetPasswordForEmail(email, {
+        /* El marcador permite reconocer el retorno aunque Supabase no incluya
+           type=recovery (por ejemplo, en enlaces vencidos o inválidos). */
+        emailRedirectTo: CONFIG.SITE_URL + '?recuperacion=1'
+      });
+      if (error) {
+        const detalle = error.code ? error.message + ' (' + error.code + ')' : error.message;
+        throw new Error(Auth.traducir(detalle));
+      }
+      return true;
+    } finally { Auth._recuperando = false; }
   },
 
   /* 2.3 — Los metadatos los escribe el usuario. Solo se aceptan países del
@@ -652,6 +705,39 @@ const Auth = {
 
     const { error } = await Auth._cliente().auth.updateUser({ password: claveNueva });
     if (error) throw new Error(Auth.traducir(error.message));
+    return true;
+  },
+
+  /* Segundo paso del enlace de recuperación. La sesión temporal ya viene del
+     callback; no se pide la contraseña actual. Las cuentas administradoras
+     quedan fuera: su clave es la compartida que valida la RPC del servidor. */
+  async actualizarContrasenaRecuperacion(nueva, confirmacion) {
+    if (!Auth._cliente()) throw new Error('Supabase no está configurado.');
+    if (!Auth.usuario) {
+      throw new Error('El enlace ya no es válido. Pedí uno nuevo desde «¿Olvidaste tu contraseña?».');
+    }
+    const clave = String(nueva || '');
+    if (clave.length < 8) throw new Error('La contraseña debe tener al menos 8 caracteres.');
+    if (clave !== String(confirmacion || '')) throw new Error('Las contraseñas no coinciden.');
+
+    try { await Auth.cargarPerfil(true); }
+    catch (e) {
+      /* Perfil sin completar no invalida el enlace: la cuenta Auth existe. */
+      console.warn('[auth] perfil durante recuperación:', e);
+    }
+    if (Auth.jugador && Auth.jugador.rol === 'admin') {
+      throw new Error('La clave de administrador se gestiona desde la configuración de administradores. Usá el acceso de administrador o hablá con administración.');
+    }
+
+    const { error } = await Auth._cliente().auth.updateUser({ password: clave });
+    if (error) {
+      const msg = String(error.message || '').toLowerCase();
+      if (msg.includes('expired') || msg.includes('invalid') || msg.includes('token') ||
+          msg.includes('session') || msg.includes('user not found')) {
+        throw new Error('El enlace venció, ya se usó o no es válido. Tu contraseña no se modificó. Pedí uno nuevo desde «¿Olvidaste tu contraseña?».');
+      }
+      throw new Error(Auth.traducir(error.message));
+    }
     return true;
   },
 
