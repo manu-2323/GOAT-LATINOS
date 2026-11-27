@@ -341,3 +341,11 @@ Se trabajó directamente en `main`, sin ramas auxiliares, sin nueva cadena de fa
 3. El proveedor SMTP remoto sigue sin verificarse; no se envió correo real ni se cambió configuración de correo.
 4. La conservación de foco/filtros ante `TOKEN_REFRESHED` debe confirmarse en el navegador con una sesión real; la cobertura automática valida la rama del router, no el refresco del proveedor.
 5. La inscripción de participantes mostrará una advertencia hasta que la migración propuesta se apruebe y aplique; el alta de torneo sigue funcionando.
+
+### Publicación
+
+- **Commit de implementación:** `5506482792b6644201313549fb7dba4335416a71` — `fix(uso-real): corregir seis problemas de perfil y navegacion`. Push directo a `main`, sin ramas auxiliares ni reescritura de historial.
+- **GitHub Actions:** run `45927454138`, `pages build and deployment`, rama `main`, `head_sha=5506482792b6644201313549fb7dba4335416a71`; `status=completed`, `conclusion=success`. Detalle: https://github.com/manu-2323/GOAT-LATINOS/actions/runs/45927454138
+- **GitHub Pages:** https://manu-2323.github.io/GOAT-LATINOS/ sirve `js/core/config.js` con `VERSION: '1.4.1'` y `index.html` con seis scripts `?v=1.4.1` y ninguno `?v=1.4.0`.
+- **Edge Function:** solo se desplegó `admin-crear-jugador` (`--yes` autorizado por el usuario) en `zmjzlvsdlfzmhptmtmjx`. Quedó en versión `14`, `verify_jwt=true` y `ezbr_sha256=eb0bd2789c88bc746f135d798810db7efd72f55b127ba5f9e9e2ac55c5dae022`. Una invocación anónima de solo validación devolvió `HTTP 400` con `{"ok":false,"estado":"error_validacion","mensaje":"Sesión inválida",...}`; no se creó ni modificó ningún dato. Las demás funciones no se desplegaron.
+- **SQL:** `supabase/migration-participantes-1.4.1.sql` quedó versionada como propuesta, **sin ejecutar**. No se aplicó ninguna migración en producción.
