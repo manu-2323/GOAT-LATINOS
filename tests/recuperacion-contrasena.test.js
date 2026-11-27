@@ -114,6 +114,10 @@ describe('Recuperación de contraseña — retorno del enlace', () => {
     expect(aviso.mensaje).toContain('No cambies tu correo');
   });
 
+  it('no recarga el perfil dentro del callback USER_UPDATED', () => {
+    expect(leer('js/core/supabase.js')).toContain("evento !== 'USER_UPDATED'");
+  });
+
   it('limpia el marcador y el fragmento para que la próxima carga sea normal', () => {
     window.history.replaceState({}, '', URL_RECUPERACION + '#access_token=token-de-prueba');
     window.Auth.consumirCallback({ recuperacion: '1', access_token: 'token-de-prueba' });
@@ -185,6 +189,17 @@ describe('Recuperación de contraseña — envío y actualización', () => {
     await expect(window.Auth.actualizarContrasenaRecuperacion('NuevaClave123', 'NuevaClave123'))
       .rejects.toThrow('El enlace venció');
   });
+
+  it('no se queda esperando un perfil lento para guardar la clave', async () => {
+    const cliente = clienteFalso();
+    window.Auth._sb = cliente;
+    window.Auth.usuario = { id: 'u-1', email: 'jugador@example.com' };
+    window.Auth.jugador = null;
+    window.Auth.cargarPerfil = () => new Promise(() => {});
+    await expect(window.Auth.actualizarContrasenaRecuperacion('NuevaClave123', 'NuevaClave123'))
+      .resolves.toBe(true);
+    expect(cliente.llamadas.updateUser).toEqual([{ password: 'NuevaClave123' }]);
+  }, 6000);
 
   it('no cambia la clave compartida de una cuenta administradora', async () => {
     const cliente = clienteFalso();

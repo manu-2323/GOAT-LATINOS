@@ -412,7 +412,11 @@ const Auth = {
       Auth.usuario = session ? session.user : null;
       Auth.jugador = null;
       if (!Auth.usuario) Auth.perfilPendienteTelefono = null;
-      if (Auth.usuario) {
+      /* supabase-js espera a este callback antes de resolver updateUser().
+         Si USER_UPDATED vuelve a cargar el perfil, un perfil lento bloquea el
+         guardado de la clave aunque el servidor ya respondió. El perfil ya se
+         cargó al iniciar sesión; acá solo se actualiza el chrome. */
+      if (Auth.usuario && evento !== 'USER_UPDATED') {
         try { await Auth.cargarPerfil(true); }
         catch (e) {
           /* La cuenta Auth existe: no se cierra sesión ni se borra nada. La UI
@@ -724,10 +728,20 @@ const Auth = {
     if (clave.length < 8) throw new Error('La contraseña debe tener al menos 8 caracteres.');
     if (clave !== String(confirmacion || '')) throw new Error('Las contraseñas no coinciden.');
 
-    try { await Auth.cargarPerfil(true); }
-    catch (e) {
-      /* Perfil sin completar no invalida el enlace: la cuenta Auth existe. */
-      console.warn('[auth] perfil durante recuperación:', e);
+    /* Solo se necesita el rol para excluir a las cuentas administradoras.
+       Si la consulta se queda esperando, no debe impedir cambiar la clave de
+       un jugador: el enlace ya acreditó la cuenta. */
+    if (!Auth.jugador) {
+      try {
+        let temporizador;
+        await Promise.race([
+          Auth.cargarPerfil(true).finally(() => clearTimeout(temporizador)),
+          new Promise(res => { temporizador = setTimeout(() => res(null), 2000); })
+        ]);
+      } catch (e) {
+        /* Perfil sin completar no invalida el enlace: la cuenta Auth existe. */
+        console.warn('[auth] perfil durante recuperación:', e);
+      }
     }
     if (Auth.jugador && Auth.jugador.rol === 'admin') {
       throw new Error('La clave de administrador se gestiona desde la configuración de administradores. Usá el acceso de administrador o hablá con administración.');
