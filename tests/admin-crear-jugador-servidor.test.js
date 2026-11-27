@@ -144,10 +144,16 @@ function crearAdminMock(opciones = {}) {
         async getUserById(id) {
           const u = Array.from(estado.usuarios.values()).find(x => x.id === id) || null;
           return { data: { user: u }, error: null };
+        },
+        async listUsers({ page = 1, perPage = 200 } = {}) {
+          const todos = Array.from(estado.usuarios.values());
+          const inicio = (page - 1) * perPage;
+          return { data: { users: todos.slice(inicio, inicio + perPage) }, error: null };
         }
       }
     }
   };
+  if (opciones.sinGetUserByEmail) delete admin.auth.admin.getUserByEmail;
   return admin;
 }
 
@@ -176,6 +182,18 @@ describe('admin-crear-jugador — idempotencia en servidor', () => {
     expect(admin.estado.jugadores).toHaveLength(1);
     expect(admin.estado.grupo_jugadores).toEqual([{ jugador_id: 'j-2', grupo_id: 'g1' }]);
     expect(r.cuerpo.user_id).toBe('u-1');
+  });
+
+  it('funciona con supabase-js v2 sin getUserByEmail (listUsers paginado)', async () => {
+    const admin = crearAdminMock({ sinGetUserByEmail: true });
+    const r = await api.crearJugadorServidor(admin, body(), { phone: api.telefonia });
+    expect(r.status).toBe(200);
+    expect(r.cuerpo.estado).toBe('creado');
+    expect(admin.estado.usuarios.size).toBe(1);
+
+    const consulta = await api.consultarEstado(admin, body());
+    expect(consulta.cuerpo.estado).toBe('ya_existente');
+    expect(consulta.cuerpo.estado_consulta).toBe('ya_existente');
   });
 
   it('correo ya registrado con jugador vinculado devuelve ya_existente sin crear nada', async () => {

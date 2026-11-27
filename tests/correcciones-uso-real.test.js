@@ -68,7 +68,7 @@ describe('Correcciones de uso real — selector de ubicación', () => {
     expect(campos.zona_horaria).toBeUndefined();
 
     const admin = leer('js/modulos/admin.js');
-    const inicio = admin.indexOf('function modalAgregar(root)');
+    const inicio = admin.indexOf('function modalAgregar(root, opciones)');
     const fin = admin.indexOf('/* ---------------- Modales de jornadas');
     const modal = admin.slice(inicio, fin);
     const listenerTel = modal.match(/telPais\.addEventListener\('change'[\s\S]*?\n        \}\);/)[0];
@@ -159,13 +159,13 @@ describe('Correcciones de uso real — cierre del modal', () => {
 
 describe('Correcciones de uso real — cache-busting', () => {
   it('renueva la versión de los archivos modificados', () => {
-    expect(leer('js/core/config.js')).toContain("VERSION: '1.4.2'");
+    expect(leer('js/core/config.js')).toContain("VERSION: '1.6.0'");
     const index = leer('index.html');
-    expect(index).toContain('js/core/config.js?v=1.4.2');
-    expect(index).toContain('js/core/gl.js?v=1.4.2');
-    expect(index).toContain('js/core/supabase.js?v=1.4.2');
-    expect(index).toContain('js/ui/menu.js?v=1.4.2');
-    expect(index).toContain('js/ui/auth.js?v=1.4.2');
-    expect(index).toContain('js/app.js?v=1.4.2');
+    expect(index).toContain('js/core/config.js?v=1.6.0');
+    expect(index).toContain('js/core/gl.js?v=1.6.0');
+    expect(index).toContain('js/core/supabase.js?v=1.6.0');
+    expect(index).toContain('js/ui/menu.js?v=1.6.0');
+    expect(index).toContain('js/ui/auth.js?v=1.6.0');
+    expect(index).toContain('js/app.js?v=1.6.0');
   });
 });

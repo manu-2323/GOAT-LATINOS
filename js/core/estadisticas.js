@@ -162,9 +162,10 @@
       const vallas = EST.calcularVallasInvictas(partidos, jugadorId);
       const rachaData = EST.calcularRachas(cl.resultados || []);
 
-      // Mejor victoria y peor derrota: sobre goles reales (estado jugado)
+      // Mejor victoria y peor derrota: solo partidos jugados en FC Mobile.
+      // Walkovers, expulsiones y jornadas libres NO generan rendimiento real.
       let mejorVictoria = null, peorDerrota = null;
-      partidos.filter(p => p.estado !== 'pendiente').forEach(p => {
+      partidos.filter(p => p.estado === 'jugado' && !GL.esAdministrativo(p)).forEach(p => {
         const r = GL.resultado(p);
         const local = p.local_id === jugadorId;
         const aFavor = local ? r.gf : r.gc;
@@ -208,6 +209,7 @@
     ------------------------------------------------------------------ */
     calcularHeadToHead(partidos, idA, idB) {
       const js = partidos.filter(p => p.estado !== 'pendiente' &&
+        !GL.esAdministrativo(p) &&
         ((p.local_id === idA && p.visitante_id === idB) ||
          (p.visitante_id === idA && p.local_id === idB)));
       let g = 0, e = 0, p = 0, gf = 0, gc = 0;

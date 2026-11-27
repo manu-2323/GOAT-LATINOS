@@ -206,15 +206,16 @@ describe('1.4.1 — grupos opcionales', () => {
     const codigo = adminJs();
     expect(codigo).toContain('Sin asignar (pendiente)');
     expect(codigo).not.toContain("No hay grupos disponibles. Creá los grupos desde Configuración.");
-    expect(codigo).toContain("const grupoVal = fondo.querySelector('#ag-grupo').value || null;");
+    expect(codigo).toContain('const grupoEl = fondo.querySelector(\'#ag-grupo\')');
     expect(codigo).toContain('creado; pendiente de asignar grupo.');
   });
 
-  it('el alta rápida permite dejar el grupo sin asignar', () => {
+  it('el alta global no inscribe ni asigna grupo automáticamente', () => {
     const codigo = adminJs();
-    expect(codigo).toContain("'<option value=\"\">Sin asignar</option>'");
-    expect(codigo).not.toContain("Seleccioná un grupo para el jugador.");
-    expect(codigo).toContain('const grupoId = grupo || null;');
+    expect(codigo).toContain('const soloGlobal = cfg.soloGlobal === true;');
+    expect(codigo).toContain('torneoActual ? torneoActual.id : null');
+    expect(codigo).toContain('El registro es global');
+    expect(codigo).not.toContain('const grupoId = grupo || null;');
   });
 
   it('el servidor ya aceptaba grupo ausente y ahora informa el estado pendiente', () => {
@@ -238,10 +239,9 @@ describe('1.4.1 — participantes por torneo', () => {
     expect(sql).toContain('grant execute on function public.gl_inscribir_participantes(uuid, uuid[])');
   });
 
-  it('el formulario de creación inscribe solo después de crear el torneo', () => {
+  it('el formulario de creación inscribe la selección visual solo después de crear el torneo', () => {
     const codigo = adminJs();
-    expect(codigo).toContain('id="tor-participantes"');
-    expect(codigo).toContain('selectedOptions');
+    expect(codigo).toContain('const participantes = Array.from(seleccionados)');
     expect(codigo).toContain('Auth.inscribirParticipantes(torneoId, participantes)');
     expect(codigo.indexOf('gl_crear_torneo')).toBeLessThan(codigo.indexOf('Auth.inscribirParticipantes'));
   });
@@ -323,12 +323,12 @@ describe('1.4.1 — navegación sin refresh', () => {
 });
 
 describe('1.4.1 — versión pública', () => {
-  it('mantiene el historial y publica 1.4.2 en config y cache-busting', () => {
+  it('mantiene el historial y publica 1.6.0 en config y cache-busting', () => {
     const config = leer('js/core/config.js');
     const index = leer('index.html');
-    expect(config).toContain("VERSION: '1.4.2'");
-    expect(index.match(/\?v=1\.4\.2/g)).toHaveLength(6);
+    expect(config).toContain("VERSION: '1.6.0'");
+    expect(index.match(/\?v=1\.6\.0/g)).toHaveLength(7);
+    expect(index).not.toContain('?v=1.4.2');
     expect(index).not.toContain('?v=1.4.1');
-    expect(index).not.toContain('?v=1.4.0');
   });
 });

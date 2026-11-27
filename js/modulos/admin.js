@@ -296,8 +296,14 @@
   /* Escritura de auditoría esperada. Si falla se informa y se devuelve false:
      la operación principal no debe presumir trazabilidad completa. */
   async function auditar(accion, entidadTipo, entidadId, detalle, grupoId) {
-    if (!GL.auditoria || typeof GL.auditoria.registrar !== 'function') return false;
     try {
+      /* El módulo de auditoría se carga bajo demanda. Si una acción se hace
+         antes de visitar la pestaña "Auditoría", GL.auditoria aún no existe:
+         cargarlo aquí evita perder la trazabilidad de esa acción real. */
+      if (!GL.auditoria || typeof GL.auditoria.registrar !== 'function') {
+        await GL.modulo('auditoria');
+      }
+      if (!GL.auditoria || typeof GL.auditoria.registrar !== 'function') return false;
       const r = await GL.auditoria.registrar(accion, entidadTipo, entidadId, detalle, grupoId);
       return !(r && r.ok === false);
     } catch (e) {
@@ -308,14 +314,15 @@
 
   /* Recarga real del contexto antes de repintar. invalidar() sin recargar
      dejaba GL.ctx con datos viejos y mostraba información ya modificada. */
-  async function refrescar(root) {
+  async function refrescar(root, alRefrescar) {
     try {
       await recargarContextoAdmin();
     } catch (e) {
       console.warn('[Admin] No se pudo refrescar el contexto:', e);
       GL.notificar('El cambio se guardó, pero la vista puede mostrar datos desactualizados. Recargá la página.', 'advertencia');
     }
-    if (root) Mod.render(root);
+    if (typeof alRefrescar === 'function') await alRefrescar();
+    else if (root) Mod.render(root);
   }
 
   /* Listado administrativo: incluye inactivos y expulsados, que GL.jugadores()
@@ -505,7 +512,7 @@
       '<div class="card mt">' +
         '<div class="card-titulo">' + icono('zap', 20) + 'Acciones rápidas</div>' +
         '<div class="acciones-rapidas-grid">' +
-          accionRapida('jugadores', 'user-plus',   'Agregar jugador',  'Registrá un nuevo participante') +
+          accionRuta('jugadores', 'user-plus',   'Registro de jugadores', 'Alta y contacto del catálogo global') +
           accionRapida('jornadas',  'flag',         'Gestionar jornadas','Abrí, cerrá y revisá partidos') +
           accionRapida('disciplina','gavel',         'Disciplina',       'Revisá sanciones y faltas') +
           (superAdmin ? accionRapida('admins', 'shield-check', 'Administradores', 'Gestioná quién puede administrar') : '') +
@@ -532,6 +539,17 @@
 
   function accionRapida(tab, ico, titulo, desc) {
     return '<button type="button" class="accion-rapida-btn" data-tab-ir="' + tab + '">' +
+      '<div class="accion-rapida-ico">' + icono(ico, 20) + '</div>' +
+      '<div class="accion-rapida-texto">' +
+        '<strong>' + titulo + '</strong>' +
+        '<span>' + desc + '</span>' +
+      '</div>' +
+      icono('chevron-right', 14) +
+    '</button>';
+  }
+
+  function accionRuta(ruta, ico, titulo, desc) {
+    return '<button type="button" class="accion-rapida-btn" data-ir-panel="' + esc(ruta) + '">' +
       '<div class="accion-rapida-ico">' + icono(ico, 20) + '</div>' +
       '<div class="accion-rapida-texto">' +
         '<strong>' + titulo + '</strong>' +
@@ -657,7 +675,7 @@
         '<div class="j5-hero-acciones">' +
           '<span class="j5-contexto">' + icono('trophy', 14) +
             esc((GL.torneo() && GL.torneo().nombre) || CONFIG.NOMBRE_LIGA) + '</span>' +
-          '<button type="button" class="btn" data-agregar>' + icono('user-plus', 16) + 'Agregar jugador</button>' +
+          '<button type="button" class="btn sec" data-ir-panel="jugadores">' + icono('user-plus', 16) + 'Registro de jugadores</button>' +
         '</div>' +
       '</header>' +
 
@@ -788,6 +806,8 @@
       if (!j) return;
       if (tipo === 'editar')   modalEditar(j, root);
       if (tipo === 'telefono') modalConfirmarTelefono(j, root);
+      if (tipo === 'baja')     modalBajaParticipante(j, root);
+      if (tipo === 'historial') modalHistorialParticipacion(j);
       if (tipo === 'grupo')    modalGrupo(j, root);
       if (tipo === 'asignar')  modalGrupo(j, root, true);
       if (tipo === 'sancion')  modalSancion(j, root);
@@ -1197,7 +1217,9 @@
 
   /* ---------------- D. Administradores ---------------- */
   function htmlAdmins() {
-    const admins = GL.jugadores().filter(j => j.rol === 'admin');
+    /* 1.5 — El rol admin es global: se consulta del catálogo completo, no del
+       plantel del torneo (los admins no son "participantes" por defecto). */
+    const admins = GL.jugadoresGlobales().filter(j => j.rol === 'admin');
     const filas = admins.map(j => {
       const yo = Auth.usuario && j.user_id === Auth.usuario.id;
       const correo = j.email || 'Sin correo cargado';
@@ -1385,34 +1407,13 @@
             '</td></tr>';
         }).join('') + '</tbody></table></div>'
       : GL.vacio('No hay jugadores inscritos en este torneo.', 'users', null,
-          'Usá el alta rápida de arriba para cargar el primer jugador.');
+          'Registrá jugadores en el panel dedicado y luego añadilos al torneo.');
 
     const pasoJugadores =
-      '<p class="muted" style="font-size:12px">Alta rápida: se crea la cuenta y se guarda el jugador. Podés asignarlo al grupo elegido o dejarlo pendiente.</p>' +
-      '<div class="campo-row">' +
-        '<label class="campo"><span>Nombre de usuario</span><input class="input" id="nt-jug-nombre" maxlength="32" placeholder="Ej. GOAT_PEREZ"></label>' +
-        '<label class="campo"><span>Correo</span><input class="input" type="email" id="nt-jug-email" placeholder="jugador@correo.com"></label>' +
-        '<label class="campo"><span>Clave</span><input class="input" id="nt-jug-clave" value="' +
-          Math.random().toString(36).slice(2, 10) + '" autocomplete="new-password"></label>' +
-      '</div>' +
-      '<div class="campo-row">' +
-        '<label class="campo"><span>País</span><select class="input" id="nt-jug-pais">' + GL.opcionesPais('NI', true) + '</select></label>' +
-        '<label class="campo"><span>País del teléfono</span><select class="input" id="nt-jug-tel-pais">' + GL.opcionesPais('NI', false) + '</select></label>' +
-        '<label class="campo"><span>Teléfono / WhatsApp (obligatorio)' +
-          '<small id="nt-jug-tel-hint" style="color:var(--text-secondary)">' + hintTel('NI') + '</small></span>' +
-          '<div class="tel-wrap">' +
-            '<button type="button" class="tel-prefijo" id="nt-jug-tel-prefijo" aria-label="Código de país">+505</button>' +
-            '<input class="input" id="nt-jug-tel" inputmode="numeric" placeholder="8108-5555" required>' +
-          '</div>' +
-        '</label>' +
-        '<label class="campo"><span>Grupo (opcional)</span><select class="input" id="nt-jug-grupo">' +
-          (grupos.length
-            ? '<option value="">Sin asignar</option>' +
-              grupos.map(g => '<option value="' + esc(g.id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</option>').join('')
-            : '<option value="">Sin grupos disponibles</option>') +
-        '</select></label>' +
-      '</div>' +
-      '<button type="button" class="btn" id="nt-jug-crear">' + icono('user-plus', 16) + 'Crear jugador</button>' +
+      '<p class="muted" style="font-size:12px">El alta de cuentas vive en su propio panel. ' +
+        'Registrá al jugador allí y volvé aquí para asignarlo a un grupo o quitarlo del actual.</p>' +
+      '<button type="button" class="btn sec" data-ir-panel="jugadores">' +
+        icono('user-plus', 16) + 'Ir al registro de jugadores</button>' +
       '<div class="mt" id="nt-lista-jugadores">' + filasJugadores + '</div>';
 
     const avisoRandom = total !== 22
@@ -1503,10 +1504,30 @@
 
   function abrirCrearTorneo(root) {
     const hayTorneo = !!GL.torneo();
+    /* 1.6 — Se muestra el catálogo global completo: el torneo anterior se
+       archiva, así que sus jugadores deben poder inscribirse en el nuevo. */
+    const disponibles = GL.jugadoresGlobales()
+      .filter(j => j.activo !== false && j.rol !== 'expulsado');
+    const seleccionados = new Set();
+
+    const tarjetaJugador = j =>
+      '<div class="tor-part-card" data-part-id="' + esc(j.id) + '" data-nombre="' + esc(j.nombre_usuario) + '">' +
+        GL.avatarHTML(j, 'avatar') +
+        '<div class="tor-part-info">' +
+          '<strong>' + esc(j.nombre_usuario) + '</strong>' +
+          '<span>' + GL.banderaHTML(j.pais, 13) + ' ' + esc(j.pais || '—') +
+            ' · N.º ' + esc(j.numero == null ? '—' : j.numero) + '</span>' +
+          '<span class="tor-part-contacto">' +
+            (GL.linkWhatsapp(j, j.nombre_usuario) || 'Sin teléfono registrado') + '</span>' +
+        '</div>' +
+        '<button type="button" class="btn sec sm" data-tor-add="' + esc(j.id) + '">' +
+          icono('plus', 14) + 'Añadir al torneo</button>' +
+      '</div>';
+
     GL.dialogo({
       titulo: 'Crear Torneo',
       icono: 'trophy',
-      ancho: 'md',
+      ancho: 'lg',
       confirmTexto: 'Crear torneo',
       cuerpo:
         '<p class="modal-texto">Se creará un torneo nuevo y quedará activo. ' +
@@ -1518,22 +1539,75 @@
         '<label class="campo"><span>Número de jornadas (1..' + MAX_JORNADAS + ')</span>' +
           '<input class="input" type="number" min="1" max="' + MAX_JORNADAS + '" id="tor-jornadas" value="' +
           CONFIG.JORNADAS_FASE_REGULAR + '"></label>' +
-        '<label class="campo"><span>Participantes iniciales (opcional)</span>' +
-          '<select class="input" id="tor-participantes" multiple size="5">' +
-            (GL.jugadores().filter(j => j.rol === 'jugador').length
-              ? GL.jugadores().filter(j => j.rol === 'jugador').map(j =>
-                  '<option value="' + esc(j.id) + '">' + esc(j.nombre_usuario) + '</option>').join('')
-              : '<option value="" disabled>No hay jugadores registrados</option>') +
-          '</select>' +
-          '<small class="campo-ayuda">Se inscriben en el torneo nuevo; luego se les asigna un grupo. ' +
-          'Requiere la migración de participantes por torneo.</small>' +
-        '</label>',
+        '<div class="tor-part-cabecera">' +
+          '<strong>' + icono('users', 16) + 'Participantes registrados (' + disponibles.length + ')</strong>' +
+          '<input class="input" id="tor-buscar" type="search" placeholder="Buscar por nombre" ' +
+            'aria-label="Buscar participantes registrados">' +
+        '</div>' +
+        '<div class="tor-part-lista" id="tor-part-lista">' +
+          (disponibles.length ? disponibles.map(tarjetaJugador).join('') :
+            '<p class="vacio-mensaje">No hay jugadores registrados. Usá el Registro de jugadores para crear el primero.</p>') +
+        '</div>' +
+        '<div class="tor-part-seleccion" aria-live="polite">' +
+          '<strong>' + icono('list-checks', 14) + 'Seleccionados</strong>' +
+          '<div id="tor-seleccionados">Ninguno todavía</div>' +
+        '</div>',
+      onAbrir(fondo) {
+        const actualizarSeleccion = () => {
+          const cont = fondo.querySelector('#tor-seleccionados');
+          if (!cont) return;
+          cont.innerHTML = seleccionados.size
+            ? Array.from(seleccionados).map(id => {
+                const j = disponibles.find(x => x.id === id);
+                return '<span class="tor-chip">' + esc(j ? j.nombre_usuario : id) +
+                  '<button type="button" data-tor-quit="' + esc(id) + '" aria-label="Quitar de la selección">' +
+                  icono('x', 12) + '</button></span>';
+              }).join('')
+            : 'Ninguno todavía';
+          cont.querySelectorAll('[data-tor-quit]').forEach(b => b.addEventListener('click', () => {
+            const id = b.dataset.torQuit;
+            seleccionados.delete(id);
+            actualizarSeleccion();
+            actualizarBoton(id, false);
+          }));
+        };
+        const actualizarBoton = (id, activo) => {
+          const card = Array.from(fondo.querySelectorAll('[data-part-id]'))
+            .find(x => x.dataset.partId === id);
+          if (!card) return;
+          card.classList.toggle('seleccionada', activo);
+          const btn = card.querySelector('[data-tor-add]');
+          if (btn) btn.innerHTML = icono(activo ? 'check' : 'plus', 14) +
+            (activo ? 'Quitar del torneo' : 'Añadir al torneo');
+        };
+        fondo.querySelectorAll('[data-tor-add]').forEach(b => b.addEventListener('click', () => {
+          const id = b.dataset.torAdd;
+          const j = disponibles.find(x => x.id === id);
+          if (seleccionados.has(id)) {
+            seleccionados.delete(id);
+            actualizarBoton(id, false);
+            GL.notificar((j ? j.nombre_usuario : 'Jugador') + ' quitado de la selección.', 'info');
+          } else {
+            seleccionados.add(id);
+            actualizarBoton(id, true);
+            GL.notificar((j ? j.nombre_usuario : 'Jugador') +
+              ' a sido añadido al torneo, espera asignar grupo', 'exito');
+          }
+          actualizarSeleccion();
+        }));
+        const buscar = fondo.querySelector('#tor-buscar');
+        if (buscar) buscar.addEventListener('input', () => {
+          const q = buscar.value.trim().toLowerCase();
+          fondo.querySelectorAll('[data-part-id]').forEach(card => {
+            card.classList.toggle('oculto', !card.dataset.nombre.toLowerCase().includes(q));
+          });
+        });
+      },
       onConfirmar(fondo, cerrar, setBloqueado) {
         const nombre = fondo.querySelector('#tor-nombre').value.trim();
         const temporada = fondo.querySelector('#tor-temporada').value.trim();
         const jornadas = validarTotal(fondo.querySelector('#tor-jornadas').value);
-        const participantes = Array.from(fondo.querySelector('#tor-participantes').selectedOptions)
-          .map(o => o.value).filter(Boolean);
+        const participantes = Array.from(seleccionados);
         if (!nombre) { fondo.setError('Ingresá el nombre de la liga.'); return; }
         if (!temporada) { fondo.setError('Ingresá la temporada.'); return; }
         if (!jornadas.ok) { fondo.setError(jornadas.mensaje); return; }
@@ -1548,7 +1622,6 @@
             const r = leerRpc(data, error, 'No se pudo crear el torneo.');
             if (!r.ok) { fondo.setError(r.mensaje); setBloqueado(false); return; }
             cerrar();
-            await recargarContextoAdmin();
             GL.notificar(r.mensaje || 'Torneo "' + nombre + '" creado correctamente.', 'exito');
             if (participantes.length) {
               const torneoId = r.datos && r.datos.torneo_id;
@@ -1565,6 +1638,9 @@
                 }
               }
             }
+            /* Recargar después de inscribir: hacerlo antes dejaba la vista sin
+               participantes hasta que el usuario recargaba la página. */
+            await recargarContextoAdmin();
             Mod.tab = 'resumen';
             Mod.render(root);
           } catch (e) {
@@ -1644,77 +1720,6 @@
       GL.notificar(r.mensaje || 'Datos guardados. El torneo tiene ' + jornadas.valor + ' jornadas.', 'exito');
       Mod.render(root);
     } catch (e) { GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error'); }
-  }
-
-  async function crearJugadorRapido(cont, root) {
-    const torneo = GL.torneo();
-    if (!torneo) { GL.notificar('No hay torneo activo.', 'error'); return; }
-    const nombreRaw = cont.querySelector('#nt-jug-nombre').value;
-    const nombre = GL.seguroTexto(nombreRaw).toUpperCase().replace(/\s+/g, '_');
-    const email = cont.querySelector('#nt-jug-email').value.trim().toLowerCase();
-    const clave = cont.querySelector('#nt-jug-clave').value;
-    const pais = cont.querySelector('#nt-jug-pais').value;
-    const paisTel = cont.querySelector('#nt-jug-tel-pais').value || pais;
-    const telRaw = cont.querySelector('#nt-jug-tel').value.trim();
-    const grupo = cont.querySelector('#nt-jug-grupo').value;
-
-    if (nombre.length < 2 || nombre.length > 32) {
-      GL.notificar('El nombre debe tener entre 2 y 32 caracteres válidos.', 'advertencia'); return;
-    }
-    if ((GL.ctx.jugadores || []).some(x => x.nombre_usuario === nombre)) {
-      GL.notificar('Ese nombre ya está en uso por otro jugador.', 'advertencia'); return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      GL.notificar('Ingresá un correo electrónico válido.', 'advertencia'); return;
-    }
-    if (clave.length < 8) {
-      GL.notificar('La contraseña debe tener al menos 8 caracteres.', 'advertencia'); return;
-    }
-    if (!pais) { GL.notificar('Seleccioná el país del jugador.', 'advertencia'); return; }
-    const validacionTel = GL.tel.validar(telRaw, paisTel, true);
-    if (!validacionTel.ok) {
-      GL.notificar(validacionTel.mensaje || 'El teléfono es obligatorio y debe ser válido.', 'advertencia'); return;
-    }
-    const camposTel = GL.tel.campos(validacionTel.e164, validacionTel.pais || paisTel);
-    if (!camposTel.telefono_e164) {
-      GL.notificar('El teléfono es obligatorio.', 'advertencia'); return;
-    }
-    const grupoId = grupo || null;
-
-    const btn = cont.querySelector('#nt-jug-crear');
-    const aviso = avisoCreacionBloqueada(email);
-    if (aviso) { GL.notificar(aviso, 'advertencia'); return; }
-    btn.disabled = true; btn.textContent = 'Creando…';
-    try {
-      const body = Object.assign({
-        nombre_usuario: nombre,
-        email,
-        password: clave,
-        pais,
-        zona_horaria: GL.zonaPorPais(pais),
-        grupo_id: grupoId,
-        torneo_id: torneo.id
-      }, camposTel);
-      const resultado = await ejecutarCreacion(body);
-      if (!resultado.ok) {
-        GL.notificar(resultado.mensaje, resultado.reintentable ? 'advertencia' : 'error');
-        return;
-      }
-      await conTimeout(
-        recargarContextoAdmin(), CONFIG.TIMEOUT_CREAR_JUGADOR,
-        'El jugador se creó, pero la vista tardó en actualizarse. Recargá la página.'
-      ).catch(() => GL.notificar(
-        'El jugador se creó, pero la vista tardó en actualizarse. Recargá la página.', 'advertencia'
-      ));
-      if (resultado.estado === 'ya_existente') {
-        GL.notificar(resultado.mensaje, 'info');
-      } else {
-        GL.notificar(nombre + (grupoId ? ' creado y asignado al grupo.' : ' creado; pendiente de asignar grupo.'), 'exito');
-      }
-      Mod.render(root);
-    } finally {
-      if (btn.isConnected) { btn.disabled = false; btn.textContent = 'Crear jugador'; }
-    }
   }
 
   async function cambiarGrupoRapido(j, root, quitar) {
@@ -1990,90 +1995,161 @@
       onAbrir(fondo, cerrar) {
         const boton = fondo.querySelector('#cf-confirmar');
         const estado = fondo.querySelector('#cf-estado');
-        /* 2.2 — Estado parcial: la RPC ya se aplicó, pero el recálculo falló.
-           El reintento NO vuelve a llamar a la RPC, por lo que no duplica
-           registros de auditoría ni deshace una titularidad válida. */
-        let pendiente = null;
+        /* 1.5 — Todas las rutas terminan: guard de reentrada, verificación real
+           contra Supabase y rehabilitación del botón. Nunca se muestra éxito
+           sin leer el estado final persistido. */
+        let ocupado = false;
+        let exito = false;
+        let pendiente = null;       // RPC aplicada, falta el recálculo
+        let pendienteLectura = null; // RPC aplicada, falló la relectura
 
-        const finalizar = async (resultado) => {
-          cerrar();
-          await recargarContextoAdmin();
-          Mod.render(root);
-          const nuevo = (resultado && resultado.nuevo) || e164Actual;
+        const cargando = texto => {
+          boton.disabled = true;
+          boton.textContent = texto;
+          estado.textContent = 'Procesando… no cierres esta ventana.';
+        };
+        const liberar = texto => {
+          boton.disabled = false;
+          boton.textContent = texto;
+        };
+        const reflejarEstado = fila => {
+          const novo = fila.telefono_e164 || e164Actual;
+          j.telefono = fila.telefono || j.telefono;
+          j.telefono_e164 = novo;
+          j.telefono_nacional = fila.telefono_nacional || j.telefono_nacional;
+          j.telefono_verificado = fila.telefono_verificado === true;
+          j.telefono_valido_plan = fila.telefono_valido_plan;
+          if (Auth.jugador && Auth.jugador.id === j.id) {
+            Auth.jugador.telefono_verificado = j.telefono_verificado;
+            Auth.jugador.telefono_valido_plan = j.telefono_valido_plan;
+          }
+          (GL.ctx.jugadoresGlobales || []).forEach(x => {
+            if (x.id === j.id) {
+              x.telefono_e164 = novo;
+              x.telefono_verificado = j.telefono_verificado;
+              x.telefono_valido_plan = j.telefono_valido_plan;
+            }
+          });
+          return novo;
+        };
+        const verificarYMostrar = async (resultado) => {
+          const fila = await Auth.verificarEstadoTelefono(j.id);
+          const novo = reflejarEstado(fila);
+          const verificado = fila.telefono_verificado === true;
+          const plan = fila.telefono_valido_plan === true
+            ? 'válida para el plan'
+            : fila.telefono_valido_plan === false
+              ? 'no válida para el plan'
+              : 'pendiente de validación';
+          estado.textContent =
+            'Confirmación verificada en la base de datos. Teléfono: ' + novo +
+            '. Titularidad: ' + (verificado ? 'confirmada' : 'no confirmada (solo formato)') +
+            '. Validación del plan: ' + plan + '.';
+          try { await recargarContextoAdmin(); } catch (e) { console.warn('[Admin] Recarga posterior al teléfono:', e); }
+          exito = true;
+          pendiente = null;
+          pendienteLectura = null;
+          liberar('Cerrar');
           GL.notificar(
-            'Teléfono confirmado: ' + nuevo + '. ' +
-            (resultado && resultado.titularidad_confirmada
-              ? 'Titularidad confirmada por administración.'
-              : 'Titularidad no modificada.'),
-            'exito'
+            'Teléfono ' + novo + ' verificado. Titularidad ' +
+            (verificado ? 'confirmada' : 'no confirmada'), 'exito'
           );
         };
 
         boton.addEventListener('click', async () => {
-          if (pendiente) {
-            boton.disabled = true;
-            boton.textContent = 'Reintentando…';
-            try {
-              await Auth.reintentarRecalculo(pendiente.jugadorId, pendiente.e164);
-              await finalizar(pendiente.resultado);
-            } catch (e) {
-              estado.textContent = 'No se pudo actualizar la validación del plan: ' + e.message;
-              GL.notificar(e.message, 'error');
-              boton.disabled = false;
-              boton.textContent = 'Reintentar validación del plan';
-            }
+          if (ocupado) return;          // doble clic / doble envío
+          if (exito) {
+            cerrar();
+            try { Mod.render(root); } catch (e) { console.warn(e); }
             return;
           }
-
-          const motivo = fondo.querySelector('#cf-motivo').value.trim();
-          if (!e164Actual) {
-            estado.textContent = 'Este jugador no tiene un teléfono E.164 válido para confirmar.';
-            return;
-          }
-          if (!motivo) {
-            errorCampo(fondo, '#cf-motivo', 'Escribí el motivo de la confirmación.');
-            return;
-          }
-          const confirmaTitularidad = fondo.querySelector('#cf-titularidad').checked;
-          const evidencia = fondo.querySelector('#cf-evidencia').value.trim();
-          if (confirmaTitularidad && !evidencia) {
-            errorCampo(fondo, '#cf-evidencia', 'La titularidad requiere evidencia verificable.');
-            return;
-          }
-          errorCampo(fondo, '#cf-evidencia', '');
-          errorCampo(fondo, '#cf-motivo', '');
-          boton.disabled = true;
-          boton.textContent = 'Confirmando…';
-          estado.textContent = '';
+          ocupado = true;
           try {
+            if (pendienteLectura) {
+              cargando('Reverificando…');
+              await verificarYMostrar(pendienteLectura);
+              return;
+            }
+            if (pendiente) {
+              cargando('Reintentando…');
+              try {
+                await Auth.reintentarRecalculo(pendiente.jugadorId, pendiente.e164);
+                await verificarYMostrar(pendiente.resultado);
+              } catch (e) {
+                estado.textContent = 'No se pudo actualizar la validación del plan: ' + e.message +
+                  '. La confirmación sigue registrada; podés reintentar.';
+                GL.notificar(e.message, 'error');
+                liberar('Reintentar validación del plan');
+              }
+              return;
+            }
+
+            const motivo = fondo.querySelector('#cf-motivo').value.trim();
+            if (!e164Actual) {
+              estado.textContent = 'Este jugador no tiene un teléfono E.164 válido para confirmar.';
+              liberar('Confirmar teléfono');
+              return;
+            }
+            if (!motivo) {
+              errorCampo(fondo, '#cf-motivo', 'Escribí el motivo de la confirmación.');
+              liberar('Confirmar teléfono');
+              return;
+            }
+            const confirmarTitularidad = fondo.querySelector('#cf-titularidad').checked;
+            const evidencia = fondo.querySelector('#cf-evidencia').value.trim();
+            if (confirmarTitularidad && !evidencia) {
+              errorCampo(fondo, '#cf-evidencia', 'La titularidad requiere evidencia verificable.');
+              liberar('Confirmar teléfono');
+              return;
+            }
+            errorCampo(fondo, '#cf-evidencia', '');
+            errorCampo(fondo, '#cf-motivo', '');
+            cargando('Confirmando…');
             const resultado = await Auth.confirmarYRecalcular({
               jugadorId: j.id,
               e164: e164Actual,
               motivo,
-              confirmarTitularidad: confirmaTitularidad,
+              confirmarTitularidad,
               evidencia: evidencia || null
             });
             if (!resultado.recalculoOk) {
               pendiente = {
                 jugadorId: j.id,
                 e164: (resultado.resultado && resultado.resultado.nuevo) || e164Actual,
-                resultado: resultado.resultado
+                resultado: resultado.resultado || {}
               };
-              estado.textContent =
-                'La confirmación quedó registrada, pero no se pudo recalcular la validez del plan. ' +
-                (resultado.errorRecalculo ? resultado.errorRecalculo + '. ' : '') +
-                'Podés reintentar sin repetir la confirmación ni la auditoría.';
-              boton.disabled = false;
-              boton.textContent = 'Reintentar validación del plan';
+              /* La RPC se aplicó: se relee para no confundir un fallo de
+                 recálculo con una confirmación no realizada. */
+              try {
+                const fila = await Auth.verificarEstadoTelefono(j.id);
+                reflejarEstado(fila);
+                estado.textContent =
+                  'La confirmación quedó registrada y verificada, pero no se pudo recalcular ' +
+                  'la validez del plan. ' + (resultado.errorRecalculo || '') +
+                  ' Podés reintentar sin repetir la auditoría.';
+              } catch (e) {
+                pendienteLectura = pendiente.resultado;
+                pendiente = null;
+                estado.textContent =
+                  'La confirmación se registró, pero no se pudo volver a leer el perfil: ' + e.message;
+                liberar('Reverificar estado');
+                GL.notificar('Confirmación registrada; no se pudo verificar el estado final.', 'advertencia');
+                return;
+              }
+              liberar('Reintentar validación del plan');
               GL.notificar('Confirmación registrada; queda pendiente la validación del plan.', 'advertencia');
               return;
             }
-            await finalizar(resultado.resultado);
+            await verificarYMostrar(resultado.resultado || {});
           } catch (e) {
-            estado.textContent = e.message;
-            GL.notificar(e.message, 'error');
-            boton.disabled = false;
-            boton.textContent = 'Confirmar teléfono';
+            estado.textContent = 'No se confirmó el teléfono. ' + ((e && e.message) || String(e));
+            GL.notificar((e && e.message) || String(e), 'error');
+            if (!exito) liberar(pendiente ? 'Reintentar validación del plan' : 'Confirmar teléfono');
+          } finally {
+            ocupado = false;
+            if (!exito && !boton.textContent.includes('Reint') && !boton.textContent.includes('Rever')) {
+              liberar('Confirmar teléfono');
+            }
           }
         });
       }
@@ -2082,11 +2158,171 @@
     return m;
   }
 
+  /* 1.5 — Baja, reemplazo e historial de participación por torneo.
+     El plazo lo decide la BD (gl_ventana_reemplazo); el navegador solo muestra
+     lo que devuelve y envía un p_solicitud_id para que el reintento sea idempotente. */
+  function modalBajaParticipante(j, root) {
+    if (!j || !GL.torneoId()) return;
+    const tid = GL.torneoId();
+    /* 1.6 — Un reemplazo solo puede salir del catálogo global de jugadores
+       que NO participan del torneo activo. La decisión es competitiva: un
+       administrador que no compite también puede entrar. */
+    const candidatos = GL.jugadoresDisponiblesParaReemplazo(j.id);
+
+    const m = GL.abrirModal({
+      titulo: 'Baja o reemplazo — ' + esc(j.nombre_usuario),
+      ancho: 'ancho',
+      cuerpo:
+        '<div class="nota-pie" id="bj-plazo" aria-live="polite">Consultando el plazo en la base de datos…</div>' +
+        '<p class="modal-texto">La baja conserva la cuenta global y el historial. ' +
+          'Sin reemplazo, los partidos pendientes se resuelven 3-0 al rival como jornada libre; ' +
+          'los resultados ya jugados no se modifican.</p>' +
+        '<label class="campo"><span>Motivo de la baja (obligatorio)</span>' +
+          '<input class="input" id="bj-motivo" maxlength="200" autocomplete="off"></label>' +
+        '<label class="campo"><span>Reemplazo (opcional, solo dentro del plazo)</span>' +
+          '<select class="input" id="bj-reemplazo">' +
+            '<option value="">Sin reemplazo — jornada libre</option>' +
+            candidatos.map(x => '<option value="' + esc(x.id) + '">' + esc(x.nombre_usuario) + '</option>').join('') +
+          '</select></label>' +
+        '<p class="nota-pie" id="bj-estado" aria-live="polite"></p>',
+      acciones:
+        '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
+        '<button type="button" class="btn peligro" id="bj-aplicar">Aplicar baja</button>',
+      onAbrir(fondo, cerrar) {
+        const plazo = fondo.querySelector('#bj-plazo');
+        const estado = fondo.querySelector('#bj-estado');
+        const select = fondo.querySelector('#bj-reemplazo');
+        const boton = fondo.querySelector('#bj-aplicar');
+        let ocupado = false;
+        let permitido = false;
+
+        (async () => {
+          try {
+            const { data, error } = await sb.rpc('gl_ventana_reemplazo', {
+              p_torneo_id: tid, p_jugador_id: j.id
+            });
+            if (error) throw new Error(error.message);
+            const r = data || {};
+            if (r.ok === false) throw new Error(r.mensaje || 'No se pudo consultar el plazo.');
+            permitido = r.reemplazo_permitido === true;
+            plazo.textContent = permitido
+              ? 'Plazo ABIERTO: se puede reemplazar hasta antes del cierre de la Jornada 7. ' +
+                (r.jornadas_1_6_cerradas || 0) + '/6 jornadas cerradas.'
+              : 'Plazo CERRADO: ' + (r.motivo_plazo || 'la base de datos no permitió el reemplazo') +
+                '. Solo se permite el retiro con jornada libre.';
+            if (!permitido) {
+              select.disabled = true;
+              select.value = '';
+            }
+          } catch (e) {
+            plazo.textContent = 'No se pudo consultar el plazo: ' + e.message +
+              '. No se habilita el reemplazo.';
+            select.disabled = true;
+            select.value = '';
+          }
+        })();
+
+        boton.addEventListener('click', async () => {
+          if (ocupado) return;
+          const motivo = fondo.querySelector('#bj-motivo').value.trim();
+          if (!motivo) { estado.textContent = 'Escribí el motivo de la baja.'; return; }
+          const reemplazoId = select.value || null;
+          if (reemplazoId && !permitido) {
+            estado.textContent = 'El reemplazo no está permitido según la base de datos.';
+            return;
+          }
+          ocupado = true;
+          boton.disabled = true;
+          boton.textContent = 'Aplicando…';
+          estado.textContent = 'Procesando… no cierres esta ventana.';
+          try {
+            const solicitudId = (window.crypto && crypto.randomUUID)
+              ? crypto.randomUUID()
+              : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                  const n = Math.random() * 16 | 0;
+                  return (c === 'x' ? n : (n & 0x3 | 0x8)).toString(16);
+                });
+            const { data, error } = await sb.rpc('gl_gestionar_baja', {
+              p_torneo_id: tid,
+              p_jugador_id: j.id,
+              p_motivo: motivo,
+              p_solicitud_id: solicitudId,
+              p_reemplazo_id: reemplazoId
+            });
+            if (error) throw new Error(error.message);
+            const r = data || {};
+            if (r.ok === false) throw new Error(r.mensaje || 'La base de datos rechazó la baja.');
+            estado.textContent = r.tipo === 'reemplazo'
+              ? 'Reemplazo aplicado: ' + (r.partidos_pendientes_reasignados || 0) +
+                ' partido(s) pendiente(s) heredado(s). Resultados anteriores conservados.'
+              : 'Baja aplicada: ' + (r.partidos_resueltos || 0) +
+                ' partido(s) pendiente(s) resuelto(s) como jornada libre (3-0 al rival).';
+            GL.notificar(estado.textContent, 'exito');
+            await refrescar(root);
+            boton.disabled = false;
+            boton.textContent = 'Cerrar';
+            boton.onclick = () => cerrar();
+          } catch (e) {
+            estado.textContent = 'No se aplicó la baja. ' + ((e && e.message) || String(e));
+            GL.notificar(estado.textContent, 'error');
+            boton.disabled = false;
+            boton.textContent = 'Reintentar baja';
+          } finally {
+            ocupado = false;
+          }
+        });
+      }
+    });
+    iniciarIconos();
+    return m;
+  }
+
+  function modalHistorialParticipacion(j) {
+    if (!j) return;
+    GL.abrirModal({
+      titulo: 'Historial de participación — ' + esc(j.nombre_usuario),
+      ancho: 'ancho',
+      cuerpo: '<div id="hp-lista" class="nota-pie">Cargando historial…</div>',
+      acciones: '<button type="button" class="btn sec" data-cerrar>Cerrar</button>',
+      onAbrir(fondo) {
+        const lista = fondo.querySelector('#hp-lista');
+        (async () => {
+          try {
+            const { data, error } = await sb.from('torneo_participantes')
+              .select('torneo_id,grupo_id,estado,inscrito_en,retirado_en,motivo,resolucion,reemplazo_id,resultado')
+              .eq('jugador_id', j.id)
+              .order('inscrito_en', { ascending: false });
+            if (error) throw new Error(error.message);
+            if (!data || !data.length) {
+              lista.textContent = 'Este jugador no tiene participaciones registradas por torneo.';
+              return;
+            }
+            lista.innerHTML = data.map(p =>
+              '<div style="border-bottom:1px solid var(--borde);padding:8px 0">' +
+                '<strong>' + esc(GL.torneo() && p.torneo_id === GL.torneoId()
+                  ? GL.torneo().nombre : p.torneo_id) + '</strong> — ' +
+                esc(p.estado === 'retirado' ? 'Retirado' : 'Activo') +
+                (p.resolucion ? ' · ' + esc(p.resolucion) : '') +
+                '<br><small>' + esc(p.motivo || 'Sin motivo registrado') +
+                (p.retirado_en ? ' · ' + esc(p.retirado_en) : '') + '</small>' +
+              '</div>').join('');
+          } catch (e) {
+            lista.textContent = 'No se pudo cargar el historial: ' + e.message;
+          }
+        })();
+      }
+    });
+    iniciarIconos();
+  }
+
   /* ---------------- Enlaces de eventos ---------------- */
   function enlazar(cont, root) {
     // Botones de acceso rápido desde el resumen
     cont.querySelectorAll('[data-tab-ir]').forEach(b => {
       b.addEventListener('click', () => irATab(b.dataset.tabIr, root));
+    });
+    cont.querySelectorAll('[data-ir-panel]').forEach(b => {
+      b.addEventListener('click', () => { location.hash = b.dataset.irPanel; });
     });
     /* ── Menú flotante / bottom sheet para móvil ── */
     cont.querySelectorAll('.btn-menu-acciones').forEach(btn => {
@@ -2099,13 +2335,21 @@
 
         const primeraSemana = esPrimeraSemana();
         const g             = GL.grupoDeJugador(j.id);
-        const expulsado     = GL.esExpulsado(j);
+        /* Un suspendido NO está expulsado: debe poder recibir una sanción
+           adicional y volver a abrir "Suspender / expulsar". GL.esExpulsado()
+           incluye suspendido para el cierre de jornadas, pero aquí esa
+           ambigüedad escondía la expulsión definitiva. */
+        const expulsado     = j.activo === false || j.rol === 'expulsado';
         const esMobile      = window.matchMedia('(max-width:480px)').matches;
 
         // Construir items del menú
         const items = [
           { accion: 'editar-'    + j.id, ico: 'pencil',         label: 'Editar jugador'    },
           { accion: 'telefono-'  + j.id, ico: 'phone',          label: 'Confirmar teléfono' },
+          GL.participantesActivos().some(p => p.jugador_id === j.id)
+            ? { accion: 'baja-' + j.id, ico: 'user-minus', label: 'Baja / reemplazo' }
+            : null,
+          { accion: 'historial-' + j.id, ico: 'clock', label: 'Historial de participación' },
           !expulsado && g && primeraSemana
             ? { accion: 'grupo-' + j.id, ico: 'users',          label: 'Cambiar de grupo'  }
             : !expulsado && !g
@@ -2132,6 +2376,8 @@
       if (!j) return;
       if (accion === 'editar')    modalEditar(j, root);
       if (accion === 'telefono')  modalConfirmarTelefono(j, root);
+      if (accion === 'baja')      modalBajaParticipante(j, root);
+      if (accion === 'historial') modalHistorialParticipacion(j);
       if (accion === 'grupo')     modalGrupo(j, root);
       if (accion === 'asignar')   modalGrupo(j, root, true);
       if (accion === 'sancion')   modalSancion(j, root);
@@ -2139,8 +2385,6 @@
       if (accion === 'reincorporar') modalSuspender(j, root);
       if (accion === 'eliminar')  modalEliminarJugador(j, root);
     }));
-    const agregar = cont.querySelector('[data-agregar]');
-    if (agregar) agregar.addEventListener('click', () => modalAgregar(root));
     enlazarFiltrosJugadores(cont);
     enlazarFiltrosEquipos(cont);
     enlazarEquipos(cont);
@@ -2249,23 +2493,7 @@
     const guardarDatosNT = cont.querySelector('#nt-guardar-datos');
     if (guardarDatosNT) guardarDatosNT.addEventListener('click', () => guardarDatosTorneo(cont, root, 'nt'));
 
-    /* ── Nueva Temporada: paso 2 ── */
-    const crearJugadorNT = cont.querySelector('#nt-jug-crear');
-    if (crearJugadorNT) crearJugadorNT.addEventListener('click', () => crearJugadorRapido(cont, root));
-    enlazarCampoTelefono(cont, {
-      pais: '#nt-jug-tel-pais', tel: '#nt-jug-tel',
-      prefijo: '#nt-jug-tel-prefijo', hint: '#nt-jug-tel-hint'
-    });
-    /* Creación rápida: el país del jugador arrastra al teléfono mientras el
-      administrador no haya elegido uno distinto manualmente. */
-    const paisJugadorNT = cont.querySelector('#nt-jug-pais');
-    const paisTelNT = cont.querySelector('#nt-jug-tel-pais');
-    if (paisTelNT) paisTelNT.addEventListener('change', () => { paisTelNT.dataset.manual = '1'; });
-    if (paisJugadorNT && paisTelNT) paisJugadorNT.addEventListener('change', () => {
-      if (paisTelNT.dataset.manual === '1') return;
-      paisTelNT.value = paisJugadorNT.value || 'NI';
-      paisTelNT.dispatchEvent(new Event('change'));
-    });
+    /* ── Nueva Temporada: paso 2 (el alta vive en el panel dedicado) ── */
     cont.querySelectorAll('[data-nt-eliminar]').forEach(b => b.addEventListener('click', () => {
       modalEliminarJugador(jugadorAdmin(b.dataset.ntEliminar), root);
     }));
@@ -2335,7 +2563,7 @@
   }
 
   /* ---------------- Modales de jugadores ---------------- */
-  function modalEditar(j, root) {
+  function modalEditar(j, root, alGuardar) {
     const paisTelInicial = GL.tel.paisJugador(j) || j.pais || 'NI';
     const e164Inicial = GL.tel.e164Jugador(j);
     const telInicial = e164Inicial
@@ -2507,7 +2735,7 @@
             });
             cerrar();
             GL.notificar(esc(nombreNorm) + ' actualizado correctamente.', 'exito');
-            await refrescar(root);
+            await refrescar(root, alGuardar);
           } catch (e) {
             GL.notificar(GL.mensaje(e, 'guardar', 'la administración'), 'error');
             btn.disabled = false; btn.textContent = 'Guardar cambios';
@@ -3192,17 +3420,22 @@
     iniciarIconos();
   }
 
-  function modalAgregar(root) {
-    // Bloquear si el torneo ya finalizó
-    const torneoActual = GL.torneo();
-    if (torneoActual && torneoActual.estado === 'finalizado') {
-      GL.notificar('El torneo ya finalizó. No se pueden agregar nuevos jugadores.', 'advertencia'); return;
-    }
-    if (!torneoActual) {
-      GL.notificar('No hay un torneo activo. Creá uno desde Administración → Configuración.', 'advertencia'); return;
+  function modalAgregar(root, opciones) {
+    const cfg = opciones || {};
+    const soloGlobal = cfg.soloGlobal === true;
+    /* El panel de registro crea cuentas aunque no haya torneo activo. El alta
+       competitiva sigue bloqueada cuando el torneo está finalizado. */
+    const torneoActual = soloGlobal ? null : GL.torneo();
+    if (!soloGlobal) {
+      if (torneoActual && torneoActual.estado === 'finalizado') {
+        GL.notificar('El torneo ya finalizó. No se pueden agregar nuevos jugadores.', 'advertencia'); return;
+      }
+      if (!torneoActual) {
+        GL.notificar('No hay un torneo activo. Creá uno desde Administración → Configuración.', 'advertencia'); return;
+      }
     }
 
-    const grupos = GL.grupos();
+    const grupos = soloGlobal ? [] : GL.grupos();
 
     const m = GL.abrirModal({
       titulo: 'Agregar jugador al torneo',
@@ -3210,7 +3443,9 @@
       cerrarFondo: false,
       confirmarDescarto: true,
       cuerpo:
-        j5FormIntro('Completá los datos para crear la cuenta en el torneo activo. La asignación a grupo es opcional.') +
+        j5FormIntro(soloGlobal
+          ? 'Completá los datos para registrar al jugador en el catálogo de la liga. No quedará inscripto en ningún torneo hasta que lo añadas desde Crear Torneo.'
+          : 'Completá los datos para crear la cuenta en el torneo activo. La asignación a grupo es opcional.') +
         '<div class="j5-form-grid">' +
           '<div class="j5-form-section">' +
             '<h3 class="j5-form-titulo">' + icono('user', 16) + 'Identidad y acceso</h3>' +
@@ -3236,7 +3471,8 @@
             '</label>' +
           '</div>' +
           '<div class="j5-form-section">' +
-            '<h3 class="j5-form-titulo">' + icono('phone', 16) + 'Contacto y torneo</h3>' +
+            '<h3 class="j5-form-titulo">' + icono('phone', 16) +
+              (soloGlobal ? 'Contacto y registro' : 'Contacto y torneo') + '</h3>' +
             '<label class="campo"><span>Ciudad o zona horaria ' + j5Requerido() + '</span>' +
               '<select class="input" id="ag-zona">' +
                 GL.opcionesZonaHoraria('', '') +
@@ -3257,18 +3493,20 @@
               '</div>' +
               '<small class="campo-ayuda">El formato válido no confirma la titularidad del número.</small>' +
             '</label>' +
-            '<label class="campo"><span>Grupo (opcional)</span>' +
-              '<select class="input" id="ag-grupo">' +
-                (grupos.length
-                  ? '<option value="">Sin asignar (pendiente)</option>' +
-                    grupos.map(g =>
-                      '<option value="' + g.id + '">Grupo ' + GL.letraGrupo(g) +
-                      ' — ' + e6Miembros(g).length + ' jugador(es)</option>'
-                    ).join('')
-                  : '<option value="">Sin grupos disponibles</option>') +
-              '</select>' +
-              '<small class="campo-ayuda">Sin grupo el jugador queda en el torneo, pero no podrá jugar hasta que se le asigne uno.</small>' +
-            '</label>' +
+            (soloGlobal
+              ? '<p class="nota-pie">El registro es global: podés añadirlo al próximo torneo desde «Crear Torneo» o usarlo como reemplazo.</p>'
+              : '<label class="campo"><span>Grupo (opcional)</span>' +
+                '<select class="input" id="ag-grupo">' +
+                  (grupos.length
+                    ? '<option value="">Sin asignar (pendiente)</option>' +
+                      grupos.map(g =>
+                        '<option value="' + g.id + '">Grupo ' + GL.letraGrupo(g) +
+                        ' — ' + e6Miembros(g).length + ' jugador(es)</option>'
+                      ).join('')
+                    : '<option value="">Sin grupos disponibles</option>') +
+                '</select>' +
+                '<small class="campo-ayuda">Sin grupo el jugador queda en el torneo, pero no podrá jugar hasta que se le asigne uno.</small>' +
+              '</label>') +
           '</div>' +
         '</div>' +
         '<div class="j5-form-aviso">' + icono('info', 14) +
@@ -3281,6 +3519,12 @@
         '<button type="button" class="btn" id="ag-crear">' + icono('user-plus', 16) + 'Crear jugador</button>',
 
       onAbrir(fondo, cerrar) {
+        if (soloGlobal) {
+          const titulo = fondo.querySelector('.modal-head h2');
+          if (titulo) titulo.textContent = 'Registrar jugador';
+          const crear = fondo.querySelector('#ag-crear');
+          if (crear) crear.innerHTML = icono('user-plus', 16) + 'Registrar jugador';
+        }
         const pais = fondo.querySelector('#ag-pais');
         const zona = fondo.querySelector('#ag-zona');
         const nota = fondo.querySelector('#ag-horario');
@@ -3370,7 +3614,8 @@
           }
 
           // ── Grupo opcional: null conserva al jugador sin asignación ─
-          const grupoVal = fondo.querySelector('#ag-grupo').value || null;
+          const grupoEl = fondo.querySelector('#ag-grupo');
+          const grupoVal = grupoEl ? (grupoEl.value || null) : null;
 
           if (hayError) return;
 
@@ -3385,7 +3630,7 @@
             pais:           pais.value,
             zona_horaria:   zona.value,
             grupo_id:       grupoVal,
-            torneo_id:      torneoActual.id,
+            torneo_id:      torneoActual ? torneoActual.id : null,
             email:          emailVal,
             password:       claveVal
           }, camposTel);
@@ -3407,30 +3652,50 @@
                 auditar('jugador_creado', 'jugador', datos.user_id || datos.jugador_id || null, {
                   jugador: nombreNorm,
                   grupo_id: grupoVal,
-                  torneo_id: torneoActual.id
+                  torneo_id: torneoActual ? torneoActual.id : null,
+                  registro_global: soloGlobal
                 }), TIEMPO_LECTURA_ERROR, 'La auditoría tardó demasiado.'
               ).catch(() => false);
               if (!auditoriaOk) {
                 GL.notificar('El jugador se creó, pero no se pudo registrar la auditoría. No repitas la creación.', 'advertencia');
+              }
+              /* 1.5 — Alta global e inscripción competitiva son pasos distintos.
+                 El Edge Function conserva torneo_id como dato histórico; la
+                 pertenencia real se escribe en torneo_participantes. */
+              if (datos.jugador_id && torneoActual && torneoActual.id) {
+                try {
+                  await Auth.inscribirParticipantes(torneoActual.id, [datos.jugador_id]);
+                } catch (e) {
+                  console.warn('[Admin] No se pudo inscribir al jugador en el torneo:', e);
+                  GL.notificar('El jugador se creó, pero no se pudo inscribir en el torneo actual. Revisá la lista de participantes.', 'advertencia');
+                }
               }
             }
 
             cerrar();
             if (resultado.estado === 'ya_existente') {
               GL.notificar(resultado.mensaje, 'info');
+            } else if (soloGlobal) {
+              GL.notificar(nombreNorm + ' registrado en el catálogo de jugadores.', 'exito');
             } else {
               GL.notificar(esc(nombreNorm) + (grupoVal
                 ? ' creado y asignado al grupo.'
                 : ' creado; pendiente de asignar grupo.'), 'exito');
             }
+            const refrescarVista = () => (typeof cfg.onCreado === 'function'
+              ? Promise.resolve(cfg.onCreado())
+              : refrescar(root));
             await conTimeout(
-              refrescar(root), CONFIG.TIMEOUT_CREAR_JUGADOR,
+              refrescarVista(), CONFIG.TIMEOUT_CREAR_JUGADOR,
               'El jugador se creó, pero la lista tardó en actualizarse. Recargá la página.'
             ).catch(() => GL.notificar(
               'El jugador se creó, pero la lista tardó en actualizarse. Recargá la página.', 'advertencia'
             ));
           } finally {
-            if (btn.isConnected) { btn.disabled = false; btn.textContent = 'Crear jugador'; }
+            if (btn.isConnected) {
+              btn.disabled = false;
+              btn.innerHTML = icono('user-plus', 16) + (soloGlobal ? 'Registrar jugador' : 'Crear jugador');
+            }
           }
         });
       }
@@ -3684,6 +3949,11 @@
     } catch (e) { console.warn(e); }
     location.hash = 'mensajes';
   }
+
+  /* 1.6 — API pública para el panel de registro: reutiliza los mismos
+     formularios validados sin duplicar reglas ni escribir en torneo_participantes. */
+  Mod.registrarJugador = modalAgregar;
+  Mod.editarJugador = modalEditar;
 
   /* API de solo pruebas: helpers sin DOM para regresiones de FASE 3.16. */
   Mod._pruebas = {

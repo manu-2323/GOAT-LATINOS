@@ -9,7 +9,7 @@ const CONFIG = {
   /* URL pública real de GitHub Pages. Se envía como emailRedirectTo para que
      Supabase Auth nunca devuelva el enlace de confirmación a la raíz. */
   SITE_URL: 'https://manu-2323.github.io/GOAT-LATINOS/',
-  VERSION: '1.4.2',
+  VERSION: '1.6.0',
   LIBPHONENUMBER_VERSION: '1.13.17',
   BUCKET_CAPTURAS: 'capturas-partidos',
   BUCKET_AVATARES: 'avatares',
@@ -98,6 +98,7 @@ const ESTADOS_PARTIDO = {
   walkover_local:       { label: 'Walkover local',       icono: 'x-circle',     color: 'orange'  },
   walkover_visitante:   { label: 'Walkover vis.',        icono: 'x-circle',     color: 'orange'  },
   doble_ausencia:       { label: 'Doble ausencia',       icono: 'minus-circle', color: 'red'     },
+  jornada_libre:        { label: 'Jornada libre',        icono: 'minus-circle', color: 'neutral' },
   expulsion_local:      { label: '1-0 por expulsión',    icono: 'user-x',       color: 'orange'  },
   expulsion_visitante:  { label: '0-1 por expulsión',    icono: 'user-x',       color: 'orange'  }
 };

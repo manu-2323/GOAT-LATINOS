@@ -161,6 +161,7 @@ const GL = {
   exportarTabla(grupoId, nombre) { return GL._delegarExport('exportarTabla', [grupoId, nombre]); },
   exportarStats(grupoId, jornadaNum, nombre) { return GL._delegarExport('exportarStats', [grupoId, jornadaNum, nombre]); },
   exportarPerfil(jugadorId, nombre) { return GL._delegarExport('exportarPerfil', [jugadorId, nombre]); },
+  exportarPartidosHoy(grupoId, nombre) { return GL._delegarExport('exportarPartidosHoy', [grupoId, nombre]); },
 
   /* ---------- Países dinámicos (tabla `paises`) ---------- */
   async cargarPaises(force) {
@@ -962,6 +963,8 @@ const GL = {
   _columnas: {
     jugadores:         'id,nombre_usuario,pais,zona_horaria,avatar_url,activo,suspendido,rol,torneo_id,numero,telefono,telefono_e164,telefono_nacional,pais_telefono,telefono_verificado,telefono_valido_plan,email,user_id,super_admin,created_at',
     jugadores_publicos:'id,nombre_usuario,pais,avatar_url,activo,suspendido,torneo_id,numero',
+    torneo_participantes:'torneo_id,jugador_id,grupo_id,estado,inscrito_en,retirado_en,motivo,resolucion,reemplazo_id,resultado',
+    participantes_publicos:'torneo_id,jugador_id,grupo_id,estado',
     sanciones:         'id,jugador_id,torneo_id,tipo,puntos_descuento,partidos_suspension,motivo,created_at'
   },
 
@@ -983,12 +986,14 @@ const GL = {
          El invitado no debe consultarlas: la pertenencia se derive de clasificacion. */
       const esPublico = !(typeof Auth !== 'undefined' && Auth && Auth.usuario);
       const sinDatos = Promise.resolve({ data: [], error: null });
-      const [torneos, grupos, jugadores, miembros, jornadas, clasificacion, sanciones] = await Promise.all([
+      const [torneos, grupos, jugadores, participantesPublicos, participantesAdmin, miembros, jornadas, clasificacion, sanciones] = await Promise.all([
         GL.consultar('torneos', q => q.eq('estado', 'activo').order('created_at', { ascending: false }).limit(1)),
         GL.consultar('grupos', q => q.order('nombre')),
         GL.esAdmin()
           ? GL.consultar('jugadores', q => q.order('nombre_usuario'))
           : GL.consultar('jugadores_publicos', q => q.order('nombre_usuario')),
+        GL.consultar('participantes_publicos'),
+        esPublico ? sinDatos : GL.consultar('torneo_participantes', q => q.order('inscrito_en', { ascending: true })),
         esPublico ? sinDatos : GL.consultar('grupo_jugadores'),
         GL.consultar('jornadas', q => q.order('numero', { ascending: true })),
         GL.consultar('clasificacion', q => q.order('pts', { ascending: false })),
@@ -999,6 +1004,7 @@ const GL = {
          aunque el error real fuera de esquema, RLS o autenticación. */
       const consultasContexto = [
         ['torneos', torneos], ['grupos', grupos], ['jugadores', jugadores],
+        ['participantes', esPublico ? participantesPublicos : participantesAdmin],
         ['grupo_jugadores/sanciones', miembros], ['jornadas', jornadas],
         ['clasificacion', clasificacion], ['sanciones', sanciones]
       ];
@@ -1012,11 +1018,32 @@ const GL = {
       const torneo = (torneos.data || [])[0] || t || null;
       const tid = torneo && torneo.id;
       const filtrar = arr => !tid ? arr : arr.filter(x => !x.torneo_id || x.torneo_id === tid);
+
+      /* 1.5 — La pertenencia competitiva NO se decide con jugadores.torneo_id.
+         Ese campo es un puntero global que gl_crear_torneo reescribe; la fuente
+         es torneo_participantes (vista pública para anónimos). */
+      const fuenteParticipantes = esPublico ? participantesPublicos : participantesAdmin;
+      let participantes = ((fuenteParticipantes && fuenteParticipantes.data) || [])
+        .filter(p => p.torneo_id === tid);
+      if (fuenteParticipantes && fuenteParticipantes.error) {
+        /* Compatibilidad temporal solo si la tabla/vista no existe: nunca se
+           usa jugadores.torneo_id cuando la fuente 1.5 sí está disponible. */
+        console.warn('[GL] Sin torneo_participantes; se usa el puntero histórico solo para no dejar la vista vacía.');
+        participantes = (jugadores.data || [])
+          .filter(x => tid && x.torneo_id === tid)
+          .map(x => ({ torneo_id: tid, jugador_id: x.id, grupo_id: null, estado: 'activo' }));
+      }
+      const idsActivos = new Set(participantes
+        .filter(p => p.estado !== 'retirado')
+        .map(p => p.jugador_id));
+      const jugadoresGlobales = jugadores.data || [];
       GL.ctx = {
         torneo,
-        grupos: filtrar(grupos.data || []),
-        jugadores: filtrar(jugadores.data || []),
+        participantes,
+        jugadoresGlobales,
+        jugadores: jugadoresGlobales.filter(j => idsActivos.has(j.id)),
         miembros: [],
+        grupos: filtrar(grupos.data || []),
         jornadas: filtrar(jornadas.data || []),
         clasificacion: filtrar(clasificacion.data || []),
         sanciones: filtrar(sanciones.data || [])
@@ -1092,12 +1119,37 @@ const GL = {
     return arr;
   },
 
+  /* 1.5 — Plantel competitivo y registros globales son conceptos distintos. */
+  participantes() { return (GL.ctx.participantes || []).slice(); },
+  participantesActivos() {
+    return (GL.ctx.participantes || []).filter(p => p.estado !== 'retirado');
+  },
+  participantesRetirados() {
+    return (GL.ctx.participantes || []).filter(p => p.estado === 'retirado');
+  },
+  jugadoresGlobales() { return (GL.ctx.jugadoresGlobales || GL.ctx.jugadores || []).slice(); },
+
+  /* 1.6 — Catálogo global depurado para reemplazos. La pertenencia competitiva
+     la decide torneo_participantes: un jugador inscripto en el torneo activo
+     no es candidato, aunque sea administrador o esté suspendido. */
+  jugadoresDisponiblesParaReemplazo(jugadorId) {
+    const enTorneo = new Set(GL.participantesActivos().map(p => p.jugador_id));
+    return GL.jugadoresGlobales().filter(j =>
+      j.id !== jugadorId && j.activo !== false && j.rol !== 'expulsado' && !enTorneo.has(j.id));
+  },
+
   // Jugadores activos sin grupo asignado en el torneo actual
   jugadoresSinGrupo() {
     const conGrupo = new Set(GL.ctx.miembros.map(m => m.jugador_id));
     return GL.ctx.jugadores.filter(j => j.activo !== false && !conGrupo.has(j.id));
   },
-  jugador(id) { return GL.ctx.jugadores.find(j => j.id === id) || null; },
+  /* El historial debe poder nombrar a un participante retirado, por eso se
+     busca también en el catálogo global sin devolverlo como plantel activo. */
+  jugador(id) {
+    return GL.ctx.jugadores.find(j => j.id === id)
+      || (GL.ctx.jugadoresGlobales || []).find(j => j.id === id)
+      || null;
+  },
   nombreJugador(id) {
     const j = GL.jugador(id);
     return j ? j.nombre_usuario : 'Por definir';
@@ -1254,7 +1306,7 @@ const GL = {
   esAdministrativo(p) {
     const e = String((p && p.estado) || '');
     return e === 'walkover_local' || e === 'walkover_visitante' ||
-           e === 'doble_ausencia' || /^expulsion_/.test(e);
+           e === 'doble_ausencia' || e === 'jornada_libre' || /^expulsion_/.test(e);
   },
 
   /* Goles efectivamente marcados dentro del juego en FC Mobile.

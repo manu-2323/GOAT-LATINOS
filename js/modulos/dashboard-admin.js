@@ -259,7 +259,7 @@
                   panelCab('da-acciones-titulo', 'zap', 'Acciones rápidas',
                     'Atajos a módulos existentes', null, null) +
                   '<div class="da-acciones">' +
-                    accionBtn('user-plus',       'Agregar jugador',     'administracion') +
+                    accionBtn('user-plus',       'Registro de jugadores', 'jugadores') +
                     accionBtn('flag',            'Abrir jornada',       'jornadas') +
                     accionBtn('flag-off',        'Cerrar jornada',      'jornadas') +
                     accionBtn('clipboard-check', 'Registrar resultado', 'resultados') +

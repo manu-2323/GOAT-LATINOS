@@ -48,7 +48,7 @@
           '<div id="contenido-tabla"></div>';
 
         const contenido = el.querySelector('#contenido-tabla');
-        contenido.innerHTML = htmlTabla(Mod.grupoId, partidos, jornada) + htmlPartidosHoy(partidos, jornada);
+        contenido.innerHTML = htmlTabla(Mod.grupoId, partidos, jornada) + htmlPartidosHoy(partidos, jornada, grupos);
         contenido.querySelectorAll('[data-expandir]').forEach(b => b.addEventListener('click', () => {
           const fila = b.closest('tr');
           const abierta = fila.classList.toggle('expandida');
@@ -62,6 +62,11 @@
         }));
         el.querySelector('[data-export]').addEventListener('click', () =>
           GL.exportarTabla(Mod.grupoId, 'GOATS_Tabla_Grupo' + GL.letraGrupo(GL.grupo(Mod.grupoId))));
+        contenido.querySelectorAll('[data-export-partidos]').forEach(b => b.addEventListener('click', () => {
+          const gid = b.dataset.exportPartidos;
+          GL.exportarPartidosHoy(gid, 'GOATS_Jornada' + jornada.numero + '_Grupo' +
+            GL.letraGrupo(GL.grupo(gid)));
+        }));
       } catch (e) {
         console.error(e);
         el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'la tabla'), null, 'la tabla de posiciones');
@@ -210,7 +215,7 @@
     '</div>';
   }
 
-  function htmlPartidosHoy(partidos, jornada) {
+  function htmlPartidosHoy(partidos, jornada, grupos) {
     const cards = partidos.map((p, i) => {
       const r = GL.resultado(p);
       const local = GL.jugador(p.local_id) || {}, visita = GL.jugador(p.visitante_id) || {};
@@ -230,8 +235,14 @@
           (r.pendiente ? '<div class="hora">' + esc(horarioVisita) + '</div>' : '') +
         '</div></div>';
     }).join('');
+    const botonesExport = (grupos || []).map(g =>
+      '<button type="button" class="btn sec sm" data-export-partidos="' + esc(g.id) + '">' +
+        icono('image', 14) + 'PNG Grupo ' + GL.letraGrupo(g) + '</button>').join('');
+
     return '<div class="card mt"><div class="card-titulo">' + icono('calendar-days', 20) + 'Partidos de hoy' +
       '<span class="badge neutral">Jornada ' + jornada.numero + '</span></div>' +
+      (botonesExport ? '<div class="partidos-export-acciones">' +
+        '<span>' + icono('share-2', 14) + 'Compartir jornada</span>' + botonesExport + '</div>' : '') +
       (cards ? '<div class="partidos-lista">' + cards + '</div>' :
         '<p class="vacio-mensaje">' + (jornada.virtual
           ? 'Esta jornada todavía no tiene partidos programados.'

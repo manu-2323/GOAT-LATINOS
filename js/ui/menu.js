@@ -25,6 +25,7 @@ const SECCIONES = [
     { id: 'resultados',   nombre: 'Resultados',     icono: 'clipboard-check', nivel: 'admin' },
     { id: 'jornadas',     nombre: 'Jornadas',       icono: 'flag',         nivel: 'admin', modulo: 'admin', tab: 'jornadas' },
     { id: 'administracion', nombre: 'Administración', icono: 'shield',     nivel: 'admin', modulo: 'admin', tab: 'jugadores' },
+    { id: 'jugadores',    nombre: 'Registro de jugadores', icono: 'user-plus', nivel: 'admin', modulo: 'jugadores' },
     { id: 'eliminatorias', nombre: 'Eliminatorias', icono: 'git-merge',    nivel: 'publico' },
     { id: 'mensajes',     nombre: 'Mensajes',       icono: 'message-square', nivel: 'admin' },
     { id: 'auditoria',    nombre: 'Auditoría',      icono: 'shield-check',   nivel: 'admin', modulo: 'auditoria' }

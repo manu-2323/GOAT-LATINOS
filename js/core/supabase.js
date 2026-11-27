@@ -806,6 +806,20 @@ const Auth = {
     return data || {};
   },
 
+  /* Verificación REAL posterior a la RPC: el modal no debe presumir éxito
+     solo porque la llamada terminó sin error. Lee el estado persistido. */
+  async verificarEstadoTelefono(jugadorId) {
+    if (!Auth._cliente()) throw new Error('Supabase no está configurado.');
+    if (!jugadorId) throw new Error('No se pudo identificar el perfil a verificar.');
+    const { data, error } = await Auth._cliente().from('jugadores')
+      .select('id,nombre_usuario,telefono,telefono_e164,telefono_nacional,pais_telefono,telefono_verificado,telefono_valido_plan')
+      .eq('id', jugadorId).limit(1);
+    if (error) throw new Error(Auth._mensajeRpcTelefono(error));
+    const fila = (data && data[0]) || null;
+    if (!fila) throw new Error('No se pudo volver a leer el perfil después de la confirmación.');
+    return fila;
+  },
+
   /* Inscripción explícita por torneo. La tabla y la RPC se entregan como
      migración propuesta: si todavía no están instaladas, el llamador recibe
      un error claro y el torneo ya creado queda intacto. */

@@ -234,13 +234,36 @@ async function borrarAuth(admin, id) {
 }
 
 async function usuarioPorCorreo(admin, email) {
+  const correo = normalizarCorreo(email);
+  if (!correo) return null;
   try {
-    const { data, error } = await admin.auth.admin.getUserByEmail(email);
-    if (error) {
-      if (/not found|no user|404/i.test(String(error.message || error))) return null;
-      throw error;
+    /* @supabase/supabase-js@2 NO expone auth.admin.getUserByEmail. Usarlo
+       lanzaba TypeError y hacía fallar la creación aunque no existiera el
+       usuario (compensación correcta, pero alta imposible). Se mantiene el
+       getter cuando un mock/cliente antiguo sí lo provee. */
+    const getter = admin.auth.admin.getUserByEmail;
+    if (typeof getter === 'function') {
+      const { data, error } = await getter.call(admin.auth.admin, correo);
+      if (error) {
+        if (/not found|no user|404/i.test(String(error.message || error))) return null;
+        throw error;
+      }
+      return (data && data.user) || null;
     }
-    return (data && data.user) || null;
+
+    const porPagina = 200;
+    for (let pagina = 1; pagina <= 50; pagina++) {
+      const { data, error } = await admin.auth.admin.listUsers({
+        page: pagina,
+        perPage: porPagina
+      });
+      if (error) throw error;
+      const usuarios = (data && data.users) || [];
+      const encontrado = usuarios.find(u => normalizarCorreo(u.email) === correo);
+      if (encontrado) return encontrado;
+      if (usuarios.length < porPagina) break;
+    }
+    return null;
   } catch (e) {
     if (/not found|no user|404/i.test(String((e && e.message) || e))) return null;
     throw e;

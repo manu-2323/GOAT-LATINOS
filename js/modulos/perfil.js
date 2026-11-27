@@ -555,7 +555,9 @@
   }
   function mejor(partidos, id, victoria) {
     let mejorDiff = null;
-    partidos.filter(p => p.estado !== 'pendiente').forEach(p => {
+    // Solo partidos jugados en FC Mobile: walkovers, expulsiones y jornadas
+    // libres son resoluciones administrativas, no rendimiento real.
+    partidos.filter(p => p.estado === 'jugado' && !GL.esAdministrativo(p)).forEach(p => {
       const r = GL.resultado(p);
       const aFavor = esLocal(p, id) ? r.gf : r.gc, enContra = esLocal(p, id) ? r.gc : r.gf;
       const diff = aFavor - enContra;

@@ -270,6 +270,37 @@
     .exp-zona-descenso{background:#ff4757}
   </style>`;
 
+  /* CSS específico para el PNG de «Partidos de hoy» (1.6). */
+  const CSS_PARTIDOS = `
+  <style>
+    .exp-partidos-wrap{width:100%;background:#0a0e1a;color:#fff}
+    .exp-partidos-lista{padding:16px 20px 10px;display:grid;gap:10px}
+    .exp-partido-card{
+      background:linear-gradient(135deg,#121b2e 0%,#0d1424 100%);
+      border:1px solid #1f2b44;border-left:3px solid #f5c518;border-radius:10px;
+      padding:12px 14px
+    }
+    .exp-partido-fila{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:38px}
+    .exp-partido-fila.visitante{flex-direction:row-reverse}
+    .exp-partido-equipo{display:flex;align-items:center;gap:9px;min-width:0;font-size:15px;font-weight:700}
+    .exp-partido-equipo.visitante{text-align:right}
+    .exp-partido-equipo span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .exp-partido-equipo img{width:18px;height:auto;border-radius:2px;flex:none}
+    .exp-partido-scio{font-size:11px;color:#64748b;letter-spacing:.6px}
+    .exp-partido-marcador{
+      min-width:74px;text-align:center;font-size:22px;font-weight:700;color:#f5c518;
+      background:rgba(245,197,24,.09);border:1px solid rgba(245,197,24,.25);
+      border-radius:8px;padding:4px 8px
+    }
+    .exp-partido-marcador.jugado{color:#00d4aa;border-color:rgba(0,212,170,.3);background:rgba(0,212,170,.08)}
+    .exp-partido-estado{
+      display:flex;justify-content:center;gap:6px;margin-top:8px;padding-top:7px;
+      border-top:1px solid #1f2b44;font-size:10px;font-weight:700;letter-spacing:.6px;
+      text-transform:uppercase;color:#9ca3af
+    }
+    .exp-partido-nota{padding:4px 20px 14px;font-size:10px;color:#6b7280;text-align:center}
+  </style>`;
+
   /* ================================================================
      PLANTILLA: TABLA DE POSICIONES
      Columnas correctas: #, Jugador, País, PJ, G, E, P, GF, GC, Dif, Pts
@@ -461,6 +492,72 @@
   }
 
   /* ================================================================
+     PLANTILLA: PARTIDOS DE HOY (1.6)
+     Un PNG portrait por grupo, listo para compartir por WhatsApp.
+     ================================================================ */
+  async function htmlPlantillaPartidos(grupoId, jornadaNum) {
+    const torneo = GL.torneo();
+    const grupo = GL.grupo(grupoId);
+    const letra = GL.letraGrupo(grupo);
+    const jornadaActual = GL.jornadaActual();
+    const numero = Number(jornadaNum || (jornadaActual && jornadaActual.numero)) || 1;
+    const partidos = torneo
+      ? await GL.partidos({ torneo_id: torneo.id, jornada: numero, grupo_id: grupoId })
+      : [];
+    const fechaHoy = new Date().toLocaleDateString('es-ES', {
+      day: '2-digit', month: 'long', year: 'numeric'
+    });
+
+    const tarjetas = partidos.map(p => {
+      const r = GL.resultado(p);
+      const local = GL.jugador(p.local_id) || {};
+      const visita = GL.jugador(p.visitante_id) || {};
+      const bandera = j => {
+        const url = GL.banderaUrl ? GL.banderaUrl(j.pais) : null;
+        return url
+          ? '<img src="' + esc(url) + '" alt="' + esc(j.pais || '') + '" crossorigin="anonymous">'
+          : '<span class="exp-partido-scio">' + esc(j.pais || '—') + '</span>';
+      };
+      const lado = (j, esLocal) =>
+        '<div class="exp-partido-equipo' + (esLocal ? '' : ' visitante') + '">' +
+          (esLocal ? bandera(j) : '') +
+          '<span>' + esc(GL.nombreJugador(esLocal ? p.local_id : p.visitante_id)) + '</span>' +
+          (esLocal ? '' : bandera(j)) +
+        '</div>';
+      return '<div class="exp-partido-card">' +
+        '<div class="exp-partido-fila">' + lado(local, true) +
+          '<div class="exp-partido-marcador' + (r.pendiente ? '' : ' jugado') + '">' +
+            esc(r.texto) + '</div>' +
+        '</div>' +
+        '<div class="exp-partido-fila visitante">' + lado(visita, false) + '</div>' +
+        '<div class="exp-partido-estado">' + esc(r.estado && r.estado.label ? r.estado.label : '') + '</div>' +
+      '</div>';
+    }).join('');
+
+    const lista = tarjetas ||
+      '<p class="exp-partido-nota">Esta jornada todavía no tiene partidos programados para el grupo.</p>';
+
+    return CSS_BASE + CSS_PARTIDOS + `
+<div class="exp-header">
+  <div>
+    <div class="exp-header-logo">GOATS LATINOS</div>
+    <div class="exp-header-sub">Partidos de hoy · ${esc(torneo ? torneo.temporada || 'Temporada activa' : 'Liga')}</div>
+  </div>
+  <div class="exp-header-grupo">G${esc(letra)}</div>
+</div>
+<div class="exp-info">
+  <span class="exp-info-jornada">Jornada ${esc(String(numero))} / ${esc(String(torneo ? torneo.total_jornadas || 22 : 22))} · Grupo ${esc(letra)}</span>
+  <span class="exp-info-fecha">${esc(fechaHoy)}</span>
+</div>
+<div class="exp-partidos-lista">${lista}</div>
+<div class="exp-partido-nota">${esc(GL.notaHorarios ? GL.notaHorarios() : '')}</div>
+<div class="exp-footer">
+  <span class="exp-footer-liga">GOATS LATINOS · Grupo ${esc(letra)}</span>
+  <span class="exp-footer-nota">Compartir por WhatsApp</span>
+</div>`;
+  }
+
+  /* ================================================================
      API PÚBLICA
      ================================================================ */
 
@@ -492,6 +589,16 @@
     }
   }
 
+  async function exportarPartidosHoy(grupoId, nombre) {
+    try {
+      const plantilla = await htmlPlantillaPartidos(grupoId);
+      GL.notificar('Preparando imagen…', 'info', 'loader-circle');
+      await capturarPlantilla(plantilla, nombre || 'GOATS_Partidos', 720);
+    } catch (e) {
+      avisarError(e);
+    }
+  }
+
   /* Captura genérica de un elemento visible del DOM (stats visuales, brackets, etc.) */
   async function exportar(elementId, nombre) {
     const el = document.getElementById(elementId);
@@ -515,9 +622,12 @@
     }
   }
 
-  Modulos['exportar-png'] = { titulo: 'Exportar PNG', exportar, exportarTabla, exportarStats, exportarPerfil };
-  GL.exportarPNG    = exportar;
-  GL.exportarTabla  = exportarTabla;
-  GL.exportarStats  = exportarStats;
-  GL.exportarPerfil = exportarPerfil;
+  Modulos['exportar-png'] = {
+    titulo: 'Exportar PNG', exportar, exportarTabla, exportarStats, exportarPerfil, exportarPartidosHoy
+  };
+  GL.exportarPNG         = exportar;
+  GL.exportarTabla       = exportarTabla;
+  GL.exportarStats       = exportarStats;
+  GL.exportarPerfil      = exportarPerfil;
+  GL.exportarPartidosHoy = exportarPartidosHoy;
 })();

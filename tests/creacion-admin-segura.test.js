@@ -262,11 +262,12 @@ describe('1.4.0 — recuperación controlada después de un resultado incierto',
 });
 
 describe('1.4.0 — integración frontend con la Edge Function', () => {
-  it('los dos botones usan el mismo guard, timeout y finally', () => {
+  it('el alta validada conserva guard, timeout y finally', () => {
     expect(codigoAdmin.match(/avisoCreacionBloqueada\(/g).length).toBeGreaterThanOrEqual(3);
-    expect(codigoAdmin.match(/await ejecutarCreacion\(body\)/g)).toHaveLength(2);
-    expect(codigoAdmin.match(/btn\.disabled = true; btn\.textContent = 'Creando…'/g)).toHaveLength(2);
-    expect(codigoAdmin.match(/finally \{\s*if \(btn\.isConnected\) \{\s*btn\.disabled = false; btn\.textContent = 'Crear jugador'; \}/g)).toHaveLength(2);
+    expect(codigoAdmin.match(/await ejecutarCreacion\(body\)/g)).toHaveLength(1);
+    expect(codigoAdmin.match(/btn\.disabled = true; btn\.textContent = 'Creando…'/g)).toHaveLength(1);
+    expect(codigoAdmin).toMatch(/finally \{\s*if \(btn\.isConnected\) \{\s*btn\.disabled = false;\s*btn\.innerHTML = icono\('user-plus', 16\) \+ \(soloGlobal \? 'Registrar jugador' : 'Crear jugador'\);\s*\}\s*\}/);
+    expect(codigoAdmin).not.toContain('crearJugadorRapido');
     expect(codigoConfig).toContain('TIMEOUT_CREAR_JUGADOR: 45000');
     expect(codigoAdmin).toContain('CONFIG.TIMEOUT_CREAR_JUGADOR');
   });
@@ -280,7 +281,7 @@ describe('1.4.0 — integración frontend con la Edge Function', () => {
   it('la auditoría solo registra creaciones confirmadas', () => {
     expect(codigoAdmin).toContain("if (resultado.estado === 'creado') {");
     expect(codigoAdmin).toContain("if (resultado.estado === 'ya_existente') {");
-    expect(codigoAdmin.match(/await conTimeout\(\s*refrescar\(root\)/g)).toHaveLength(1);
+    expect(codigoAdmin).toContain('refrescarVista()');
   });
 
   it('los timeouts siguen siendo locales de la interfaz', () => {

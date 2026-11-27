@@ -152,23 +152,24 @@ describe('FASE 3.19 — carga única de módulos', () => {
   });
 
   it('renueva el cache-busting de lo modificado', () => {
-    expect(codigoConfig).toMatch(/VERSION: '1\.(3|4)\.[0-9]+'/);
+    expect(codigoConfig).toMatch(/VERSION: '1\.(3|4|5|6)\.[0-9]+'/);
     expect(codigoIndex).toMatch(/css\/tokens-3\.1\.css\?v=3\.(19|20|23)\.0/);
-    expect(codigoIndex).toMatch(/css\/estilos\.css\?v=3\.(19|20|23)\.0/);
-    expect(codigoIndex).toMatch(/js\/core\/config\.js\?v=1\.(3|4)\.[0-9]+/);
-    expect(codigoIndex).toMatch(/js\/core\/gl\.js\?v=1\.(3|4)\.[0-9]+/);
-    expect(codigoIndex).toMatch(/js\/ui\/menu\.js\?v=1\.(3|4)\.[0-9]+/);
+    expect(codigoIndex).toMatch(/css\/estilos\.css\?v=3\.(19|20|23|24)\.0/);
+    expect(codigoIndex).toMatch(/js\/core\/config\.js\?v=1\.(3|4|5|6)\.[0-9]+/);
+    expect(codigoIndex).toMatch(/js\/core\/gl\.js\?v=1\.(3|4|5|6)\.[0-9]+/);
+    expect(codigoIndex).toMatch(/js\/ui\/menu\.js\?v=1\.(3|4|5|6)\.[0-9]+/);
   });
 });
 
 describe('FASE 3.19 — navegación y redacción', () => {
-  it('mantiene las 15 rutas y añade Jornadas al menú "Más"', () => {
+  it('mantiene el menú completo y añade Jornadas al menú "Más"', () => {
     const secciones = codigoMenu.slice(
       codigoMenu.indexOf('const SECCIONES'),
       codigoMenu.indexOf('// Los 4 accesos fijos')
     );
     const ids = [...secciones.matchAll(/\bid:\s*'([^']+)'/g)].map(m => m[1]);
-    expect(new Set(ids).size).toBe(15);
+    expect(new Set(ids).size).toBe(16);
+    expect(ids).toContain('jugadores');
     expect(ids).toContain('jornadas');
 
     const mas = codigoMenu.slice(
