@@ -377,7 +377,8 @@ Entra a `Mi Perfil` y ve el perfil completo con sus datos, estadísticas e histo
 
 - **Real (solo lectura):** se verificó el registro de FABIAN10 y sus relaciones con `auth.users`, `torneos`, `grupos` y `grupo_jugadores`. No se modificaron datos, RLS, GRANT/REVOKE, RPC, Edge Functions ni Auth. No se aplicó ninguna migración SQL.
 - **Aislado:** nueva suite `tests/perfil-sin-grupo-1.4.2.test.js` con 19 pruebas para los 16 escenarios solicitados; suite completa **25 archivos / 334 pruebas, `EXIT=0`**; `node --check` sin errores y `diff --check` sin avisos.
-- **Pendiente:** no se usaron cuentas reales para probar contraseña, perfil ajeno, confirmación telefónica ni inscripción. La revisión visual en escritorio/móvil con una sesión real sigue siendo manual; las pruebas validan las clases adaptativas y media queries existentes. `supabase/migration-participantes-1.4.1.sql` sigue sin aplicarse y requiere aprobación expresa.
+- **Visual aislado:** se renderizó el módulo con datos simulados en un arnés temporal dentro de iframes de 1180 px y 390 px. En ambos anchos se vieron encabezado, tarjeta de pertenencia, estadísticas, historial, próximo partido y Head to head, sin desbordamiento horizontal; en móvil las tarjetas pasaron a dos columnas y la tarjeta de pertenencia midió 350 px dentro del viewport de 390 px. El arnés no forma parte del repositorio.
+- **Pendiente:** no se usaron cuentas reales para probar contraseña, perfil ajeno, confirmación telefónica ni inscripción. La revisión visual con una sesión real sigue siendo manual; la comprobación anterior usa mocks. `supabase/migration-participantes-1.4.1.sql` sigue sin aplicarse y requiere aprobación expresa.
 
 ### Publicación
 
