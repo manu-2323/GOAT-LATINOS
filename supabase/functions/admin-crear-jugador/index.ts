@@ -494,7 +494,9 @@ async function crearJugadorServidor(admin, b, opciones) {
       return falloConCompensacion(admin, creado, 'error_servidor',
         'No se pudo asignar el jugador al grupo. La creación se revirtió.', {});
 
-    return respuesta('creado', 'Jugador creado y asignado al grupo.', {
+    return respuesta('creado', b.grupo_id
+      ? 'Jugador creado y asignado al grupo.'
+      : 'Jugador creado; pendiente de asignar grupo.', {
       user_id: creado.auth.id,
       jugador_id: creado.jugador
     });

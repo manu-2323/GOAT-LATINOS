@@ -598,7 +598,7 @@ const GL = {
       '<h3>Algo salió mal</h3>' +
       '<p class="estado-desc">' + esc(amigable) + '</p>' +
       '<div class="estado-accion">' +
-        '<button type="button" class="btn sec" onclick="location.reload()">' +
+        '<button type="button" class="btn sec" data-reintentar-vista>' +
           icono('refresh-cw', 16) + 'Reintentar' +
         '</button>' +
       '</div>' +

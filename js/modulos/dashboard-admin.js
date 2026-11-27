@@ -51,6 +51,11 @@
   const Mod = {
     titulo: 'Centro de control',
 
+    destruir() {
+      Object.values(_charts).forEach(c => { try { c.destroy(); } catch (e) {} });
+      Object.keys(_charts).forEach(k => delete _charts[k]);
+    },
+
     async render(el) {
       el.innerHTML = GL.skeleton(8, 20, true);
       if (!(await GL.asegurarAdmin(el))) return;

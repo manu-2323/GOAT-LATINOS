@@ -13,8 +13,13 @@
       try {
         await GL.cargarContexto(true);
         if (!GL.torneo()) { el.innerHTML = GL.vacio('No hay torneo activo todavía.', 'trophy', null); iniciarIconos(); return; }
-        if (!Auth.jugador || (!GL.esAdmin() && !GL.grupoDeJugador(Auth.jugador.id))) {
-          el.innerHTML = pendiente();
+        /* Un perfil creado y vinculado NO es un registro incompleto. La
+           ausencia de grupo en el torneo activo es un estado distinto: solo
+           falta una asignación administrativa, no una carga de datos. */
+        const sinPerfil = !Auth.jugador;
+        const sinGrupo = !sinPerfil && !GL.esAdmin() && !GL.grupoDeJugador(Auth.jugador.id);
+        if (sinPerfil || sinGrupo) {
+          el.innerHTML = sinPerfil ? pendiente() : pendienteDeGrupo();
           /* 2.2 — Si la cuenta Auth existe pero el perfil no se pudo completar
              por el teléfono, se ofrece recuperación con otro número. */
           const btnRec = el.querySelector('[data-recuperar-telefono]');
@@ -31,8 +36,10 @@
               Mod.render(el);
             }
           });
-          const btn = el.querySelector('[data-actualizar-nombre]');
-          if (btn) btn.addEventListener('click', () => editarPerfil(el, Auth.jugador || {}));
+          if (sinPerfil) {
+            const btn = el.querySelector('[data-actualizar-nombre]');
+            if (btn) btn.addEventListener('click', () => editarPerfil(el, Auth.jugador || {}));
+          }
           iniciarIconos(); return;
         }
         if (!Mod.jugadorId || !(Auth.jugador.rol === 'admin' && Mod.jugadorId !== Auth.jugador.id)) {
@@ -188,6 +195,20 @@
       '</div>';
   }
 
+  /* El perfil existe y está vinculado; lo que falta es pertenencia al grupo
+     del torneo activo. No se ofrece "Completar mi perfil" porque ese botón no
+     crea la asignación y repetirlo no cambia este estado. */
+  function pendienteDeGrupo() {
+    return '<div class="estado-vacio">' + icono('users', 32) +
+      '<h2>Tu perfil ya está creado</h2>' +
+      '<p>Falta que un administrador te asigne a un grupo del torneo activo. ' +
+      'Tus datos están guardados; no hace falta registrarte de nuevo ni recargar la página.</p>' +
+      '<button type="button" class="btn sec" data-reintentar-perfil>' +
+        icono('rotate-cw', 16) + 'Reintentar carga del grupo' +
+      '</button>' +
+      '</div>';
+  }
+
   /* Recuperación segura: actualiza SOLO el metadata del usuario autenticado y
      reintenta la creación del perfil. La titularidad nunca se escribe aquí. */
   function recuperarTelefono(el) {
@@ -287,7 +308,22 @@
         '<label class="campo"><span>Ciudad o zona horaria</span><select class="input" id="perfil-zona" required>' +
           GL.opcionesZonaHoraria(j.zona_horaria, j.pais || (Auth.jugador && Auth.jugador.pais)) +
         '</select></label>' +
-        '<p class="nota-pie" id="perfil-horario"></p>',
+        '<p class="nota-pie" id="perfil-horario"></p>' +
+        (Auth.jugador && Auth.jugador.rol !== 'admin'
+          ? '<div class="mt">' +
+              '<h3 class="j5-form-titulo">' + icono('key-round', 16) + 'Cambiar contraseña (opcional)</h3>' +
+              '<div class="campo-row">' +
+                '<label class="campo"><span>Contraseña actual</span>' +
+                  '<input class="input" type="password" id="perfil-clave-actual" autocomplete="current-password"></label>' +
+                '<label class="campo"><span>Nueva contraseña</span>' +
+                  '<input class="input" type="password" id="perfil-clave-nueva" autocomplete="new-password"></label>' +
+                '<label class="campo"><span>Confirmar nueva contraseña</span>' +
+                  '<input class="input" type="password" id="perfil-clave-confirmar" autocomplete="new-password"></label>' +
+              '</div>' +
+              '<p class="nota-pie">Mínimo 8 caracteres. Se verifica con tu contraseña actual; ' +
+              'las cuentas administradoras usan la clave compartida y no se cambian desde aquí.</p>' +
+            '</div>'
+          : ''),
       acciones: '<button type="button" class="btn sec" data-cerrar>Cancelar</button>' +
         '<button type="button" class="btn" id="perfil-guardar">Guardar cambios</button>',
       onAbrir(fondo, cerrar) {
@@ -397,6 +433,14 @@
             GL.notificar(v.mensaje, 'advertencia'); return;
           }
 
+          const claveActual = fondo.querySelector('#perfil-clave-actual')?.value || '';
+          const claveNueva = fondo.querySelector('#perfil-clave-nueva')?.value || '';
+          const claveConfirmar = fondo.querySelector('#perfil-clave-confirmar')?.value || '';
+          const cambiarClave = Boolean(claveActual || claveNueva || claveConfirmar);
+          if (cambiarClave && typeof Auth.cambiarContrasena !== 'function') {
+            GL.notificar('El cambio de contraseña no está disponible en esta versión.', 'advertencia'); return;
+          }
+
           boton.disabled = true;
           try {
             const cambios = {
@@ -416,8 +460,11 @@
             await Auth.actualizarPerfil(cambios);
             if (archivo) await Auth.subirAvatar(archivo);
             else if (quitarFoto) await Auth.eliminarAvatar();
+            if (cambiarClave) {
+              await Auth.cambiarContrasena(claveActual, claveNueva, claveConfirmar);
+            }
             cerrar();
-            GL.notificar('Perfil actualizado.', 'exito');
+            GL.notificar(cambiarClave ? 'Perfil y contraseña actualizados.' : 'Perfil actualizado.', 'exito');
             Mod.render(el);
             window.dispatchEvent(new CustomEvent('gl:auth', { detail: { evento: 'PROFILE_UPDATED' } }));
           } catch (e) { console.error('[perfil]', e); GL.notificar(GL.mensaje(e, 'guardar', 'el perfil'), 'error'); boton.disabled = false; }

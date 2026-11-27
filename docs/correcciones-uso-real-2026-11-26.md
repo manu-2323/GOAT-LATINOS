@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-11-26  
 **Rama:** `main` (sin ramas auxiliares)  
-**Alcance:** selector `Ciudad o zona horaria`, cierre del modal `Agregar jugador al torneo` e investigación del correo electrónico.  
+**Alcance:** selector `Ciudad o zona horaria`, cierre del modal `Agregar jugador al torneo`, investigación del correo electrónico y correcciones posteriores `1.3.8`–`1.4.1`.
 **Decisión:** **A — correcciones verificadas y publicadas en `main`.**
 
 No se inició una nueva fase. No se modificaron tablas, SQL, RLS, GRANT, firmas RPC, autenticación, datos reales ni configuración de Supabase. No se enviaron correos de prueba.
@@ -297,3 +297,47 @@ No se envió un correo real: el usuario prohibió registrar cuentas de prueba co
 | `git -c core.whitespace=cr-at-eol diff --check` | Sin errores. |
 
 **Distinción de evidencia**: los 429 y la configuración remota se comprobaron en producción; los flujos de idempotencia, compensación y recuperación se simularon en entorno aislado con mocks. No se crearon cuentas reales ni se enviaron correos. La ejecución real con jugadores queda pendiente de verificación manual.
+
+---
+
+## 13. Quinta corrección: seis problemas de uso real (1.4.1)
+
+### Alcance
+
+Se trabajó directamente en `main`, sin ramas auxiliares, sin nueva cadena de fases y sin tocar la historia de `1.3.8`, `1.3.9` ni `1.4.0`. Los seis problemas atendidos fueron: perfil incompleto, cambio de contraseña, grupos opcionales, participantes por torneo, mensaje de autorización de teléfonos y navegación sin refresh.
+
+### Cambios de código
+
+- **Perfil**: `js/modulos/perfil.js` distingue «sin perfil» de «perfil existente sin grupo». El segundo estado dice que los datos ya están guardados y que falta una asignación administrativa; ya no ofrece «Completar mi perfil», que no creaba esa asignación.
+- **Contraseña**: `js/core/supabase.js` incorpora `Auth.cambiarContrasena(actual, nueva, confirmacion)`: verifica la contraseña actual con `auth.signInWithPassword()`, actualiza con `auth.updateUser({ password })` y excluye a las cuentas `rol === 'admin'` porque usan clave compartida. El editor de `Mi perfil` ofrece el formulario solo a jugadores.
+- **Grupos opcionales**: `js/modulos/admin.js` permite dejar el grupo sin asignar tanto en `Agregar jugador al torneo` como en el alta rápida de `Nueva temporada`. Se envía `grupo_id: null` y el mensaje distingue «creado» de «creado; pendiente de asignar grupo». No se reutiliza `grupo_jugadores` como participación, no se crea `jugadores.grupo_id` y no se reescribe historial. `admin-crear-jugador` ya toleraba grupo ausente; ahora también informa el estado pendiente.
+- **Participantes por torneo**: se propone `supabase/migration-participantes-1.4.1.sql`, que crea `public.torneo_participantes` con PK `(torneo_id, jugador_id)`, backfill solo desde membresías reales de `grupo_jugadores` y una RPC aditiva `gl_inscribir_participantes(uuid, uuid[])`. El alta de torneo permite elegir participantes y llama a la RPC **después** de crear el torneo; si la migración no está instalada, el torneo queda intacto y se avisa. **La migración NO fue aplicada.**
+- **Teléfonos**: `_mensajeRpcTelefono()` separa sesión vencida, falta de rol administrativo activo y error de permisos de fila/recalculo. La autoridad sigue siendo `gl_confirmar_e164` + `public.gl_es_admin()` en servidor; el frontend solo traduce.
+- **Navegación**: `js/app.js` invalida y fuerza contexto fresco por ruta, repinta menú/sesión/temporada, llama a `destruir()` del módulo saliente y evita reemplazar el DOM en un `TOKEN_REFRESHED` con la misma identidad. `GL.error()` ya no usa `location.reload()`: ofrece un botón `data-reintentar-vista` que recarga solo la vista. `stats-globales`, `dashboard-admin`, `notificaciones` y `admin` liberan charts, Realtime o listeners.
+- **Versión**: `CONFIG.VERSION = '1.4.1'` y seis scripts con `?v=1.4.1` en `index.html`. CSS permanece en `3.23.0` porque no cambió.
+
+### Real (comprobado en producción, solo lectura)
+
+- `supabase db query --remote --read-only` sobre `pg_proc`/`pg_get_functiondef` confirmó que `public.gl_es_admin()` es `SECURITY DEFINER`, con `search_path=''`, y exige `j.user_id = auth.uid()`, `j.rol = 'admin'` **y `j.activo = TRUE`**. Permisos: `anon=false`, `authenticated=true`, `service_role=true`.
+- La misma consulta confirmó `public.gl_confirmar_e164(uuid,text,text,boolean,text)` como `SECURITY DEFINER`, con `anon=false`, `authenticated=true`, `service_role=true`, y que exige sesión (`auth.uid()` no nulo) y `gl_es_admin()` antes de escribir. Auditoría y UPDATE del teléfono ocurren en una sola transacción.
+- Las políticas reales de `public.jugadores` confirman que el UPDATE permitido a `authenticated` es `(user_id = auth.uid()) OR gl_es_admin()`. Por eso un error de fila no debe traducirse como falta de permiso administrativo genérico.
+- No se modificaron RLS, GRANT/REVOKE, SMTP, Auth general, contraseñas ajenas ni datos reales. No se crearon cuentas, jugadores ni torneos de prueba. No se enviaron correos.
+
+### Aislado (verificado sin producción)
+
+| Verificación | Resultado |
+|---|---|
+| `vitest run` | **24 archivos, 315 pruebas, `EXIT=0`**. |
+| `tests/correcciones-1.4.1.test.js` (nuevo) | 19 pruebas aisladas de los seis problemas, con `new Function`, jsdom, mocks de `Auth`, `GL` y cliente Supabase falso. No conecta a Supabase. |
+| Suite previa | 23 archivos / 296 pruebas sin regresiones. |
+| `node --check` | Sin errores en los nueve JS modificados y en la suite nueva. |
+| `git -c core.whitespace=cr-at-eol diff --check` | `EXIT=0`. |
+| Edge Function | La lógica se ejecuta en pruebas con mocks; el mensaje de grupo pendiente queda cubierto por aserción estática. Deno no está instalado en este entorno. |
+
+### Pendiente (requiere decisión o verificación humana)
+
+1. **`supabase/migration-participantes-1.4.1.sql` no está aplicada.** Requiere SQL exacto (ya redactado), explicación y aprobación expresa. Afecta solo una tabla nueva; no altera torneos, grupos ni `grupo_jugadores` existentes.
+2. No se probaron flujos reales de contraseña, perfil ajeno, confirmación telefónica ni inscripción con cuentas reales. Las pruebas son de código y mocks.
+3. El proveedor SMTP remoto sigue sin verificarse; no se envió correo real ni se cambió configuración de correo.
+4. La conservación de foco/filtros ante `TOKEN_REFRESHED` debe confirmarse en el navegador con una sesión real; la cobertura automática valida la rama del router, no el refresco del proveedor.
+5. La inscripción de participantes mostrará una advertencia hasta que la migración propuesta se apruebe y aplique; el alta de torneo sigue funcionando.

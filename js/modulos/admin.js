@@ -14,6 +14,10 @@
 
     setTab(tab) { Mod.tab = tab || 'resumen'; },
 
+    destruir() {
+      try { cerrarMenuAcciones(); } catch (e) { console.warn('[admin] cleanup', e); }
+    },
+
     async render(el) {
       el.innerHTML = GL.skeleton(8);
       if (!(await GL.asegurarAdmin(el))) return;
@@ -1384,7 +1388,7 @@
           'Usá el alta rápida de arriba para cargar el primer jugador.');
 
     const pasoJugadores =
-      '<p class="muted" style="font-size:12px">Alta rápida: se crea la cuenta, se guarda el jugador y se lo asigna al grupo elegido.</p>' +
+      '<p class="muted" style="font-size:12px">Alta rápida: se crea la cuenta y se guarda el jugador. Podés asignarlo al grupo elegido o dejarlo pendiente.</p>' +
       '<div class="campo-row">' +
         '<label class="campo"><span>Nombre de usuario</span><input class="input" id="nt-jug-nombre" maxlength="32" placeholder="Ej. GOAT_PEREZ"></label>' +
         '<label class="campo"><span>Correo</span><input class="input" type="email" id="nt-jug-email" placeholder="jugador@correo.com"></label>' +
@@ -1401,9 +1405,10 @@
             '<input class="input" id="nt-jug-tel" inputmode="numeric" placeholder="8108-5555" required>' +
           '</div>' +
         '</label>' +
-        '<label class="campo"><span>Grupo</span><select class="input" id="nt-jug-grupo">' +
+        '<label class="campo"><span>Grupo (opcional)</span><select class="input" id="nt-jug-grupo">' +
           (grupos.length
-            ? grupos.map(g => '<option value="' + esc(g.id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</option>').join('')
+            ? '<option value="">Sin asignar</option>' +
+              grupos.map(g => '<option value="' + esc(g.id) + '">Grupo ' + esc(GL.letraGrupo(g)) + '</option>').join('')
             : '<option value="">Sin grupos disponibles</option>') +
         '</select></label>' +
       '</div>' +
@@ -1512,11 +1517,23 @@
           'placeholder="Ej. 2026 · Clausura"></label>' +
         '<label class="campo"><span>Número de jornadas (1..' + MAX_JORNADAS + ')</span>' +
           '<input class="input" type="number" min="1" max="' + MAX_JORNADAS + '" id="tor-jornadas" value="' +
-          CONFIG.JORNADAS_FASE_REGULAR + '"></label>',
+          CONFIG.JORNADAS_FASE_REGULAR + '"></label>' +
+        '<label class="campo"><span>Participantes iniciales (opcional)</span>' +
+          '<select class="input" id="tor-participantes" multiple size="5">' +
+            (GL.jugadores().filter(j => j.rol === 'jugador').length
+              ? GL.jugadores().filter(j => j.rol === 'jugador').map(j =>
+                  '<option value="' + esc(j.id) + '">' + esc(j.nombre_usuario) + '</option>').join('')
+              : '<option value="" disabled>No hay jugadores registrados</option>') +
+          '</select>' +
+          '<small class="campo-ayuda">Se inscriben en el torneo nuevo; luego se les asigna un grupo. ' +
+          'Requiere la migración de participantes por torneo.</small>' +
+        '</label>',
       onConfirmar(fondo, cerrar, setBloqueado) {
         const nombre = fondo.querySelector('#tor-nombre').value.trim();
         const temporada = fondo.querySelector('#tor-temporada').value.trim();
         const jornadas = validarTotal(fondo.querySelector('#tor-jornadas').value);
+        const participantes = Array.from(fondo.querySelector('#tor-participantes').selectedOptions)
+          .map(o => o.value).filter(Boolean);
         if (!nombre) { fondo.setError('Ingresá el nombre de la liga.'); return; }
         if (!temporada) { fondo.setError('Ingresá la temporada.'); return; }
         if (!jornadas.ok) { fondo.setError(jornadas.mensaje); return; }
@@ -1533,6 +1550,21 @@
             cerrar();
             await recargarContextoAdmin();
             GL.notificar(r.mensaje || 'Torneo "' + nombre + '" creado correctamente.', 'exito');
+            if (participantes.length) {
+              const torneoId = r.datos && r.datos.torneo_id;
+              if (!torneoId) {
+                GL.notificar('El torneo se creó, pero no se pudo identificar su ID para inscribir participantes.', 'advertencia');
+              } else {
+                try {
+                  const ins = await Auth.inscribirParticipantes(torneoId, participantes);
+                  GL.notificar(ins.inscritos
+                    ? ins.inscritos + ' participante(s) inscripto(s) en el torneo nuevo.'
+                    : 'Los participantes seleccionados ya estaban inscriptos.', 'exito');
+                } catch (e) {
+                  GL.notificar(e.message, 'advertencia');
+                }
+              }
+            }
             Mod.tab = 'resumen';
             Mod.render(root);
           } catch (e) {
@@ -1647,7 +1679,7 @@
     if (!camposTel.telefono_e164) {
       GL.notificar('El teléfono es obligatorio.', 'advertencia'); return;
     }
-    if (!grupo) { GL.notificar('Seleccioná un grupo para el jugador.', 'advertencia'); return; }
+    const grupoId = grupo || null;
 
     const btn = cont.querySelector('#nt-jug-crear');
     const aviso = avisoCreacionBloqueada(email);
@@ -1660,7 +1692,7 @@
         password: clave,
         pais,
         zona_horaria: GL.zonaPorPais(pais),
-        grupo_id: grupo,
+        grupo_id: grupoId,
         torneo_id: torneo.id
       }, camposTel);
       const resultado = await ejecutarCreacion(body);
@@ -1677,7 +1709,7 @@
       if (resultado.estado === 'ya_existente') {
         GL.notificar(resultado.mensaje, 'info');
       } else {
-        GL.notificar(nombre + ' creado y asignado al grupo.', 'exito');
+        GL.notificar(nombre + (grupoId ? ' creado y asignado al grupo.' : ' creado; pendiente de asignar grupo.'), 'exito');
       }
       Mod.render(root);
     } finally {
@@ -3178,7 +3210,7 @@
       cerrarFondo: false,
       confirmarDescarto: true,
       cuerpo:
-        j5FormIntro('Completá los datos para crear la cuenta y asignar al jugador al torneo activo.') +
+        j5FormIntro('Completá los datos para crear la cuenta en el torneo activo. La asignación a grupo es opcional.') +
         '<div class="j5-form-grid">' +
           '<div class="j5-form-section">' +
             '<h3 class="j5-form-titulo">' + icono('user', 16) + 'Identidad y acceso</h3>' +
@@ -3225,15 +3257,17 @@
               '</div>' +
               '<small class="campo-ayuda">El formato válido no confirma la titularidad del número.</small>' +
             '</label>' +
-            '<label class="campo"><span>Grupo ' + j5Requerido() + '</span>' +
+            '<label class="campo"><span>Grupo (opcional)</span>' +
               '<select class="input" id="ag-grupo">' +
                 (grupos.length
-                  ? grupos.map(g =>
+                  ? '<option value="">Sin asignar (pendiente)</option>' +
+                    grupos.map(g =>
                       '<option value="' + g.id + '">Grupo ' + GL.letraGrupo(g) +
                       ' — ' + e6Miembros(g).length + ' jugador(es)</option>'
                     ).join('')
                   : '<option value="">Sin grupos disponibles</option>') +
               '</select>' +
+              '<small class="campo-ayuda">Sin grupo el jugador queda en el torneo, pero no podrá jugar hasta que se le asigne uno.</small>' +
             '</label>' +
           '</div>' +
         '</div>' +
@@ -3335,12 +3369,8 @@
             hayError = true;
           }
 
-          // ── Validar grupo ──────────────────────────────────────────
-          const grupoVal = fondo.querySelector('#ag-grupo').value;
-          if (!grupoVal) {
-            GL.notificar('No hay grupos disponibles. Creá los grupos desde Configuración.', 'error');
-            hayError = true;
-          }
+          // ── Grupo opcional: null conserva al jugador sin asignación ─
+          const grupoVal = fondo.querySelector('#ag-grupo').value || null;
 
           if (hayError) return;
 
@@ -3389,7 +3419,9 @@
             if (resultado.estado === 'ya_existente') {
               GL.notificar(resultado.mensaje, 'info');
             } else {
-              GL.notificar(esc(nombreNorm) + ' creado y asignado al grupo.', 'exito');
+              GL.notificar(esc(nombreNorm) + (grupoVal
+                ? ' creado y asignado al grupo.'
+                : ' creado; pendiente de asignar grupo.'), 'exito');
             }
             await conTimeout(
               refrescar(root), CONFIG.TIMEOUT_CREAR_JUGADOR,

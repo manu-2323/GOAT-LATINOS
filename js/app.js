@@ -3,6 +3,8 @@
    ===================================================================== */
 let _tokenVista = 0;
 let _rutaActual = 'tabla';
+let _moduloActual = null;
+let _firmaAuth = null;
 
 /* FASE 3.12 (ampliación): la entrada de la app es el panel principal cuando
    hay sesión; la Tabla sigue siendo la puerta pública para invitados. */
@@ -13,6 +15,42 @@ function rutaPorDefecto() {
 function rutaActual() {
   const id = location.hash.replace('#', '').split('/')[0];
   return itemNav(id) ? id : rutaPorDefecto();
+}
+
+/* Firma mínima de la sesión. Un refresh de token NO cambia esta firma: la
+   vista no debe destruirse mientras la persona está escribiendo. */
+function firmaSesion() {
+  const id = Auth.usuario ? Auth.usuario.id : null;
+  const rol = Auth.jugador ? Auth.jugador.rol : null;
+  return id + '|' + (rol || '');
+}
+
+/* Menú, chip de sesión y temporada también son parte de la navegación. */
+function sincronizarChrome() {
+  try {
+    if (typeof dibujarMenu === 'function') dibujarMenu();
+    if (typeof pintarSesion === 'function') pintarSesion();
+    if (typeof pintarTemporada === 'function') pintarTemporada();
+  } catch (e) { console.warn('[app] chrome', e); }
+}
+
+/* Reintento de la VISTA, no de toda la página. Los módulos ya usan este
+   patrón localmente; ahora es una política central del router. */
+async function reintentarVista() {
+  GL.invalidar();
+  try { await Promise.all([GL.cargarPaises(true), GL.cargarContexto(true)]); } catch (e) { console.warn(e); }
+  await mostrar(_rutaActual);
+}
+
+function conectarReintento() {
+  document.addEventListener('click', async e => {
+    const boton = e.target && e.target.closest ? e.target.closest('[data-reintentar-vista]') : null;
+    if (!boton) return;
+    e.preventDefault();
+    boton.disabled = true;
+    try { await reintentarVista(); }
+    finally { if (boton.isConnected) boton.disabled = false; }
+  });
 }
 
 /* Acceso obligatorio: ninguna vista se renderiza sin una sesión válida. */
@@ -40,8 +78,20 @@ async function mostrar(id) {
   const nivel = item.nivel || 'publico';
   const vista = document.getElementById('vista');
   if (!vista) return;
+
+  /* Contrato de ciclo de vida: un módulo libera charts, canales Realtime y
+     listeners globales antes de que otro ocupe el mismo contenedor. */
+  if (_moduloActual && _moduloActual !== archivo) {
+    const anterior = window.Modulos && window.Modulos[_moduloActual];
+    if (anterior && typeof anterior.destruir === 'function') {
+      try { await anterior.destruir(); } catch (e) { console.warn('[app] cleanup', e); }
+    }
+  }
+  _moduloActual = archivo;
+
   const token = ++_tokenVista;
   _rutaActual = item.id;
+  sincronizarChrome();
 
   document.getElementById('titulo-pagina').textContent = item.nombre;
   document.querySelectorAll('.nav-link,.nav-movil a').forEach(a => {
@@ -72,7 +122,7 @@ async function mostrar(id) {
   vista.innerHTML = GL.skeleton(6);
   iniciarIconos();
   try {
-    await GL.cargarContexto();
+    await GL.cargarContexto(true);
     if (token !== _tokenVista) return;
     if (nivel === 'admin' && !(await GL.asegurarAdmin(vista))) {
       enlazarLogin(vista); iniciarIconos(); return;
@@ -143,6 +193,7 @@ async function arrancar() {
   conectarOffline();
   conectarMenu();
   conectarAccesibilidad();
+  conectarReintento();
   iniciarIconos();
   dibujarMenu();
   pintarSesion();
@@ -152,6 +203,7 @@ async function arrancar() {
   const avisoAuth = Auth.consumirCallback ? Auth.consumirCallback(undefined, false) : null;
   if (avisoAuth && avisoAuth.error) PantallaAuth.aviso = avisoAuth.mensaje;
   try { await Auth.iniciar(); } catch (e) { console.warn(e); }
+  _firmaAuth = firmaSesion();
   if (Auth.limpiarCallbackUrl) Auth.limpiarCallbackUrl();
   if (avisoAuth && Auth.usuario) {
     GL.notificar(avisoAuth.mensaje, avisoAuth.error ? 'advertencia' : 'exito',
@@ -170,12 +222,15 @@ async function arrancar() {
 }
 
 window.addEventListener('hashchange', () => mostrar(rutaActual()));
-window.addEventListener('gl:auth', async () => {
-  dibujarMenu(); pintarSesion();
-  // FASE 3.12 (ampliación): sin sesión no se consulta el contexto; un evento
-  // SIGNED_OUT del refresco de token no debe disparar lecturas prematuras.
-  try { if (Auth.usuario) await GL.cargarContexto(true); } catch (e) { console.warn(e); }
-  pintarTemporada();
+window.addEventListener('gl:auth', async e => {
+  const firma = firmaSesion();
+  const cambioDeSesion = firma !== _firmaAuth;
+  const evento = String((e && e.detail && e.detail.evento) || '');
+  _firmaAuth = firma;
+  sincronizarChrome();
+  // Sin sesión no se consulta el contexto; un SIGNED_OUT del refresco no
+  // debe disparar lecturas prematuras.
+  try { if (Auth.usuario) await GL.cargarContexto(true); } catch (err) { console.warn(err); }
   if (PantallaAuth.obligatorio && !Auth.usuario) {
     exigirLogin(_rutaActual);
     return;
@@ -185,13 +240,19 @@ window.addEventListener('gl:auth', async () => {
     _rutaActual = rutaPorDefecto();
     location.hash = _rutaActual;
   }
-  await mostrar(_rutaActual);
-  // Mostrar tour de bienvenida al nuevo jugador (solo una vez)
-  if (Auth.usuario && !GL.esAdmin() && window.OnboardingTour) {
+
+  /* Un TOKEN_REFRESHED con la misma identidad actualiza el contexto y el
+     chrome, pero NO reemplaza el DOM: conserva foco, filtros y formularios. */
+  if (cambioDeSesion || evento === 'SIGNED_IN' || evento === 'SIGNED_OUT' || evento === 'PROFILE_UPDATED') {
+    await mostrar(_rutaActual);
+  } else {
+    GL.invalidar();
+  }
+
+  if (cambioDeSesion && Auth.usuario && !GL.esAdmin() && window.OnboardingTour) {
     setTimeout(() => OnboardingTour.iniciar(false), 600);
   }
-  // 1.2.0: recorrido guiado para administradores.
-  if (Auth.usuario && GL.esAdmin() && window.OnboardingAdmin) {
+  if (cambioDeSesion && Auth.usuario && GL.esAdmin() && window.OnboardingAdmin) {
     setTimeout(() => OnboardingAdmin.iniciar(false), 700);
   }
 });

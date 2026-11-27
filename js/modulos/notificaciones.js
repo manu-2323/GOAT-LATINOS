@@ -149,6 +149,7 @@
     _generando: null,
     _cargando: null,
     _badgeCargadoPara: null,
+    _listenerFuera: null,
 
     _existe(clave, alternativa) {
       return !!(clave && Mod._claves.has(clave)) ||
@@ -582,14 +583,16 @@
       panel.querySelector('#notif-panel-cerrar')
         ?.addEventListener('click', Mod.cerrarPanel);
 
-      /* Cerrar al hacer click fuera */
+      /* Cerrar al hacer click fuera. Un único listener por panel: se retira
+         en TODOS los caminos de cierre, no solo en el click externo. */
       setTimeout(() => {
+        if (Mod._listenerFuera) document.removeEventListener('click', Mod._listenerFuera);
         const fuera = e => {
           if (!panel.contains(e.target) && !e.target.closest('#btn-notif')) {
             Mod.cerrarPanel();
-            document.removeEventListener('click', fuera);
           }
         };
+        Mod._listenerFuera = fuera;
         document.addEventListener('click', fuera);
       }, 120);
     },
@@ -644,8 +647,21 @@
 
     cerrarPanel() {
       Mod._panelAbierto = false;
+      if (Mod._listenerFuera) {
+        document.removeEventListener('click', Mod._listenerFuera);
+        Mod._listenerFuera = null;
+      }
       const panel = document.getElementById('notif-panel');
       if (panel) panel.style.display = 'none';
+    },
+
+    /* El router invoca destruir() al cambiar de módulo: no debe quedar un
+       canal Realtime ni un listener global apuntando a la vista anterior. */
+    destruir() {
+      Mod.cerrarPanel();
+      Mod.desuscribir();
+      Mod._elVista = null;
+      Mod._badgeCargadoPara = null;
     }
   };
 

@@ -608,6 +608,53 @@ const Auth = {
     if (Auth._cliente()) await Auth._cliente().auth.signOut();
   },
 
+  /* Cambio de contraseña del propio usuario autenticado. La contraseña actual
+     se verifica con signInWithPassword; nunca se escribe en la base ni en logs.
+     Las cuentas administradoras usan una clave compartida gestionada en
+     servidor: cambiarla aquí desalinearía ese secreto, por eso se excluyen. */
+  async cambiarContrasena(actual, nueva, confirmacion) {
+    if (!Auth._cliente() || !Auth.usuario || !Auth.usuario.email) {
+      throw new Error('Iniciá sesión para cambiar tu contraseña.');
+    }
+    const claveActual = String(actual || '');
+    const claveNueva = String(nueva || '');
+    if (!claveActual) throw new Error('Ingresá tu contraseña actual.');
+    if (claveNueva.length < 8) {
+      throw new Error('La nueva contraseña debe tener al menos 8 caracteres.');
+    }
+    if (claveNueva !== String(confirmacion || '')) {
+      throw new Error('Las contraseñas nuevas no coinciden.');
+    }
+    if (claveNueva === claveActual) {
+      throw new Error('La nueva contraseña debe ser diferente de la actual.');
+    }
+
+    /* Se relee el rol: un perfil en caché no debe permitir cambiar la clave
+       compartida de una cuenta administradora. */
+    try {
+      await Auth.cargarPerfil(true);
+    } catch (e) {
+      throw new Error('No se pudo verificar tu perfil. Volvé a iniciar sesión antes de cambiar la contraseña.');
+    }
+    if (!Auth.jugador) {
+      throw new Error('Tu cuenta todavía no tiene un perfil de jugador. Completalo antes de cambiar la contraseña.');
+    }
+    if (Auth.jugador.rol === 'admin') {
+      throw new Error('La clave de las cuentas administradoras se gestiona desde la configuración de administradores. Los jugadores pueden cambiar su contraseña aquí.');
+    }
+
+    const { data, error: errorActual } = await Auth._cliente().auth.signInWithPassword({
+      email: Auth.usuario.email,
+      password: claveActual
+    });
+    if (errorActual) throw new Error('La contraseña actual no es correcta.');
+    if (data && data.user) Auth.usuario = data.user;
+
+    const { error } = await Auth._cliente().auth.updateUser({ password: claveNueva });
+    if (error) throw new Error(Auth.traducir(error.message));
+    return true;
+  },
+
   async actualizarNombreJuego(nombre, zonaHoraria) {
     if (!Auth._cliente() || !Auth.usuario) throw new Error('Inicia sesión para continuar.');
     const n = GL.seguroTexto(nombre).slice(0, 24);
@@ -718,9 +765,18 @@ const Auth = {
   _mensajeRpcTelefono(error) {
     const msg = String((error && error.message) || error || 'No se pudo completar la confirmación.');
     const m = msg.toLowerCase();
-    if (m.includes('no autorizado') || m.includes('sesión no autenticada') ||
-        m.includes('permission denied') || m.includes('row-level security')) {
-      return 'No tenés autorización para confirmar teléfonos. Ingresá con una cuenta de administrador.';
+    /* La autoridad es la RPC: el frontend solo traduce. Se distingue una
+       sesión vencida de una cuenta sin rol administrativo para no pedir un
+       login administrativo cuando el problema es otro. */
+    if (m.includes('sesión no autenticada') || m.includes('jwt') ||
+        m.includes('token expirado') || m.includes('expired')) {
+      return 'Tu sesión venció. Ingresá nuevamente antes de confirmar un teléfono.';
+    }
+    if (m.includes('no autorizado')) {
+      return 'No tenés autorización para confirmar teléfonos. Ingresá con una cuenta de administrador activa.';
+    }
+    if (m.includes('permission denied') || m.includes('row-level security')) {
+      return 'No se pudo actualizar el estado del teléfono por permisos de la fila. Verificá que la cuenta administradora esté activa y que el jugador pertenezca a este torneo.';
     }
     if (m.includes('ya existe en otro jugador') || m.includes('jugadores_e164_canonicalizado_uniq') ||
         m.includes('duplicate key') || m.includes('unique constraint')) {
@@ -748,6 +804,32 @@ const Auth = {
     });
     if (error) throw new Error(Auth._mensajeRpcTelefono(error));
     return data || {};
+  },
+
+  /* Inscripción explícita por torneo. La tabla y la RPC se entregan como
+     migración propuesta: si todavía no están instaladas, el llamador recibe
+     un error claro y el torneo ya creado queda intacto. */
+  async inscribirParticipantes(torneoId, jugadorIds) {
+    if (!Auth._cliente() || !Auth.usuario) {
+      throw new Error('Iniciá sesión para inscribir participantes.');
+    }
+    const torneo = String(torneoId || '');
+    if (!torneo) throw new Error('No se pudo identificar el torneo creado.');
+    const ids = Array.from(new Set((jugadorIds || [])
+      .map(id => String(id || '').trim()).filter(Boolean)));
+    if (!ids.length) return { ok: true, inscritos: 0 };
+
+    const { data, error } = await Auth._cliente().rpc('gl_inscribir_participantes', {
+      p_torneo_id: torneo,
+      p_jugador_ids: ids
+    });
+    if (error) {
+      throw new Error('La inscripción por torneo requiere la migración de participantes. ' +
+        Auth.traducir(error.message));
+    }
+    const r = data || {};
+    if (r.ok === false) throw new Error(r.mensaje || 'No se pudieron inscribir los participantes.');
+    return { ok: true, inscritos: Number(r.inscritos || ids.length), datos: r };
   },
 
   /* La RPC deja telefono_valido_plan en NULL: se recalcula en JS con la
