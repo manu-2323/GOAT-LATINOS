@@ -375,4 +375,13 @@ Si `analizar-captura` no responde, el módulo **Resultados** avisa y se puede us
 - **Sin «Creando…» eterno**: la llamada, la lectura del error, la auditoría y la recarga tienen timeout local (`CONFIG.TIMEOUT_CREAR_JUGADOR = 45000` ms; lectura/auditoría 5000 ms). `finally` rehabilita el botón y restaura «Crear jugador».
 - **Sin doble cuenta**: un guard `enCurso` y un mapa por correo bloquean un segundo clic. Si el servidor confirma, la dirección se libera; si la respuesta se pierde o hay timeout/429/red, queda como «resultado desconocido» y solo se permite otro correo.
 - **Errores claros**: se distinguen teléfono duplicado, correo ya registrado, nombre duplicado, límite de solicitudes, permisos y error genérico. Ya no se etiqueta un teléfono duplicado como correo duplicado.
-- **Pendiente externo (no aplicado)**: la Edge Function no es atómica; si falla la última inserción puede dejar una fila `jugadores` sin usuario, o un usuario Auth sin fila si falla la compensación. Corregirlo exige modificar y desplegar esa función con autorización explícita.
+- **Parte servidor resuelta en 1.4.0**: ver sección 19.
+
+## 19. Idempotencia y recuperación del alta 1.4.0
+
+- **Servidor**: `admin-crear-jugador` busca usuario Auth y jugador antes de crear; devuelve `creado`, `ya_existente`, `error_validacion`, `error_parcial`, `rollback_fallido` o `error_servidor`. Nunca crea un segundo Auth ni una segunda fila para el mismo jugador.
+- **Compensación**: borra solo lo creado por la invocación (grupo → jugador → Auth) y verifica cada borrado. Si falla, devuelve `rollback_fallido` con el estado real; nunca dice que se revirtió sin comprobarlo.
+- **Consulta segura**: `action: 'estado'` es de solo lectura. Tras un timeout o pérdida de respuesta, el frontend la usa para saber si puede reintentar (`no_existe`), si ya está creado (`ya_existente`) o si requiere revisión (`error_parcial`).
+- **Frontend**: `ya_existente` no se muestra como creado; la auditoría solo se registra en `creado`; se mantienen doble-clic, timeouts, `finally` y bloqueo del correo ante resultado incierto.
+- **Sin migración**: se usan los únicos ya existentes en producción. No se cambiaron RLS, GRANT, RPC, Auth ni datos reales.
+- **Pendiente de verificación manual**: ejecutar un alta real con jugadores y comprobar la lista y la auditoría. Las pruebas automatizadas son aisladas con mocks.

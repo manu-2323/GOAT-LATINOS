@@ -240,16 +240,60 @@ No se envió un correo real: el usuario prohibió registrar cuentas de prueba co
 - `clasificarErrorCreacion()` distingue teléfono duplicado, correo registrado, nombre duplicado, límite de solicitudes, permisos y error genérico. Corrige el fallo previo que etiquetaba como «correo duplicado» un conflicto `jugadores_e164_canonicalizado_uniq`.
 - La auditoría guarda el `user_id` devuelto por la función; antes se guardaba `null` porque se leía una clave inexistente (`jugador_id`).
 
-### Riesgo que NO se corrigió en cliente
+### Riesgo corregido después en 1.4.0
 
-- La Edge Function crea el usuario Auth antes que las filas y no es atómica. Si falla la inserción en `grupo_jugadores`, su `catch` elimina el usuario Auth pero no la fila `jugadores` ya insertada; si falla `deleteUser`, puede quedar un usuario Auth sin jugador. Evitar por completo cuentas incompletas exige modificar y redesplegar esa Edge Function: compensación completa (borrar también la fila) o idempotencia por correo con una respuesta explícita del tipo `ya_existente` / `rollback_fallido`. **No se aplicó** porque requiere autorización para cambiar y desplegar una función de producción.
+- La Edge Function creaba el usuario Auth antes que las filas y no era atómica. Si fallaba `grupo_jugadores`, su `catch` eliminaba el usuario Auth pero no la fila `jugadores` ya insertada; si fallaba `deleteUser`, podía quedar un usuario Auth sin jugador. Esta corrección de cliente no podía resolverlo; se cerró en el servidor con la versión 1.4.0 (sección 12).
 
 ### Verificación
 
 | Verificación | Resultado |
 |---|---|
-| `vitest run` | **22 archivos, 271 pruebas, `EXIT=0`**. |
+| `vitest run` | **23 archivos, 296 pruebas, `EXIT=0`** (conteo final en §12). |
 | `tests/registro-rate-limit.test.js` | 15 pruebas de registro público con mocks: un clic, doble clic, timeout, límite, red, cuenta existente, reenvío y regresiones de Gmail/login. |
-| `tests/creacion-admin-segura.test.js` (nuevo) | 12 pruebas AISLADAS con mocks: creación confirmada, doble clic, reintento con otro correo, respuesta perdida, `ok:false`, correo ya registrado, teléfono duplicado, límite, permisos, botón y timeouts. No crea cuentas reales. |
+| `tests/creacion-admin-segura.test.js` | 18 pruebas AISLADAS del frontend del alta: estados del servidor, doble clic, timeouts, recuperación y botón. No crea cuentas reales. |
 | `git -c core.whitespace=cr-at-eol diff --check` | Sin errores. |
 | Logs remotos | 429 reales confirmados en registro público; sin invocaciones fallidas de la Edge Function en las últimas 24 h. No se modificó configuración de Supabase. |
+
+---
+
+## 12. Corrección integral: idempotencia en servidor y recuperación (1.4.0)
+
+### Causa definitiva
+
+- **Registro público**: los 429 son reales (`over_email_send_rate_limit`, proveedor de correo integrado con límite de 2 correos/hora por proyecto). La app ya no inventa tiempos ni recomienda reintentar. La causa del bloqueo era de interfaz: sin `finally` ni timeout, y con un mensaje que sugería volver a pulsar.
+- **Alta administrativa**: el bloqueo de «Creando…» era de interfaz (sin `finally`, sin timeout, sin límite para auditoría/recarga). Los duplicados y las cuentas incompletas eran de servidor: `createUser` se ejecutaba antes que las inserciones y la compensación borraba el usuario Auth pero no la fila `jugadores`; una respuesta perdida permitía repetir sin saber si el alta ya había terminado.
+
+### Edge Function `admin-crear-jugador`
+
+- Mantiene la autorización administrativa: token del llamador, `auth.getUser()` con la clave anon y `esAdmin(perfil)` antes de cualquier operación. La Service Role sigue solo en el servidor.
+- Antes de crear nada busca jugador por correo, nombre y teléfono, y usuario Auth por correo. Si el correo pertenece a otro jugador, devuelve `error_validacion` sin modificar nada.
+- Si el usuario Auth existe y tiene jugador vinculado, devuelve `ya_existente`. Si no tiene jugador pero conserva el `user_metadata` que esta función escribió, completa la fila faltante; si el metadata es ajeno, no lo adopta ni lo modifica.
+- Si no hay usuario ni jugador, crea la cuenta. Un `User already registered` de una solicitud simultánea se relee (máximo dos veces) y se resuelve como `ya_existente`, nunca borrando la cuenta ajena.
+- La PK de `grupo_jugadores` y los únicos de `nombre_usuario`, `user_id` y E.164 canónico cierran la carrera entre dos solicitudes simultáneas. La asignación al grupo se inserta solo si no existía.
+- **Compensación**: se registran exactamente las filas/usuario creados por la invocación. Ante un fallo se borra en orden grupo → jugador → Auth y se **verifica** cada borrado. Si todo se verificó, se devuelve `error_servidor` con `reintentable: true`. Si algún borrado falla, se devuelve `rollback_fallido` con el estado real (`auth`, `jugador`, `grupo`) y `requiere_revision: true`. Nunca se afirma que se revirtió si no se comprobó.
+- **Acción `estado`**: consulta de solo lectura por correo/nombre/teléfono. Devuelve `ya_existente`, `no_existe` o `error_parcial` (registro incompleto). No crea ni borra nada.
+- **Respuestas**: `ok`, `estado`, `mensaje`, `reintentable`, `requiere_revision` y, cuando aplica, `user_id`, `jugador_id` y `compensacion`. Sin tokens, Service Role ni códigos internos.
+
+### Frontend
+
+- `resultadoInvoke()` entiende los seis estados del servidor. `ya_existente` se muestra como «ya registrado», nunca como éxito de creación; la auditoría solo se registra para `creado`.
+- Tras timeout, red o respuesta desconocida, `consultarEstadoCreacion()` hace una comprobación de solo lectura: si dice `no_existe`, se permite reintentar; si dice `ya_existente`, se informa sin crear otra cuenta; si dice `error_parcial` o no se puede consultar, el correo sigue bloqueado y se pide revisión.
+- Se conservan el guard de doble clic, los timeouts locales, el `finally` que rehabilita el botón y la protección contra reintentos ciegos de 1.3.9.
+
+### Base de datos
+
+- **No se creó ni aplicó ninguna migración SQL.** La idempotencia se apoya en índices únicos ya presentes en producción (`jugadores_nombre_usuario_key`, `jugadores_user_id_uniq`, `jugadores_e164_canonicalizado_uniq`, PK de `grupo_jugadores`) y en la unicidad de correo de Supabase Auth. No se modificaron RLS, GRANT, RPC, políticas, SMTP ni datos de jugadores.
+
+### Verificación final
+
+| Verificación | Resultado |
+|---|---|
+| `vitest run` | **23 archivos, 296 pruebas, `EXIT=0`**. |
+| `tests/admin-crear-jugador-servidor.test.js` | 19 pruebas aisladas de la Edge Function: alta correcta, correo existente, dos solicitudes simultáneas por correo y por jugador, fallo de Auth, fallo de `jugadores`, fallo de `grupo_jugadores`, fallo de compensación, respuesta perdida, cuenta huérfana recuperable, cuenta ajena, estado incompleto, validación, conexión, permisos y secretos. |
+| `tests/creacion-admin-segura.test.js` | 18 pruebas aisladas del frontend: estados explícitos, doble clic, timeout con `no_existe`/`ya_existente`/incompleto, `rollback_fallido`, botón y auditoría. |
+| `tests/registro-rate-limit.test.js` | 15 pruebas aisladas del registro público, incluidos 429 y cuenta ya existente. |
+| Confirmación de correo | Cubierta por las pruebas de retorno de callback de 1.3.8, sin cambios en ese flujo. |
+| `node --check` | Sin errores en JS modificado. La lógica de la Edge Function se ejecuta en las pruebas con mocks; Deno no está instalado en este entorno. |
+| `git -c core.whitespace=cr-at-eol diff --check` | Sin errores. |
+
+**Distinción de evidencia**: los 429 y la configuración remota se comprobaron en producción; los flujos de idempotencia, compensación y recuperación se simularon en entorno aislado con mocks. No se crearon cuentas reales ni se enviaron correos. La ejecución real con jugadores queda pendiente de verificación manual.

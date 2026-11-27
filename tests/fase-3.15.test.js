@@ -352,8 +352,8 @@ describe('FASE 3.15 — consulta, integración y presentación', () => {
   it('renueva el cache-busting de los archivos modificados', () => {
     const index = leer('index.html');
     const config = leer('js/core/config.js');
-    expect(config).toMatch(/VERSION: '1\.3\.[0-9]+'/);
-    expect(index.match(/\?v=1\.3\.[0-9]+/g)).toHaveLength(6);
+    expect(config).toMatch(/VERSION: '1\.(3|4)\.[0-9]+'/);
+    expect(index.match(/\?v=1\.(3|4)\.[0-9]+/g)).toHaveLength(6);
     expect(index.match(/\?v=3\.(15|16|17|19|20|23)\.0/g)).toHaveLength(2);
     expect(index).not.toContain('?v=1.2.3');
     expect(index).not.toContain('?v=3.2.2');

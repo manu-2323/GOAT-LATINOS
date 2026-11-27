@@ -9,7 +9,7 @@ const CONFIG = {
   /* URL pública real de GitHub Pages. Se envía como emailRedirectTo para que
      Supabase Auth nunca devuelva el enlace de confirmación a la raíz. */
   SITE_URL: 'https://manu-2323.github.io/GOAT-LATINOS/',
-  VERSION: '1.3.9',
+  VERSION: '1.4.0',
   LIBPHONENUMBER_VERSION: '1.13.17',
   BUCKET_CAPTURAS: 'capturas-partidos',
   BUCKET_AVATARES: 'avatares',

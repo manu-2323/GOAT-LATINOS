@@ -140,26 +140,57 @@
     };
   }
 
+  /* Lee las respuestas estructuradas de la Edge Function. `error` se conserva
+     solo para clients antiguos en caché; el estado canónico es `estado`. */
   function resultadoInvoke(data) {
     if (!data || typeof data !== 'object') {
-      return { ok: false, mensaje: 'La función no devolvió una respuesta válida. No repitas la creación hasta revisar la lista de jugadores.' };
+      return {
+        ok: false, estado: 'desconocido',
+        mensaje: 'La función no devolvió una respuesta válida. No repitas la creación hasta comprobar el estado.'
+      };
     }
     if (data.ok === false || data.error) {
-      return { ok: false, mensaje: data.mensaje || String(data.error) || 'No se pudo crear el jugador.' };
+      return {
+        ok: false,
+        estado: data.estado || 'error_servidor',
+        mensaje: data.mensaje || String(data.error) || 'No se pudo crear el jugador.',
+        campos: Array.isArray(data.campos) ? data.campos : []
+      };
     }
-    return { ok: true, datos: data };
+    return {
+      ok: true,
+      estado: data.estado || 'creado',
+      mensaje: data.mensaje || 'Operación completada.',
+      datos: data
+    };
   }
+
+  const CAMPOS_ESTADO = { telefono: '#ag-tel', email: '#ag-email', nombre_usuario: '#ag-nombre' };
+  const INCERTOS = ['desconocido', 'red', 'timeout', 'error_servidor', 'error_parcial', 'rollback_fallido'];
 
   function clasificarErrorCreacion(error) {
     const msg = (error && error.message) || String(error || '');
+    const estado = (error && error.estado) || '';
+    const campos = Array.isArray(error && error.campos) ? error.campos : [];
+
+    if (estado === 'error_validacion') {
+      const campo = campos.map(c => CAMPOS_ESTADO[c]).find(Boolean) || null;
+      return { campo, mensaje: msg, estado: 'error_validacion' };
+    }
+    if (estado === 'ya_existente') {
+      return { campo: '#ag-email', mensaje: msg, estado: 'duplicado' };
+    }
+    if (INCERTOS.indexOf(estado) >= 0) {
+      return { campo: null, mensaje: msg, estado };
+    }
     if (/jugadores_e164_canonicalizado_uniq|tel[eé]fono ya est[aá] registrado/i.test(msg)) {
-      return { campo: '#ag-tel', mensaje: 'Ese teléfono ya está registrado en otro jugador.', estado: 'desconocido' };
+      return { campo: '#ag-tel', mensaje: 'Ese teléfono ya está registrado en otro jugador.', estado: 'error_validacion' };
     }
     if (/user already registered|already registered|ya está registrado|correo.*ya.*registrad|email.*(ya|registered)/i.test(msg)) {
       return { campo: '#ag-email', mensaje: 'Ese correo ya está registrado en el sistema. Revisá la lista de jugadores antes de crear otra cuenta.', estado: 'duplicado' };
     }
     if (/duplicate key|nombre.*(ya existe|duplicad)/i.test(msg)) {
-      return { campo: '#ag-nombre', mensaje: 'Ese nombre ya existe en la base de datos.', estado: 'duplicado' };
+      return { campo: '#ag-nombre', mensaje: 'Ese nombre ya existe en la base de datos.', estado: 'error_validacion' };
     }
     if (/rate limit|too many|429|over_email_send/i.test(msg)) {
       return { campo: null, mensaje: 'Supabase limitó las solicitudes. No repitas la creación y volvé a intentar más tarde.', estado: 'desconocido' };
@@ -167,14 +198,35 @@
     if (/permiso|permission|forbidden|unauthorized|jwt|403/i.test(msg)) {
       return { campo: null, mensaje: 'No tenés permisos para crear jugadores. No se creó ningún jugador nuevo.', estado: 'desconocido' };
     }
+    if (/failed to fetch|network|fetch/i.test(msg)) {
+      return { campo: null, mensaje: 'No se pudo conectar con el servidor. No se creó ningún jugador nuevo.', estado: 'red' };
+    }
     return { campo: null, mensaje: 'No se pudo crear el jugador: ' + msg, estado: 'desconocido' };
+  }
+
+  /* Comprobación de SOLO LECTURA tras una respuesta perdida. Nunca crea ni
+     borra nada: decide si es seguro permitir otro intento. */
+  async function consultarEstadoCreacion(correo) {
+    try {
+      const { data, error } = await conTimeout(
+        sb.functions.invoke('admin-crear-jugador', {
+          body: { action: 'estado', email: correoClave(correo) }
+        }),
+        TIEMPO_LECTURA_ERROR, 'No se pudo comprobar el estado del jugador.'
+      );
+      if (error || !data || typeof data !== 'object') return null;
+      return data;
+    } catch (e) {
+      return null;
+    }
   }
 
   async function ejecutarCreacion(body) {
     let intento = null;
     try {
       intento = registrarIntento(body.email);
-      if (!intento.ok) throw new Error(intento.mensaje);
+      if (!intento.ok) return { ok: false, estado: 'bloqueado', mensaje: intento.mensaje, reintentable: false };
+
       const { data, error } = await conTimeout(
         sb.functions.invoke('admin-crear-jugador', { body }),
         CONFIG.TIMEOUT_CREAR_JUGADOR,
@@ -185,18 +237,45 @@
           mensajeInvoke(error), TIEMPO_LECTURA_ERROR,
           'No se pudo leer el detalle del error de la función.'
         );
-        throw new Error(detalle);
+        throw Object.assign(new Error(detalle), { estado: 'red' });
       }
+
       const r = resultadoInvoke(data);
-      if (!r.ok) throw new Error(r.mensaje);
-      /* Se libera en cuanto el servidor confirma: auditoría o recarga no deben
-         impedir que el correo pueda revisarse, pero un fallo posterior ya no
-         habilita una segunda creación. */
+      if (!r.ok)
+        throw Object.assign(new Error(r.mensaje), { estado: r.estado, campos: r.campos });
+
+      /* Confirmación del servidor: se libera antes de auditoría o recarga,
+         que no forman parte de la creación. */
       intento.terminar('confirmado');
-      return r.datos;
+      return r;
     } catch (e) {
-      if (intento && intento.ok) intento.terminar(clasificarErrorCreacion(e).estado);
-      throw e;
+      const incierto = INCERTOS.indexOf(clasificarErrorCreacion(e).estado) >= 0;
+      let comprobacion = null;
+      if (incierto && intento && intento.ok) comprobacion = await consultarEstadoCreacion(body.email);
+      const seguro = !!(comprobacion && comprobacion.estado === 'no_existe');
+      const c = clasificarErrorCreacion(e);
+      /* Un error de validación o un «ya registrado» explícito no creó nada:
+         liberar la dirección es seguro. Lo incierto sigue bloqueado. */
+      const definitivo = c.estado === 'error_validacion' || c.estado === 'duplicado' ||
+        !!(comprobacion && comprobacion.estado === 'ya_existente');
+      if (intento && intento.ok)
+        intento.terminar(seguro || definitivo ? 'confirmado' : 'desconocido');
+      let mensaje = c.mensaje;
+      if (comprobacion && comprobacion.estado === 'ya_existente') {
+        mensaje = 'El jugador ya está registrado. No se creó otra cuenta.';
+      } else if (comprobacion && comprobacion.estado === 'error_parcial') {
+        mensaje = 'Hay un registro incompleto asociado a ese correo. No reintentes: revisá la lista de jugadores.';
+      } else if (seguro) {
+        mensaje = 'No hay cuenta ni jugador creado con ese correo. Podés volver a intentar.';
+      }
+      return {
+        ok: false,
+        estado: seguro ? 'reintentable' : (comprobacion ? comprobacion.estado : c.estado),
+        mensaje,
+        campo: c.campo,
+        reintentable: seguro,
+        comprobacion
+      };
     }
   }
 
@@ -1584,17 +1663,23 @@
         grupo_id: grupo,
         torneo_id: torneo.id
       }, camposTel);
-      await ejecutarCreacion(body);
+      const resultado = await ejecutarCreacion(body);
+      if (!resultado.ok) {
+        GL.notificar(resultado.mensaje, resultado.reintentable ? 'advertencia' : 'error');
+        return;
+      }
       await conTimeout(
         recargarContextoAdmin(), CONFIG.TIMEOUT_CREAR_JUGADOR,
         'El jugador se creó, pero la vista tardó en actualizarse. Recargá la página.'
       ).catch(() => GL.notificar(
         'El jugador se creó, pero la vista tardó en actualizarse. Recargá la página.', 'advertencia'
       ));
-      GL.notificar(nombre + ' creado y asignado al grupo.', 'exito');
+      if (resultado.estado === 'ya_existente') {
+        GL.notificar(resultado.mensaje, 'info');
+      } else {
+        GL.notificar(nombre + ' creado y asignado al grupo.', 'exito');
+      }
       Mod.render(root);
-    } catch (e) {
-      GL.notificar(clasificarErrorCreacion(e).mensaje, 'error');
     } finally {
       if (btn.isConnected) { btn.disabled = false; btn.textContent = 'Crear jugador'; }
     }
@@ -3276,29 +3361,42 @@
           }, camposTel);
 
           try {
-            const datos = await ejecutarCreacion(body);
-            const auditoriaOk = await conTimeout(
-              auditar('jugador_creado', 'jugador', (datos && datos.user_id) || (datos && datos.jugador_id) || null, {
-                jugador: nombreNorm,
-                grupo_id: grupoVal,
-                torneo_id: torneoActual.id
-              }), TIEMPO_LECTURA_ERROR, 'La auditoría tardó demasiado.'
-            ).catch(() => false);
-            if (!auditoriaOk) {
-              GL.notificar('El jugador se creó, pero no se pudo registrar la auditoría. No repitas la creación.', 'advertencia');
+            const resultado = await ejecutarCreacion(body);
+            if (!resultado.ok) {
+              if (resultado.estado === 'error_validacion' && resultado.campo) {
+                errorCampo(fondo, resultado.campo, resultado.mensaje);
+              } else {
+                GL.notificar(resultado.mensaje, resultado.reintentable ? 'advertencia' : 'error');
+              }
+              return;
             }
+
+            const datos = resultado.datos || {};
+            if (resultado.estado === 'creado') {
+              const auditoriaOk = await conTimeout(
+                auditar('jugador_creado', 'jugador', datos.user_id || datos.jugador_id || null, {
+                  jugador: nombreNorm,
+                  grupo_id: grupoVal,
+                  torneo_id: torneoActual.id
+                }), TIEMPO_LECTURA_ERROR, 'La auditoría tardó demasiado.'
+              ).catch(() => false);
+              if (!auditoriaOk) {
+                GL.notificar('El jugador se creó, pero no se pudo registrar la auditoría. No repitas la creación.', 'advertencia');
+              }
+            }
+
             cerrar();
-            GL.notificar(esc(nombreNorm) + ' creado y asignado al grupo.', 'exito');
+            if (resultado.estado === 'ya_existente') {
+              GL.notificar(resultado.mensaje, 'info');
+            } else {
+              GL.notificar(esc(nombreNorm) + ' creado y asignado al grupo.', 'exito');
+            }
             await conTimeout(
               refrescar(root), CONFIG.TIMEOUT_CREAR_JUGADOR,
               'El jugador se creó, pero la lista tardó en actualizarse. Recargá la página.'
             ).catch(() => GL.notificar(
               'El jugador se creó, pero la lista tardó en actualizarse. Recargá la página.', 'advertencia'
             ));
-          } catch (e) {
-            const c = clasificarErrorCreacion(e);
-            if (c.campo) errorCampo(fondo, c.campo, c.mensaje);
-            else GL.notificar(c.mensaje, 'error');
           } finally {
             if (btn.isConnected) { btn.disabled = false; btn.textContent = 'Crear jugador'; }
           }
@@ -3560,7 +3658,7 @@
     auditar, refrescar, jugadoresAdmin, jugadorAdmin, mensajeInvoke,
     validarTotal, leerRpc,
     conTimeout, correoClave, avisoCreacionBloqueada, registrarIntento,
-    resultadoInvoke, clasificarErrorCreacion, ejecutarCreacion,
+    resultadoInvoke, clasificarErrorCreacion, consultarEstadoCreacion, ejecutarCreacion,
     estadoCrear: () => ({ enCurso: estadoCrear.enCurso, correos: Array.from(estadoCrear.correos.entries()) })
   };
 
