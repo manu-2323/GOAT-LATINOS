@@ -202,12 +202,13 @@ const PantallaAuth = {
           await Auth.actualizarContrasenaRecuperacion(clave.value, clave2.value);
           /* Al salir, el evento gl:auth vuelve a mostrar el acceso con este
              aviso; la sesión temporal del correo no queda activa. */
-          PantallaAuth.modo = 'entrar';
           PantallaAuth.aviso = 'Contraseña actualizada. Ingresá con tu nueva contraseña.';
           try { await Auth.salir(); }
           catch (e) { console.warn('[auth] cierre tras recuperación:', e); }
-          /* exigirLogin() no repinta si el overlay ya existe: acá sí hay que
-             reemplazarlo para volver al formulario de ingreso. */
+          /* exigirLogin() no repinta si el overlay ya existe, y el SIGNED_OUT
+             puede llegar después de este handler. Fijar el modo acá y repintar
+             garantiza que se vea el ingreso, no la pantalla de recuperación. */
+          PantallaAuth.modo = 'entrar';
           await PantallaAuth.mostrar(PantallaAuth.alEntrar);
           GL.notificar('Contraseña actualizada. Ingresá con tu nueva contraseña.', 'exito', 'check-circle-2');
         } catch (e) {
