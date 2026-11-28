@@ -1,148 +1,338 @@
 /* =====================================================================
-   MÓDULO 4 — Estadísticas avanzadas de jornada
+   MÓDULO 4 — Estadísticas avanzadas por grupo y jornada
+   Cálculo 100% derivado: GL + EST son la única fuente. No escribe datos.
+   La exportación usa una composición propia, no una captura del dashboard.
    ===================================================================== */
 (function () {
   const Mod = {
     titulo: 'Estadísticas',
     grupoId: null,
     jornada: null,
+    _ultimoInforme: null,
+    _ultimoNombre: null,
 
     async render(el) {
       el.innerHTML = GL.skeleton(8);
       try {
         await GL.cargarContexto(true);
         const grupos = GL.grupos();
-        if (!GL.torneo()) { el.innerHTML = GL.vacio('No hay torneo activo todavía.', 'trophy', null); iniciarIconos(); return; }
-        if (!grupos.length) { el.innerHTML = GL.vacio('No hay grupos configurados.'); iniciarIconos(); return; }
-        if (!Mod.grupoId || !grupos.some(g => g.id === Mod.grupoId)) {
-          Mod.grupoId = (typeof GL.grupoInicial === 'function' ? GL.grupoInicial() : grupos[0]).id;
+        if (!GL.torneo()) {
+          el.innerHTML = GL.vacio('No hay torneo activo todavía.', 'trophy', null);
+          iniciarIconos();
+          return;
         }
-        if (!Mod.jornada) Mod.jornada = GL.jornadaActual().numero;
-        const total = (GL.torneo() && GL.torneo().total_jornadas) || 22;
-        const partidos = (await GL.partidos({ torneo_id: GL.torneo().id, jornada: Mod.jornada }))
-          .filter(p => p.grupo_id === Mod.grupoId && p.estado !== 'pendiente');
+        if (!grupos.length) {
+          el.innerHTML = GL.vacio('No hay grupos configurados.', 'users-round', null);
+          iniciarIconos();
+          return;
+        }
+        if (!Mod.grupoId || !grupos.some(g => g.id === Mod.grupoId)) {
+          const inicial = typeof GL.grupoInicial === 'function' ? GL.grupoInicial() : grupos[0];
+          Mod.grupoId = (inicial && inicial.id) || grupos[0].id;
+        }
 
-        el.innerHTML =
-          '<div class="seccion-head"><div class="seccion-titulo"><h2>Estadísticas de la jornada</h2>' +
-            '<p>Lectura pública · Datos calculados a partir de los resultados cargados</p></div>' +
-            '<div class="seccion-acciones"><button type="button" class="btn sec" data-export>' +
-              icono('image', 16) + 'Exportar PNG</button></div></div>' +
-          '<div class="tabs">' + grupos.map(g =>
-            '<button type="button" class="tab' + (g.id === Mod.grupoId ? ' activo' : '') + '" data-grupo="' + g.id + '">' +
-            'Grupo ' + GL.letraGrupo(g) + '</button>').join('') + '</div>' +
-          '<div class="jornada-scroller">' + Array.from({ length: total }, (_, i) => i + 1).map(n =>
-            '<button type="button" class="jornada-btn' + (n === Mod.jornada ? ' activo' : '') + '" data-jornada="' + n + '">J' + n + '</button>').join('') + '</div>' +
-          '<div id="stats-export" style="padding:6px;background:var(--bg-primary);border-radius:var(--radius)">' +
-            '<div id="contenido-stats"></div>' +
-            '<p class="nota-pie" style="text-align:right">GOATS LATINOS · Jornada ' + Mod.jornada +
-              ' · Grupo ' + GL.letraGrupo(GL.grupo(Mod.grupoId)) + ' · ' + GL.fechaLarga(new Date()) + '</p>' +
-          '</div>';
+        const torneo = GL.torneo();
+        const total = Number(torneo.total_jornadas) || CONFIG.JORNADAS_FASE_REGULAR || 22;
+        const jornadasGrupo = (GL.ctx.jornadas || []).filter(j => j.grupo_id === Mod.grupoId &&
+          Number(j.numero) <= total);
+        const cerradas = jornadasGrupo.filter(j => j.estado === 'cerrada')
+          .map(j => Number(j.numero)).filter(Number.isFinite);
+        const abierta = jornadasGrupo.find(j => j.estado === 'abierta');
+        const ultimaCerrada = cerradas.length ? Math.max.apply(null, cerradas) : null;
+        const jornadaValida = Number.isFinite(Number(Mod.jornada)) && Number(Mod.jornada) >= 1 &&
+          Number(Mod.jornada) <= total;
+        if (!jornadaValida) Mod.jornada = ultimaCerrada ||
+          (abierta ? Number(abierta.numero) : null) || 1;
+        Mod.jornada = Number(Mod.jornada);
 
-        el.querySelector('#contenido-stats').innerHTML = htmlStats(partidos);
-        el.querySelectorAll('[data-grupo]').forEach(b => b.addEventListener('click', () => { Mod.grupoId = b.dataset.grupo; Mod.render(el); }));
-        el.querySelectorAll('[data-jornada]').forEach(b => b.addEventListener('click', () => { Mod.jornada = Number(b.dataset.jornada); Mod.render(el); }));
-        el.querySelector('[data-export]').addEventListener('click', () =>
-          GL.exportarPNG('stats-export', 'GOATS_Stats_J' + Mod.jornada + '_G' + GL.letraGrupo(GL.grupo(Mod.grupoId))));
-      } catch (e) { console.error(e); el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'las estadísticas'), null, 'las estadísticas de jornada'); }
+        const partidos = await GL.partidos({ torneo_id: torneo.id });
+        const filaJornada = jornadasGrupo.find(j => Number(j.numero) === Mod.jornada) || null;
+        const opciones = {
+          torneoId: torneo.id,
+          grupoId: Mod.grupoId,
+          jornada: Mod.jornada,
+          jugadores: GL.jugadores(Mod.grupoId),
+          jornadas: jornadasGrupo,
+          totalJornadas: total,
+          estadoJornada: filaJornada ? filaJornada.estado : 'sin_programar'
+        };
+        const informe = EST.calcularInformeJornada(partidos, opciones);
+        const historial = EST.calcularHistorialJornadas(partidos, opciones);
+        const tabla = EST.posicionesCompartidas((GL.clasificacion(Mod.grupoId) || []).map(c =>
+          Object.assign({}, c, { nombre_usuario: c.nombre_usuario || GL.nombreJugador(c.jugador_id) })));
+
+        informe.grupoLetra = GL.letraGrupo(GL.grupo(Mod.grupoId));
+        informe.grupo = GL.grupo(Mod.grupoId);
+        informe.torneoNombre = torneo.nombre || CONFIG.NOMBRE_LIGA;
+        Mod._ultimoInforme = informe;
+        Mod._ultimoNombre = nombreArchivo(torneo, GL.grupo(Mod.grupoId), Mod.jornada);
+
+        el.innerHTML = htmlPagina({
+          torneo,
+          grupos,
+          total,
+          informe,
+          historial,
+          tabla,
+          grupo: GL.grupo(Mod.grupoId),
+          ultimaCerrada
+        });
+
+        el.querySelectorAll('[data-grupo]').forEach(boton => boton.addEventListener('click', () => {
+          Mod.grupoId = boton.dataset.grupo;
+          Mod.jornada = null;
+          Mod.render(el);
+        }));
+        el.querySelectorAll('[data-jornada]').forEach(boton => boton.addEventListener('click', () => {
+          Mod.jornada = Number(boton.dataset.jornada);
+          Mod.render(el);
+        }));
+        const botonExportar = el.querySelector('[data-export]');
+        if (botonExportar) botonExportar.addEventListener('click', () =>
+          GL.exportarInformeEstadisticas(Mod._ultimoInforme, Mod._ultimoNombre));
+      } catch (e) {
+        console.error(e);
+        el.innerHTML = GL.error(GL.mensaje(e, 'cargar', 'las estadísticas'), null,
+          'las estadísticas de jornada');
+      }
       iniciarIconos();
     }
   };
 
-  function calcular(partidos) {
-    const gr = EST.calcularGolesReales(partidos);
-    const prom = EST.calcularPromedios(partidos);
-    const vallas = EST.calcularVallasInvictas(partidos);
-
-    // Unificar en un mapa por jugador
-    const ids = new Set([
-      ...gr.map(s => s.id),
-      ...prom.map(s => s.id),
-      ...vallas.map(s => s.id)
-    ]);
-    return Array.from(ids).map(id => {
-      const g = gr.find(s => s.id === id) || { gf: 0, gc: 0, dif: 0, pj: 0 };
-      const po = prom.find(s => s.id === id) || { promPos: 0, promPase: 0, pj: 0 };
-      const v = vallas.find(s => s.id === id) || { vallas: 0 };
-      const pj = Math.max(g.pj, po.pj);
-      return {
-        id,
-        pj,
-        gf: g.gf, gc: g.gc, dif: g.dif,
-        vallas: v.vallas,
-        promPos: po.promPos,
-        promPase: po.promPase,
-        promedio: pj ? g.gf / pj : 0,
-        score: g.gf + v.vallas
-      };
-    });
+  /* ---------- Nombre de archivo estable y legible ---------- */
+  function nombreArchivo(torneo, grupo, jornada) {
+    const letra = GL.letraGrupo(grupo);
+    const base = 'GOAT-LATINOS_Estadisticas_Grupo-' + letra + '_Jornada-' + jornada;
+    return base.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim();
   }
 
-  function top(lista, clave, n) {
-    return lista.slice().sort((a, b) => (b[clave] || 0) - (a[clave] || 0)).slice(0, n || 3);
-  }
+  /* ---------- Encabezado y selector ---------- */
+  function htmlPagina(datos) {
+    const { informe, grupo, grupos, total, tabla, historial } = datos;
+    const letra = GL.letraGrupo(grupo);
+    const estado = informe.estadoJornada || 'sin_programar';
+    const etiquetaEstado = estado === 'cerrada' ? 'Cerrada'
+      : estado === 'abierta' ? 'Abierta' : 'Sin programar';
+    const claseEstado = estado === 'cerrada' ? 'green' : estado === 'abierta' ? 'gold' : 'neutral';
 
-  function fila(s, valor, extra) {
-    return '<li><span class="rank">' + esc(GL.nombreJugador(s.id)) + '</span>' +
-      '<span class="codigo-pais">' + esc(GL.paisJugador(s.id)) + '</span>' +
-      '<span class="nombre">' + (extra || '') + '</span>' +
-      '<span class="cant">' + valor + '</span></li>';
-  }
-
-  function metrica(titulo, ico, lista, clave, sufijo, extraFn) {
-    return '<div class="card"><div class="card-titulo">' + icono(ico, 19) + esc(titulo) + '</div>' +
-      '<ul class="lista-top">' + lista.map((s, i) =>
-        '<li style="animation-delay:' + (i * .06) + 's">' +
-          '<span class="rank">' + (i + 1) + '</span>' +
-          '<span class="avatar-sm">' + esc(GL.iniciales(GL.nombreJugador(s.id))) + '</span>' +
-          '<span class="nombre">' + esc(GL.nombreJugador(s.id)) +
-            '<small class="extra"> · ' + esc(GL.paisJugador(s.id)) + '</small></span>' +
-          (extraFn ? '<small class="extra">' + esc(extraFn(s)) + '</small>' : '') +
-          '<span class="cant">' + (s[clave] || 0) + (sufijo || '') + '</span></li>').join('') +
-      '</ul></div>';
-  }
-
-  function htmlStats(partidos) {
-    if (!partidos.length) return GL.vacio('Todavía no hay resultados en esta jornada.', 'chart-no-axes-column', null);
-    const s = calcular(partidos);
-    // Mejor partido: solo partidos realmente jugados en FC Mobile
-    const soloJugados = partidos.filter(p => p.estado === 'jugado');
-    const mejorPartido = soloJugados.slice().sort((a, b) => {
-      const ra = GL.golesReales(a), rb = GL.golesReales(b);
-      return (rb.gf + rb.gc) - (ra.gf + ra.gc);
-    })[0];
-    // GL.golesReales() solo devuelve {gf, gc}: el marcador visible sale de GL.resultado().
-    // Si todos los partidos están resueltos administrativamente no hay "mejor partido":
-    // mostramos una nota clara en vez de leer local_id de undefined.
-    const marcador = mejorPartido ? GL.resultado(mejorPartido) : null;
-    const golesReales = mejorPartido ? GL.golesReales(mejorPartido) : { gf: 0, gc: 0 };
-    const cardMejorPartido = mejorPartido
-      ? '<div class="card"><div class="card-titulo">' + icono('star', 20) + 'Mejor partido de la jornada</div>' +
-          '<div class="center" style="padding:16px 0">' +
-            '<div style="font-family:var(--gl-font-sans);font-size:17px">' + esc(GL.nombreJugador(mejorPartido.local_id)) +
-            ' <span class="dorado">' + esc(marcador.texto) + '</span> ' + esc(GL.nombreJugador(mejorPartido.visitante_id)) + '</div>' +
-            '<div class="num dorado" style="font-size:38px;font-family:var(--gl-font-sans);font-weight:700;margin-top:6px">' +
-              (golesReales.gf + golesReales.gc) + ' goles</div>' +
-          '</div></div>'
-      : '<div class="card"><div class="card-titulo">' + icono('star', 20) + 'Mejor partido de la jornada</div>' +
-          GL.vacio('Todavía no hay partidos jugados en esta jornada.', 'swords', null) + '</div>';
-    return '<div class="grid tres">' +
-      metrica('Más porterías rasgadas', 'zap', top(s, 'gf'), 'gf', '', x => 'prom. ' + x.promedio.toFixed(1)) +
-      metrica('Más porterías en 0', 'shield', top(s, 'vallas'), 'vallas', '') +
-      metrica('Menos goles recibidos', 'lock', s.slice().sort((a, b) => a.gc - b.gc).slice(0, 3), 'gc', '') +
-      metrica('Mejor diferencia de gol', 'trending-up', top(s, 'dif'), 'dif', '') +
-      cardMejorPartido +
-      metrica('Mejor jugador de la jornada', 'award', top(s, 'score'), 'score', ' pts', x => x.gf + ' goles · ' + x.vallas + ' vallas') +
+    return '<div class="ea-pantalla">' +
+      '<div class="seccion-head ea-cabecera">' +
+        '<div class="seccion-titulo">' +
+          '<h2>Estadísticas de la jornada</h2>' +
+          '<p>Grupo ' + esc(letra) + ' · Jornada ' + informe.jornada +
+            ' · Datos calculados desde resultados reales y resoluciones registradas</p>' +
+        '</div>' +
+        '<div class="seccion-acciones">' +
+          '<button type="button" class="btn ea-boton-exportar" data-export>' +
+            icono('image-down', 16) + 'EXPORTAR INFORME PNG' +
+          '</button>' +
+        '</div>' +
       '</div>' +
-      '<div class="card mt"><div class="card-titulo">' + icono('activity', 20) + 'Detalle por jugador</div>' +
-        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th class="izq">Jugador</th><th>PJ</th><th>GF</th><th>GC</th><th>Vallas</th><th>Pos %</th><th>Pase %</th></tr></thead><tbody>' +
-        s.sort((a, b) => b.score - a.score).map((x, i) =>
-          '<tr style="animation-delay:' + (i * .03) + 's"><td class="izq"><div class="jugador-celda">' +
-          '<span class="avatar-sm">' + esc(GL.iniciales(GL.nombreJugador(x.id))) + '</span>' +
-          esc(GL.nombreJugador(x.id)) + '</div></td><td class="num">' + x.pj + '</td><td class="num verde-txt">' + x.gf +
-          '</td><td class="num rojo-txt">' + x.gc + '</td><td class="num">' + x.vallas + '</td><td class="num">' +
-          x.promPos + '</td><td class="num">' + x.promPase + '</td></tr>').join('') +
-        '</tbody></table></div></div>';
+
+      '<div class="tabs ea-tabs" role="tablist" aria-label="Grupos">' + grupos.map(g =>
+        '<button type="button" class="tab' + (g.id === Mod.grupoId ? ' activo' : '') +
+          '" data-grupo="' + esc(g.id) + '" aria-pressed="' + (g.id === Mod.grupoId) + '">' +
+          'Grupo ' + esc(GL.letraGrupo(g)) + '</button>').join('') + '</div>' +
+
+      '<div class="ea-barra-jornada">' +
+        '<div class="ea-jornadas" role="group" aria-label="Jornadas">' +
+          Array.from({ length: total }, (_, i) => i + 1).map(n =>
+            '<button type="button" class="ea-jornada' + (n === Mod.jornada ? ' activo' : '') +
+              '" data-jornada="' + n + '" aria-pressed="' + (n === Mod.jornada) + '">J' + n + '</button>'
+          ).join('') +
+        '</div>' +
+        GL.badge(etiquetaEstado, claseEstado, 'circle-dot') +
+      '</div>' +
+
+      htmlResumen(informe, letra, tabla) +
+      htmlTarjetas(informe) +
+      htmlDestacados(informe, letra) +
+      htmlDetalle(informe, letra) +
+      htmlTabla(tabla, letra) +
+      htmlHistorial(historial, letra, datos.ultimaCerrada) +
+    '</div>';
   }
 
+  function htmlResumen(informe, letra, tabla) {
+    const r = informe.resumen;
+    const lider = (tabla || [])[0] || null;
+    const kpis = [
+      ['circle-check', r.partidos, 'Partidos válidos'],
+      ['goal', r.golesReales, 'Goles reales'],
+      ['scale', r.golesReglamentarios, 'Goles reglamentarios'],
+      ['shield', r.vallas, 'Vallas invictas'],
+      ['file-clock', r.partidosAdministrativos, 'Resoluciones administrativas'],
+      ['clock', r.pendientes, 'Pendientes excluidos']
+    ];
+    return '<section class="ea-card ea-resumen" aria-labelledby="ea-resumen-titulo">' +
+      '<div class="ea-card-cab">' +
+        '<h3 id="ea-resumen-titulo">' + icono('activity', 17) + 'Resumen · Grupo ' + esc(letra) +
+          ' · J' + informe.jornada + '</h3>' +
+        (lider ? '<span>DG tabla (líder): ' + esc(GL.signo(lider.dif)) + '</span>' : '') +
+      '</div>' +
+      '<div class="ea-kpis">' + kpis.map(([ico, valor, etiqueta]) =>
+        '<div class="ea-kpi"><span class="ea-kpi-ico">' + icono(ico, 17) + '</span>' +
+          '<strong>' + esc(valor) + '</strong><small>' + esc(etiqueta) + '</small></div>').join('') +
+      '</div>' +
+      '<p class="ea-nota">El DG mostrado se toma sin recalcular de la clasificación oficial. ' +
+        'Orden: PTS → DG → GF. Goles reales y resoluciones administrativas se contabilizan por separado.</p>' +
+    '</section>';
+  }
+
+  function htmlTarjetas(informe) {
+    return '<section class="ea-grid" aria-label="Indicadores de la jornada">' +
+      informe.tarjetas.map(tarjeta => {
+        const filas = tarjeta.filas.length
+          ? tarjeta.filas.map((j, i) =>
+              '<li class="ea-fila">' +
+                '<span class="ea-puesto">' + (i + 1) + '</span>' +
+                '<span class="ea-avatar">' + esc(GL.iniciales(j.nombre)) + '</span>' +
+                '<span class="ea-fila-nombre">' + esc(j.nombre) +
+                  '<small>' + esc(detalleFila(tarjeta, j)) + '</small>' +
+                '</span>' +
+                '<strong>' + esc(valorFila(tarjeta, j)) + '</strong>' +
+              '</li>').join('')
+          : '<li class="ea-vacio">Sin datos registrados en esta jornada.</li>';
+        return '<article class="ea-card ea-metrica">' +
+          '<div class="ea-card-cab"><h3>' + icono(tarjeta.icono, 17) + esc(tarjeta.titulo) + '</h3></div>' +
+          '<ul class="ea-lista">' + filas + '</ul>' +
+          '<p class="ea-nota">' + esc(tarjeta.nota) + '</p>' +
+        '</article>';
+      }).join('') +
+    '</section>';
+  }
+
+  function detalleFila(tarjeta, j) {
+    if (tarjeta.id === 'pase') return j.paseN + ' PJ con dato';
+    if (tarjeta.id === 'posesion') return j.posN + ' PJ con dato';
+    if (tarjeta.id === 'goleadores') return j.pj + ' PJ · ' + j.promGoles + ' por partido';
+    if (tarjeta.id === 'vallas') return j.pj + ' PJ reales';
+    if (tarjeta.id === 'diferencia') return 'GF ' + j.gf + ' · GC ' + j.gc;
+    return j.gf + ' goles · ' + j.vallas + ' vallas';
+  }
+
+  function valorFila(tarjeta, j) {
+    const valor = numero(j[tarjeta.clave]);
+    const textoValor = tarjeta.id === 'diferencia' ? GL.signo(valor) : String(valor);
+    return textoValor + (tarjeta.sufijo || '');
+  }
+
+  function htmlDestacados(informe, letra) {
+    const partido = informe.partidoDestacado;
+    const jugador = informe.jugadorDestacado;
+    return '<section class="ea-destacados">' +
+      '<article class="ea-card ea-partido-destacado">' +
+        '<div class="ea-card-cab"><h3>' + icono('star', 17) + 'Partido destacado</h3></div>' +
+        (partido
+          ? '<div class="ea-marcadores">' +
+              '<div class="ea-lado"><span class="ea-avatar grande">' +
+                esc(GL.iniciales(partido.local)) + '</span><strong>' + esc(partido.local) + '</strong>' +
+                '<small>' + esc(codigoPais(informe, partido.localId)) + '</small></div>' +
+              '<div class="ea-marcador"><strong>' + esc(partido.marcador) + '</strong>' +
+                '<span>' + partido.goles + ' goles reales · J' + partido.jornada + '</span></div>' +
+              '<div class="ea-lado"><span class="ea-avatar grande">' +
+                esc(GL.iniciales(partido.visitante)) + '</span><strong>' + esc(partido.visitante) + '</strong>' +
+                '<small>' + esc(codigoPais(informe, partido.visitanteId)) + '</small></div>' +
+            '</div>'
+          : GL.vacio('No hay partidos jugados en esta jornada.', 'swords', null,
+              'Las resoluciones administrativas no generan rendimiento real.')) +
+      '</article>' +
+      '<article class="ea-card ea-jugador-destacado">' +
+        '<div class="ea-card-cab"><h3>' + icono('award', 17) + 'Jugador destacado</h3></div>' +
+        (jugador
+          ? '<div class="ea-destacado-jugador">' +
+              '<span class="ea-avatar enorme">' + esc(GL.iniciales(jugador.nombre)) + '</span>' +
+              '<div><strong>' + esc(jugador.nombre) + '</strong>' +
+                '<small>' + esc(codigoPais(informe, jugador.id)) + ' · Grupo ' + esc(letra) + '</small>' +
+                '<p>' + jugador.gf + ' goles · ' + jugador.vallas + ' vallas · ' + jugador.score + ' pts</p>' +
+              '</div>' +
+            '</div>'
+          : GL.vacio('Sin jugador destacado.', 'award', null,
+              'Se elige con goles reales + vallas invictas.')) +
+      '</article>' +
+    '</section>';
+  }
+
+  function codigoPais(informe, id) {
+    const j = informe.jugadores.find(x => x.id === id);
+    return j && /^[A-Za-z]{2}$/.test(j.pais || '') ? j.pais.toUpperCase() : '';
+  }
+
+  function htmlDetalle(informe, letra) {
+    const filas = informe.jugadores.slice().sort((a, b) =>
+      b.score - a.score || b.gf - a.gf || a.nombre.localeCompare(b.nombre, 'es'));
+    return '<section class="ea-card ea-detalle" aria-labelledby="ea-detalle-titulo">' +
+      '<div class="ea-card-cab"><h3 id="ea-detalle-titulo">' + icono('list', 17) +
+        'Detalle por jugador · Grupo ' + esc(letra) + '</h3>' +
+        '<span>' + filas.length + ' jugador(es)</span></div>' +
+      (filas.length
+        ? '<div class="ea-tabla-wrap" tabindex="0" role="region" aria-label="Detalle por jugador">' +
+            '<table class="ea-tabla"><thead><tr>' +
+              '<th class="izq">Jugador</th><th>PJ</th><th>GF</th><th>GC</th><th>DG</th>' +
+              '<th>Vallas</th><th>Pos %</th><th>Pase %</th>' +
+            '</tr></thead><tbody>' + filas.map(j =>
+              '<tr><td class="izq"><span class="ea-avatar">' + esc(GL.iniciales(j.nombre)) +
+                '</span><span class="ea-nombre-largo">' + esc(j.nombre) + '</span></td>' +
+                '<td>' + j.pj + '</td><td>' + j.gf + '</td><td>' + j.gc + '</td>' +
+                '<td>' + esc(GL.signo(j.dif)) + '</td><td>' + j.vallas + '</td>' +
+                '<td>' + (j.posN ? j.promPos + '%' : '—') + '</td>' +
+                '<td>' + (j.paseN ? j.promPase + '%' : '—') + '</td></tr>').join('') +
+            '</tbody></table></div>'
+        : GL.vacio('Todavía no hay resultados en esta jornada.', 'bar-chart-2', null,
+            'Cuando se cargue un resultado válido aparecerá el detalle.')) +
+      '<p class="ea-nota">Pos % y Pase % usan su propio denominador: solo partidos con ese dato cargado.</p>' +
+    '</section>';
+  }
+
+  function htmlTabla(tabla, letra) {
+    return '<section class="ea-card ea-clasificacion" aria-labelledby="ea-clasificacion-titulo">' +
+      '<div class="ea-card-cab"><h3 id="ea-clasificacion-titulo">' + icono('trophy', 17) +
+        'Tabla de posiciones · Grupo ' + esc(letra) + '</h3></div>' +
+      (tabla.length
+        ? '<div class="ea-tabla-wrap" tabindex="0" role="region" aria-label="Clasificación acumulada">' +
+            '<table class="ea-tabla"><thead><tr>' +
+              '<th>#</th><th class="izq">Jugador</th><th>PJ</th><th>GF</th><th>GC</th><th>DG</th><th>PTS</th>' +
+            '</tr></thead><tbody>' + tabla.map(f =>
+              '<tr><td><strong>' + f.posicion + (f.compartida ? '=' : '') + '</strong></td>' +
+                '<td class="izq"><span class="ea-nombre-largo">' + esc(f.nombre_usuario || GL.nombreJugador(f.jugador_id)) +
+                  '</span></td>' +
+                '<td>' + numero(f.pj) + '</td><td>' + numero(f.gf) + '</td><td>' + numero(f.gc) + '</td>' +
+                '<td>' + esc(GL.signo(f.dif)) + '</td><td>' + numero(f.pts) + '</td></tr>').join('') +
+            '</tbody></table></div>'
+        : GL.vacio('La tabla todavía no tiene filas.', 'layout-list', null,
+            'La clasificación se genera cuando se cargan resultados.')) +
+      '<p class="ea-nota">Fuente oficial: clasificación acumulada. Orden: PTS → DG → GF. ' +
+        'El signo “=” indica posición compartida por igualdad exacta en esos tres valores.</p>' +
+    '</section>';
+  }
+
+  function htmlHistorial(historial, letra, ultimaCerrada) {
+    const filas = historial.filter(h => h.estado === 'cerrada' || h.partidos > 0);
+    return '<section class="ea-card ea-historial" aria-labelledby="ea-historial-titulo">' +
+      '<div class="ea-card-cab"><h3 id="ea-historial-titulo">' + icono('history', 17) +
+        'Histórico · Grupo ' + esc(letra) + '</h3>' +
+        '<span>' + filas.length + ' jornada(s) con registro</span></div>' +
+      (filas.length
+        ? '<ul class="ea-historial-lista">' + filas.map(h =>
+            '<li><button type="button" class="ea-historial-btn' + (h.numero === Mod.jornada ? ' activo' : '') +
+              '" data-jornada="' + h.numero + '">' +
+              '<strong>J' + h.numero + '</strong>' +
+              '<span>' + esc(h.estado === 'cerrada' ? 'Cerrada' : h.estado) + '</span>' +
+              '<span>' + h.partidos + ' partido(s)</span>' +
+              '<span>' + h.golesReales + ' goles reales</span>' +
+              '<span class="ea-nombre-largo">' + esc(h.destacado) + '</span>' +
+            '</button></li>').join('') + '</ul>'
+        : GL.vacio('Todavía no hay jornadas cerradas con resultados.', 'history', null,
+            'El histórico se calcula desde cada jornada cerrada; no duplica registros al reprocesar.')) +
+      (ultimaCerrada ? '<p class="ea-nota">Última jornada cerrada del grupo: J' + ultimaCerrada + '.</p>' : '') +
+    '</section>';
+  }
+
+  function numero(valor) {
+    const n = Number(valor);
+    return Number.isFinite(n) ? n : 0;
+  }
+  /* Superficie de prueba: mismas funciones puras que usa la vista. */
+  Mod._interno = { nombreArchivo, htmlPagina, htmlTarjetas, htmlResumen, htmlHistorial, codigoPais };
   Modulos['stats-jornada'] = Mod;
 })();

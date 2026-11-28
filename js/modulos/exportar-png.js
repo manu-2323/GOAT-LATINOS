@@ -188,7 +188,7 @@
   }
 
   /* ── Montar plantilla, capturar, mostrar preview y desmontar ── */
-  async function capturarPlantilla(html, nombre, anchoFijo) {
+  async function capturarPlantilla(html, nombre, anchoFijo, escala) {
     await cargarHtml2Canvas();
     await esperarFuentes();
 
@@ -217,7 +217,7 @@
     };
 
     try {
-      const canvas = await capturar(contenedor, 2, prepararClon);
+      const canvas = await capturar(contenedor, escala || 2, prepararClon);
       await mostrarVistaPreviaYDescargar(canvas, nombre);
     } finally {
       contenedor.remove();
@@ -558,6 +558,203 @@
   }
 
   /* ================================================================
+     PLANTILLA DEDICADA: INFORME AVANZADO POR GRUPO/JORNADA
+     Composición propia, 1080 × 1350 (capturada a escala 2). No captura
+     el dashboard: no incluye botones, selectores ni controles.
+     ================================================================ */
+
+  const CSS_INFORME = `
+  <style>
+    .ea-doc,.ea-doc *{box-sizing:border-box;margin:0;padding:0}
+    .ea-doc{width:1080px;height:1350px;position:relative;overflow:hidden;
+      background:#0B0D10;color:#F5F6F7;
+      font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif}
+    .ea-cab{height:176px;padding:30px 40px;background:linear-gradient(135deg,#E11D35 0%,#8B1023 100%)}
+    .ea-marca{font-size:12px;font-weight:800;letter-spacing:.18em;color:rgba(255,255,255,.78)}
+    .ea-titulo{margin-top:8px;font-size:38px;font-weight:800;line-height:1.05}
+    .ea-sub{margin-top:8px;font-size:15px;color:rgba(255,255,255,.82)}
+    .ea-estado{position:absolute;right:40px;top:34px;padding:7px 14px;border:1px solid rgba(255,255,255,.45);
+      border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+    .ea-kpis{position:relative;z-index:2;display:grid;grid-template-columns:repeat(6,1fr);gap:10px;
+      margin:-26px 40px 0}
+    .ea-kpi{height:82px;padding:12px;border:1px solid #2E353D;border-radius:12px;background:#20252B}
+    .ea-kpi strong{display:block;font-size:26px;line-height:1.1;font-weight:800;font-variant-numeric:tabular-nums}
+    .ea-kpi small{display:block;margin-top:4px;font-size:10px;color:#9299A3;line-height:1.25}
+    .ea-seccion{margin:18px 40px 0}
+    .ea-seccion-titulo{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .ea-seccion-titulo strong{font-size:15px;font-weight:800;letter-spacing:.02em}
+    .ea-seccion-titulo span{font-size:10px;color:#7A828E}
+    .ea-tarjetas{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    .ea-tarjeta{height:164px;padding:14px;border:1px solid #2E353D;border-radius:12px;background:#14171B}
+    .ea-tarjeta h3{font-size:13px;font-weight:800;color:#FF6B7A;margin-bottom:10px}
+    .ea-fila{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:8px;align-items:center;
+      padding:6px 0;border-top:1px solid #2E353D}
+    .ea-fila:first-of-type{border-top:0}
+    .ea-num{color:#FF6B7A;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums}
+    .ea-nombre{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .ea-valor{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
+    .ea-sin{font-size:11px;color:#7A828E;padding:18px 0;text-align:center}
+    .ea-destacados{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+    .ea-dest{height:140px;padding:14px;border:1px solid #3B434D;border-radius:12px;background:#20252B}
+    .ea-dest h3{font-size:12px;font-weight:800;color:#FF6B7A;margin-bottom:10px}
+    .ea-marcador{font-size:30px;font-weight:800;color:#F5F6F7;font-variant-numeric:tabular-nums}
+    .ea-duelo{font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+    .ea-nota-dest{font-size:10px;color:#9299A3;margin-top:6px}
+    .ea-jugador{font-size:17px;font-weight:800;overflow-wrap:anywhere}
+    .ea-detalle{margin:14px 40px 0}
+    .ea-tabla{width:100%;border-collapse:collapse;background:#14171B;border:1px solid #2E353D}
+    .ea-tabla th,.ea-tabla td{padding:7px 9px;border-bottom:1px solid #2E353D;font-size:11px;text-align:center;
+      font-variant-numeric:tabular-nums}
+    .ea-tabla th{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#9299A3;background:#20252B}
+    .ea-tabla td:first-child{text-align:left;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .ea-pie{position:absolute;left:40px;right:40px;bottom:22px;display:flex;justify-content:space-between;
+      align-items:center;border-top:1px solid #2E353D;padding-top:10px;font-size:10px;color:#7A828E}
+    .ea-pie strong{color:#F5F6F7;letter-spacing:.12em}
+  </style>`;
+
+  function textoPlano(valor) {
+    return typeof esc === 'function' ? esc(valor) : String(valor === null || valor === undefined ? '' : valor);
+  }
+
+  function paisPlano(valor) {
+    const codigo = String(valor || '');
+    return /^[A-Za-z]{2}$/.test(codigo) ? codigo.toUpperCase() : 'Sin país registrado';
+  }
+
+  function numeroPlano(valor) {
+    const n = Number(valor);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function valorTarjeta(tarjeta, jugador) {
+    const n = numeroPlano(jugador[tarjeta.clave]);
+    const conSigno = tarjeta.id === 'diferencia' && typeof GL.signo === 'function'
+      ? GL.signo(n) : String(n);
+    return conSigno + (tarjeta.sufijo || '');
+  }
+
+  function filasPlano(tarjeta) {
+    if (!tarjeta.filas || !tarjeta.filas.length) {
+      return '<div class="ea-sin">Sin datos registrados</div>';
+    }
+    return tarjeta.filas.slice(0, 3).map((j, i) =>
+      '<div class="ea-fila"><span class="ea-num">' + (i + 1) + '</span>' +
+        '<span class="ea-nombre">' + textoPlano(j.nombre) + '</span>' +
+        '<strong class="ea-valor">' + textoPlano(valorTarjeta(tarjeta, j)) + '</strong></div>').join('');
+  }
+
+  function htmlPlantillaInformeEstadisticas(informe, opciones) {
+    const d = informe || {};
+    const o = opciones || {};
+    const r = d.resumen || {};
+    const letra = o.letraGrupo || (typeof GL.letraGrupo === 'function' && o.grupo
+      ? GL.letraGrupo(o.grupo) : (o.grupo && o.grupo.nombre) || '—');
+    const jornada = d.jornada === null || d.jornada === undefined ? '—' : d.jornada;
+    const torneoNombre = o.torneoNombre || (typeof CONFIG !== 'undefined' && CONFIG.NOMBRE_LIGA) ||
+      'GOATS LATINOS';
+    const fecha = new Date().toLocaleDateString('es-ES', {
+      day: '2-digit', month: 'long', year: 'numeric'
+    });
+    const estado = d.estadoJornada === 'cerrada' ? 'Jornada cerrada'
+      : d.estadoJornada === 'abierta' ? 'Jornada abierta' : 'Sin programar';
+    const kpis = [
+      ['Partidos', r.partidos], ['Goles reales', r.golesReales],
+      ['Goles regl.', r.golesReglamentarios], ['Vallas', r.vallas],
+      ['Administrativos', r.partidosAdministrativos], ['Pendientes', r.pendientes]
+    ];
+    const partido = d.partidoDestacado;
+    const jugador = d.jugadorDestacado;
+    const detalle = (d.jugadores || []).slice().sort((a, b) =>
+      numeroPlano(b.score) - numeroPlano(a.score) ||
+      numeroPlano(b.gf) - numeroPlano(a.gf)).slice(0, 7);
+
+    return CSS_INFORME +
+      '<div class="ea-doc">' +
+        '<header class="ea-cab">' +
+          '<div class="ea-marca">' + textoPlano(torneoNombre).toUpperCase() + ' · LEAGUE MANAGER</div>' +
+          '<div class="ea-titulo">Estadísticas · Grupo ' + textoPlano(letra) + '</div>' +
+          '<div class="ea-sub">Jornada ' + textoPlano(jornada) +
+            ' · Informe calculado desde resultados registrados</div>' +
+          '<div class="ea-estado">' + textoPlano(estado) + '</div>' +
+        '</header>' +
+        '<section class="ea-kpis">' + kpis.map(([etiqueta, valor]) =>
+          '<div class="ea-kpi"><strong>' + textoPlano(numeroPlano(valor)) + '</strong>' +
+            '<small>' + textoPlano(etiqueta) + '</small></div>').join('') +
+        '</section>' +
+        '<section class="ea-seccion">' +
+          '<div class="ea-seccion-titulo"><strong>Indicadores de la jornada</strong>' +
+            '<span>Rendimiento real · resoluciones administrativas separadas</span></div>' +
+          '<div class="ea-tarjetas">' + (d.tarjetas || []).map(t =>
+            '<div class="ea-tarjeta"><h3>' + textoPlano(t.titulo) + '</h3>' +
+              filasPlano(t) + '</div>').join('') + '</div>' +
+        '</section>' +
+        '<section class="ea-seccion ea-destacados">' +
+          '<div class="ea-dest"><h3>PARTIDO DESTACADO</h3>' +
+            (partido
+              ? '<div class="ea-marcador">' + textoPlano(partido.marcador) + '</div>' +
+                '<div class="ea-duelo">' + textoPlano(partido.local) + ' vs ' +
+                  textoPlano(partido.visitante) + '</div>' +
+                '<div class="ea-nota-dest">' + partido.goles + ' goles reales · J' +
+                  textoPlano(partido.jornada) + '</div>'
+              : '<div class="ea-sin">Sin partidos jugados en la jornada.</div>') +
+          '</div>' +
+          '<div class="ea-dest"><h3>JUGADOR DESTACADO</h3>' +
+            (jugador
+              ? '<div class="ea-jugador">' + textoPlano(jugador.nombre) + '</div>' +
+                '<div class="ea-duelo">' + jugador.gf + ' goles · ' + jugador.vallas +
+                  ' vallas · ' + jugador.score + ' pts</div>' +
+                '<div class="ea-nota-dest">' + paisPlano(jugador.pais) +
+                  ' · Grupo ' + textoPlano(letra) + '</div>'
+              : '<div class="ea-sin">Sin jugador destacado.</div>') +
+          '</div>' +
+        '</section>' +
+        '<section class="ea-detalle">' +
+          '<div class="ea-seccion-titulo"><strong>Detalle por jugador</strong>' +
+            '<span>Goles reales y porterías en 0</span></div>' +
+          '<table class="ea-tabla"><thead><tr>' +
+            '<th>Jugador</th><th>PJ</th><th>GF</th><th>GC</th><th>DG</th><th>Vallas</th>' +
+          '</tr></thead><tbody>' + detalle.map(j =>
+            '<tr><td>' + textoPlano(j.nombre) + '</td><td>' + j.pj + '</td><td>' + j.gf +
+              '</td><td>' + j.gc + '</td><td>' +
+              textoPlano(typeof GL.signo === 'function' ? GL.signo(j.dif) : j.dif) +
+              '</td><td>' + j.vallas + '</td></tr>').join('') +
+          '</tbody></table>' +
+        '</section>' +
+        '<footer class="ea-pie">' +
+          '<span><strong>GOATS LATINOS</strong> · Grupo ' + textoPlano(letra) +
+            ' · Jornada ' + textoPlano(jornada) + '</span>' +
+          '<span>Generado ' + textoPlano(fecha) + ' · Sin datos de ejemplo</span>' +
+        '</footer>' +
+      '</div>';
+  }
+
+  function nombreSeguro(nombre) {
+    return String(nombre || 'GOAT-LATINOS_Estadisticas')
+      .replace(/[\\/:*?"<>|]+/g, '-')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  async function exportarInformeEstadisticas(informe, nombre) {
+    GL.notificar('Preparando informe PNG…', 'info', 'loader-circle');
+    try {
+      await capturarPlantilla(
+        htmlPlantillaInformeEstadisticas(informe, {
+          letraGrupo: informe && informe.grupoLetra,
+          grupo: informe && informe.grupo,
+          torneoNombre: informe && informe.torneoNombre,
+          jornada: informe && informe.jornada
+        }),
+        nombreSeguro(nombre || 'GOAT-LATINOS_Estadisticas'),
+        1080,
+        1
+      );
+    } catch (e) {
+      avisarError(e);
+    }
+  }
+
+  /* ================================================================
      API PÚBLICA
      ================================================================ */
 
@@ -623,11 +820,17 @@
   }
 
   Modulos['exportar-png'] = {
-    titulo: 'Exportar PNG', exportar, exportarTabla, exportarStats, exportarPerfil, exportarPartidosHoy
+    titulo: 'Exportar PNG',
+    exportar, exportarTabla, exportarStats, exportarPerfil, exportarPartidosHoy,
+    exportarInformeEstadisticas,
+    _htmlInforme: htmlPlantillaInformeEstadisticas,
+    _nombreSeguro: nombreSeguro,
+    _paisPlano: paisPlano
   };
   GL.exportarPNG         = exportar;
   GL.exportarTabla       = exportarTabla;
   GL.exportarStats       = exportarStats;
+  GL.exportarInformeEstadisticas = exportarInformeEstadisticas;
   GL.exportarPerfil      = exportarPerfil;
   GL.exportarPartidosHoy = exportarPartidosHoy;
 })();

@@ -92,6 +92,47 @@
     '</article>';
   }
 
+  /* Resumen compacto de la última jornada cerrada. Se calcula con EST y no
+     duplica lógica: si EST no está disponible, el bloque simplemente se omite. */
+  function resumenJornadaHTML(grupo, partidos) {
+    if (!grupo || typeof EST === 'undefined' || !EST || typeof EST.calcularInformeJornada !== 'function') return '';
+    const torneo = GL.torneo();
+    const cerradas = (GL.ctx.jornadas || [])
+      .filter(j => j.grupo_id === grupo.id && j.estado === 'cerrada')
+      .map(j => Number(j.numero)).filter(Number.isFinite);
+    if (!cerradas.length) return '';
+    const jornada = Math.max.apply(null, cerradas);
+    const informe = EST.calcularInformeJornada(partidos || [], {
+      torneoId: torneo && torneo.id,
+      grupoId: grupo.id,
+      jornada,
+      jugadores: typeof GL.jugadores === 'function' ? GL.jugadores(grupo.id) : [],
+      estadoJornada: 'cerrada'
+    });
+    if (!informe.resumen.partidos && !informe.resumen.partidosAdministrativos) return '';
+    const r = informe.resumen;
+    const lider = ((typeof GL.clasificacion === 'function' ? GL.clasificacion(grupo.id) : []) || [])[0] || null;
+    const destacado = informe.jugadorDestacado;
+    const kpi = (valor, etiqueta) =>
+      '<div class="ea-kpi"><strong>' + esc(valor) + '</strong><small>' + esc(etiqueta) + '</small></div>';
+    return '<section class="card ini-bloque ea-inicio-resumen" aria-labelledby="ea-ini-resumen">' +
+      '<div class="ea-resumen-cab">' +
+        '<h2 id="ea-ini-resumen">' + icono('chart-no-axes-column-increasing', 18) +
+          'Resumen de jornada · Grupo ' + esc(GL.letraGrupo(grupo)) + '</h2>' +
+        '<a href="#estadisticas">Ver informe completo</a>' +
+      '</div>' +
+      '<div class="ea-resumen-compacto">' +
+        kpi('J' + jornada, 'Última cerrada') +
+        kpi(lider ? GL.signo(lider.dif) : '—', 'DG tabla (líder)') +
+        kpi(r.golesReales, 'Goles reales') +
+        kpi(r.vallas, 'Vallas invictas') +
+        kpi(destacado ? destacado.nombre : '—', 'Jugador destacado') +
+      '</div>' +
+      '<p class="ea-nota">El DG se toma sin recalcular de la clasificación oficial (PTS → DG → GF). ' +
+        'El detalle por jornada está en el informe completo.</p>' +
+    '</section>';
+  }
+
   /* ---------- Panel del jugador ---------- */
 
   async function renderJugador(el) {
@@ -202,6 +243,8 @@
               'La clasificación se actualiza cuando se cargan resultados.')) +
       '</section>' +
 
+      resumenJornadaHTML(grupo, partidos) +
+
       '<section class="card ini-bloque" aria-labelledby="ini-accesos">' +
         '<h2 id="ini-accesos" class="ini-titulo">' + icono('grid-2x2', 18) + 'Accesos rápidos</h2>' +
         '<div class="ini-accesos">' +
@@ -250,6 +293,8 @@
       : Math.max(0, ...(GL.ctx.clasificacion || []).map(c => instanteActualizacion(c)));
     const sinGrupo = (typeof GL.jugadoresSinGrupo === 'function' ? GL.jugadoresSinGrupo() : []);
     const sinTelefono = jugadores.filter(j => !j.telefono);
+    const grupoResumen = typeof GL.grupoInicial === 'function' ? GL.grupoInicial() : grupos[0];
+    const resumenJornada = resumenJornadaHTML(grupoResumen, partidos);
 
     const alertas = [];
     if (sinGrupo.length) alertas.push({ ico: 'user-x', texto: sinGrupo.length + ' jugador(es) sin grupo asignado.', link: 'administracion' });
@@ -294,6 +339,8 @@
         kpi(jornadasPendientes.length, 'Jornadas pendientes', 'calendar-days') +
         kpi(jornadas.filter(j => fechaJornada(j)).length, 'Jornadas con fecha', 'calendar-clock') +
       '</section>' +
+
+      resumenJornada +
 
       '<div class="ini-columnas">' +
         '<section class="card ini-bloque" aria-labelledby="ini-proximos">' +

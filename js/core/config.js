@@ -10,6 +10,9 @@ const CONFIG = {
      Supabase Auth nunca devuelva el enlace de confirmación a la raíz. */
   SITE_URL: 'https://goat-latinos.pages.dev/',
   VERSION: '1.6.0',
+  /* Revisión de caché para los módulos cargados bajo demanda. Cambia cuando se
+     modifica un módulo sin alterar la versión funcional de la aplicación. */
+  REVISION: 'estadisticas-avanzadas-1',
   LIBPHONENUMBER_VERSION: '1.13.17',
   BUCKET_CAPTURAS: 'capturas-partidos',
   BUCKET_AVATARES: 'avatares',

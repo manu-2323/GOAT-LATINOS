@@ -15,6 +15,14 @@
     return n;
   }
 
+  /* Estados que pueden aportar a un informe. Cualquier otro estado
+     (por ejemplo un partido anulado) se excluye: nunca se interpreta como
+     jugado solo por tener un marcador cargado. */
+  const ESTADOS_INFORME = new Set([
+    'jugado', 'walkover_local', 'walkover_visitante',
+    'doble_ausencia', 'expulsion_local', 'expulsion_visitante'
+  ]);
+
   const EST = {
 
     /* ------------------------------------------------------------------
@@ -221,9 +229,267 @@
         if (a > b) g++; else if (a === b) e++; else p++;
       });
       return { partidos: js.length, g, e, p, gf, gc };
+    },
+
+    /* ------------------------------------------------------------------
+       posicionesCompartidas(filas)
+       Orden canónico usado por el cliente: pts → dif → gf. La posición se
+       comparte cuando esos tres valores son iguales. No inventa desempate
+       nuevo y NO sustituye a la tabla materializada en public.clasificacion.
+    ------------------------------------------------------------------ */
+    posicionesCompartidas(filas) {
+      const triada = f => [numero(f && f.pts), numero(f && f.dif), numero(f && f.gf)].join('|');
+      const orden = (filas || []).slice().sort((a, b) =>
+        numero(b && b.pts) - numero(a && a.pts) ||
+        numero(b && b.dif) - numero(a && a.dif) ||
+        numero(b && b.gf) - numero(a && a.gf) ||
+        texto(a && a.nombre_usuario).localeCompare(texto(b && b.nombre_usuario), 'es'));
+      const conteo = {};
+      orden.forEach(f => { const k = triada(f); conteo[k] = (conteo[k] || 0) + 1; });
+      let puesto = 0, anterior = null;
+      return orden.map((f, i) => {
+        const k = triada(f);
+        if (k !== anterior) { puesto = i + 1; anterior = k; }
+        return Object.assign({}, f, {
+          posicion: puesto,
+          compartida: (conteo[k] || 0) > 1,
+          gf: numero(f && f.gf),
+          gc: numero(f && f.gc),
+          dif: numero(f && f.dif),
+          pts: numero(f && f.pts)
+        });
+      });
+    },
+
+    /* ------------------------------------------------------------------
+       calcularInformeJornada(partidos, opciones)
+       Informe 100% derivado, de solo lectura. Nunca escribe ni persiste.
+
+       opciones:
+         torneoId, grupoId, jornada, jugadores, jornadas, totalJornadas
+
+       Reglas:
+         · filtra por torneo/grupo/jornada y elimina duplicados;
+         · excluye pendientes y jornada_libre de todo cómputo;
+         · rendimiento usa solo partidos 'jugado' no administrativos;
+         · clasificación del informe usa GL.resultado() (walkover 3-0,
+           doble ausencia 0-0, expulsiones 1-0) para que DG = GF - GC;
+         · la tabla oficial sigue siendo public.clasificacion.
+    ------------------------------------------------------------------ */
+    calcularInformeJornada(partidos, opciones) {
+      const o = opciones || {};
+      const todas = Array.isArray(partidos) ? partidos : [];
+      const jornadaNumero = o.jornada === null || o.jornada === undefined || o.jornada === ''
+        ? null : Number(o.jornada);
+      const tieneJornada = jornadaNumero !== null && Number.isFinite(jornadaNumero);
+      const enAlcance = p => !!p &&
+        (!o.torneoId || !p.torneo_id || p.torneo_id === o.torneoId) &&
+        (!o.grupoId || p.grupo_id === o.grupoId) &&
+        (!tieneJornada || Number(p.jornada) === jornadaNumero) &&
+        !!p.local_id && !!p.visitante_id && p.anulado !== true;
+
+      const pendientes = todas.filter(p => enAlcance(p) && p.estado === 'pendiente');
+      const vistos = new Set();
+      const lista = todas.filter(p => {
+        if (!enAlcance(p)) return false;
+        if (!ESTADOS_INFORME.has(String(p.estado || ''))) return false;
+        const clave = [p.torneo_id, p.grupo_id, p.jornada, p.local_id, p.visitante_id].join('|');
+        if (vistos.has(clave)) return false;
+        vistos.add(clave);
+        return true;
+      });
+      const reales = lista.filter(p => p.estado === 'jugado' && !GL.esAdministrativo(p));
+      const administrativos = lista.filter(p => GL.esAdministrativo(p));
+
+      const cl = EST.calcularClasificacion(lista);
+      const gr = EST.calcularGolesReales(lista);
+      const pr = EST.calcularPromedios(lista);
+      const vi = EST.calcularVallasInvictas(lista);
+
+      const porId = id => (o.jugadores || []).find(j => j && j.id === id) || null;
+      const nombre = id => {
+        const j = porId(id);
+        return j ? (j.nombre_usuario || j.nombre || id) : (GL.nombreJugador ? GL.nombreJugador(id) : id);
+      };
+      const pais = id => {
+        const j = porId(id);
+        if (j && j.pais) return j.pais;
+        return GL.paisJugador ? GL.paisJugador(id) : '';
+      };
+
+      const ids = new Set([
+        ...(o.jugadores || []).map(j => j && j.id).filter(Boolean),
+        ...cl.map(s => s.id), ...gr.map(s => s.id), ...pr.map(s => s.id), ...vi.map(s => s.id),
+        ...lista.reduce((acc, p) => { acc.push(p.local_id, p.visitante_id); return acc; }, [])
+      ]);
+      const jugadores = Array.from(ids).map(id => {
+        const c = cl.find(s => s.id === id) || {};
+        const g = gr.find(s => s.id === id) || {};
+        const m = pr.find(s => s.id === id) || {};
+        const v = vi.find(s => s.id === id) || {};
+        const partidosReales = numero(g.pj);
+        const gf = numero(g.gf), gc = numero(g.gc);
+        return {
+          id,
+          nombre: nombre(id),
+          pais: pais(id),
+          nombreUsuario: nombre(id),
+          pj: partidosReales,
+          gf, gc,
+          dif: numero(g.dif),
+          vallas: numero(v.vallas),
+          promPos: numero(m.promPos),
+          promPase: numero(m.promPase),
+          posN: numero(m.posN),
+          paseN: numero(m.paseN),
+          promGoles: partidosReales ? Math.round((gf / partidosReales) * 10) / 10 : 0,
+          gfReglamentario: numero(c.gf),
+          gcReglamentario: numero(c.gc),
+          difReglamentario: numero(c.dif),
+          puntosReglamentarios: numero(c.pts),
+          score: gf + numero(v.vallas)
+        };
+      });
+
+      const ordenar = (a, b, clave) =>
+        numero(b[clave]) - numero(a[clave]) ||
+        numero(b.dif) - numero(a.dif) ||
+        numero(b.gf) - numero(a.gf) ||
+        texto(a.nombre).localeCompare(texto(b.nombre), 'es');
+      /* Un ranking solo existe cuando hay rendimiento real. Sin partidos
+         jugados no se muestra un "0" como si fuera un dato válido. */
+      const conPartido = jugadores.filter(j => numero(j.pj) > 0);
+      const top = (fuente, clave, n) =>
+        fuente.slice().sort((a, b) => ordenar(a, b, clave)).slice(0, n || 3);
+      const conDato = (clave, minimo) => jugadores.filter(j => numero(j[clave + 'N']) >= (minimo || 1));
+
+      const goleadores = top(conPartido, 'gf');
+      const vallasRanking = top(conPartido.filter(j => numero(j.vallas) > 0), 'vallas');
+      const diferenciaRanking = top(conPartido, 'dif');
+      const paseRanking = conDato('pase').sort((a, b) => ordenar(a, b, 'promPase')).slice(0, 3);
+      const posesionRanking = conDato('pos').sort((a, b) => ordenar(a, b, 'promPos')).slice(0, 3);
+      const jugadorDestacado = top(conPartido.filter(j => numero(j.score) > 0), 'score', 1)[0] || null;
+
+      const partidoOrdenado = reales.slice().sort((a, b) => {
+        const ra = GL.golesReales(a), rb = GL.golesReales(b);
+        return (numero(rb.gf) + numero(rb.gc)) - (numero(ra.gf) + numero(ra.gc)) ||
+          Math.abs(numero(rb.gf) - numero(rb.gc)) - Math.abs(numero(ra.gf) - numero(ra.gc)) ||
+          numero(a.jornada) - numero(b.jornada) || texto(a.id).localeCompare(texto(b.id));
+      });
+      const p = partidoOrdenado[0] || null;
+      const marcador = p ? GL.resultado(p) : null;
+      const golesPartido = p ? GL.golesReales(p) : null;
+      const partidoDestacado = p ? {
+        id: p.id,
+        jornada: numero(p.jornada),
+        localId: p.local_id,
+        visitanteId: p.visitante_id,
+        local: nombre(p.local_id),
+        visitante: nombre(p.visitante_id),
+        marcador: marcador.texto,
+        gf: numero(golesPartido.gf),
+        gc: numero(golesPartido.gc),
+        goles: numero(golesPartido.gf) + numero(golesPartido.gc),
+        estado: p.estado
+      } : null;
+
+      const golesRealesTotales = jugadores.reduce((acc, j) => acc + numero(j.gf), 0);
+      const golesReglamentarios = lista.reduce((acc, partido) => {
+        const r = GL.resultado(partido);
+        return acc + numero(r.gf) + numero(r.gc);
+      }, 0);
+
+      const tarjetas = [
+        { id: 'goleadores', titulo: 'Más goles reales', icono: 'goal', filas: goleadores, clave: 'gf', sufijo: '', nota: 'Solo partidos jugados' },
+        { id: 'vallas', titulo: 'Más porterías en 0', icono: 'shield', filas: vallasRanking, clave: 'vallas', sufijo: '', nota: 'Sin resoluciones por expulsión' },
+        { id: 'diferencia', titulo: 'Mejor diferencia real', icono: 'trending-up', filas: diferenciaRanking, clave: 'dif', sufijo: '', nota: 'GF real − GC real' },
+        { id: 'pase', titulo: 'Precisión de pase', icono: 'target', filas: paseRanking, clave: 'promPase', sufijo: '%', nota: 'Solo partidos con dato de pase' },
+        { id: 'posesion', titulo: 'Posesión promedio', icono: 'pie-chart', filas: posesionRanking, clave: 'promPos', sufijo: '%', nota: 'Solo partidos con dato de posesión' },
+        { id: 'valor', titulo: 'Jugador destacado', icono: 'award', filas: jugadorDestacado ? [jugadorDestacado] : [], clave: 'score', sufijo: ' pts', nota: 'Goles reales + vallas' }
+      ];
+
+      return {
+        torneoId: o.torneoId || null,
+        grupoId: o.grupoId || null,
+        jornada: tieneJornada ? jornadaNumero : null,
+        estadoJornada: o.estadoJornada || null,
+        partidos: lista,
+        reales,
+        administrativos,
+        pendientes,
+        jugadores,
+        tarjetas,
+        jugadorDestacado,
+        partidoDestacado,
+        resumen: {
+          partidos: lista.length,
+          partidosReales: reales.length,
+          partidosAdministrativos: administrativos.length,
+          pendientes: pendientes.length,
+          golesReales: golesRealesTotales,
+          golesReglamentarios,
+          vallas: jugadores.reduce((acc, j) => acc + numero(j.vallas), 0),
+          conPase: partidosConDato(lista, 'pase_local', 'pase_visitante'),
+          conPosesion: partidosConDato(lista, 'posesion_local', 'posesion_visitante')
+        }
+      };
+    },
+
+    /* ------------------------------------------------------------------
+       calcularHistorialJornadas(partidos, opciones)
+       Cada jornada se calcula de forma independiente. Cerrar J8 no altera el
+       resultado de J7; reprocesar no inserta ni duplica nada.
+    ------------------------------------------------------------------ */
+    calcularHistorialJornadas(partidos, opciones) {
+      const o = opciones || {};
+      const todas = Array.isArray(partidos) ? partidos : [];
+      /* Las filas de public.jornadas no siempre repiten torneo_id: se aceptan
+         cuando no lo traen. Los partidos sí conservan el filtro estricto. */
+      const enTorneo = x => !o.torneoId || !x.torneo_id || x.torneo_id === o.torneoId;
+      const enGrupoJornada = j => !!j && enTorneo(j) &&
+        (!o.grupoId || !j.grupo_id || j.grupo_id === o.grupoId);
+      const enGrupoPartido = p => !!p && enTorneo(p) && (!o.grupoId || p.grupo_id === o.grupoId);
+      const numeros = new Set();
+      (o.jornadas || []).filter(enGrupoJornada).forEach(j => {
+        const n = Number(j.numero);
+        if (Number.isFinite(n) && (!o.totalJornadas || n <= Number(o.totalJornadas))) numeros.add(n);
+      });
+      todas.filter(enGrupoPartido).forEach(p => {
+        const n = Number(p.jornada);
+        if (Number.isFinite(n)) numeros.add(n);
+      });
+      return Array.from(numeros).sort((a, b) => a - b).map(numeroJornada => {
+        const filaJornada = (o.jornadas || []).filter(enGrupoJornada)
+          .find(j => Number(j.numero) === numeroJornada);
+        const informe = EST.calcularInformeJornada(todas, Object.assign({}, o, { jornada: numeroJornada }));
+        const destacado = informe.jugadorDestacado;
+        return {
+          numero: numeroJornada,
+          estado: filaJornada ? (filaJornada.estado || 'sin_programar') : 'sin_programar',
+          virtual: !!(filaJornada && filaJornada.virtual),
+          partidos: informe.resumen.partidos,
+          golesReales: informe.resumen.golesReales,
+          golesReglamentarios: informe.resumen.golesReglamentarios,
+          destacado: destacado ? destacado.nombre : '—',
+          destacadoGoles: destacado ? numero(destacado.score) : 0
+        };
+      });
     }
 
   };
+
+  /* Pequeños helpers internos, deliberadamente sin estado. */
+  function numero(valor) {
+    const n = Number(valor);
+    return Number.isFinite(n) ? n : 0;
+  }
+  function texto(valor) {
+    return valor === null || valor === undefined ? '' : String(valor);
+  }
+  function partidosConDato(partidos, claveLocal, claveVisitante) {
+    return (partidos || []).filter(p => datoRegistrado(p[claveLocal], 0) !== null ||
+      datoRegistrado(p[claveVisitante], 0) !== null).length;
+  }
 
   window.EST = EST;
 })();

@@ -129,7 +129,8 @@ const GL = {
   },
 
   modulo(id) {
-    const ruta = 'js/modulos/' + id + '.js?v=' + encodeURIComponent(CONFIG.VERSION);
+    const revision = encodeURIComponent(CONFIG.REVISION || '1');
+    const ruta = 'js/modulos/' + id + '.js?v=' + encodeURIComponent(CONFIG.VERSION) + '&r=' + revision;
     /* Un módulo ya registrado no vuelve a cargarse: evita IIFE duplicados,
        suscripciones Realtime repetidas y eventos registrados dos veces. */
     if ((window.Modulos || {})[id]) {
@@ -160,6 +161,7 @@ const GL = {
   exportarPNG(id, nombre) { return GL._delegarExport('exportarPNG', [id, nombre]); },
   exportarTabla(grupoId, nombre) { return GL._delegarExport('exportarTabla', [grupoId, nombre]); },
   exportarStats(grupoId, jornadaNum, nombre) { return GL._delegarExport('exportarStats', [grupoId, jornadaNum, nombre]); },
+  exportarInformeEstadisticas(informe, nombre) { return GL._delegarExport('exportarInformeEstadisticas', [informe, nombre]); },
   exportarPerfil(jugadorId, nombre) { return GL._delegarExport('exportarPerfil', [jugadorId, nombre]); },
   exportarPartidosHoy(grupoId, nombre) { return GL._delegarExport('exportarPartidosHoy', [grupoId, nombre]); },
 
